@@ -132,16 +132,32 @@ const Product: React.FC = () => {
 
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
-    if (!token || !userId) {
-      alert('Usuario no identificado. Inicia sesión para agregar al carrito.');
-      return;
-    }
 
     const variant = product?.variants.find(
       (v) => v.size === selectedSize && v.color === selectedColor
     );
-    if (!variant) {
+
+    if (!variant || !product) {
       alert('Variante de producto no encontrada.');
+      return;
+    }
+
+    const cartItem = {
+      userId,
+      variantId: variant.id,
+      quantity,
+      productName: product.name,
+      color: selectedColor,
+      size: selectedSize,
+      imageUrl: variant.images?.[0]?.imageUrl || '',
+      price: variant.price,
+    };
+
+    if (!token || !userId) {
+      // Guardar en localStorage para procesar después
+      localStorage.setItem('pendingCartItem', JSON.stringify(cartItem));
+      alert('Producto guardado. Inicia sesión para completar la compra.');
+      router.push('/login');
       return;
     }
 

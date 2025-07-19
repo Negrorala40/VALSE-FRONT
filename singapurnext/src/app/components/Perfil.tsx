@@ -45,7 +45,7 @@ const Perfil = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showCheckmark, setShowCheckmark] = useState<boolean>(false); // ✅ NUEVO
+  const [showCheckmark, setShowCheckmark] = useState<boolean>(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   const authHeaders = {
@@ -204,13 +204,21 @@ const Perfil = () => {
     }
   };
 
+  // NUEVO: función para cerrar sesión
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.href = '/'; // Cambia la ruta si es necesario
+  };
+
   if (loading) return <div className="loading">Cargando...</div>;
 
   return (
     <div className="perfil-container">
-      {showCheckmark && <div className="checkmark-popup">✅</div>} {/* ✅ NUEVO */}
+      {showCheckmark && <div className="checkmark-popup">✅</div>}
 
-      <h1>🚀 Bienvenido a tu Perfil en <span className="highlight">A Marte</span> 🪐</h1>
+      <h1>
+        🚀 Bienvenido a tu Perfil en <span className="highlight">A Marte</span> 🪐
+      </h1>
 
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}
@@ -251,7 +259,9 @@ const Perfil = () => {
               pattern="\d{10,15}"
             />
           </div>
-          <button type="submit" className="update-button">Actualizar Información</button>
+          <button type="submit" className="update-button">
+            Actualizar Información
+          </button>
         </form>
       </section>
 
@@ -272,15 +282,11 @@ const Perfil = () => {
                     />
                     <input
                       value={editedAddress.city}
-                      onChange={(e) =>
-                        setEditedAddress({ ...editedAddress, city: e.target.value })
-                      }
+                      onChange={(e) => setEditedAddress({ ...editedAddress, city: e.target.value })}
                     />
                     <input
                       value={editedAddress.state}
-                      onChange={(e) =>
-                        setEditedAddress({ ...editedAddress, state: e.target.value })
-                      }
+                      onChange={(e) => setEditedAddress({ ...editedAddress, state: e.target.value })}
                     />
                     <input
                       value={editedAddress.country}
@@ -288,15 +294,28 @@ const Perfil = () => {
                         setEditedAddress({ ...editedAddress, country: e.target.value })
                       }
                     />
-                    <button onClick={handleSaveAddress} className="save-button">Guardar</button>
-                    <button onClick={() => setEditIndex(null)} className="cancel-button">Cancelar</button>
+                    <button onClick={handleSaveAddress} className="save-button">
+                      Guardar
+                    </button>
+                    <button onClick={() => setEditIndex(null)} className="cancel-button">
+                      Cancelar
+                    </button>
                   </div>
                 ) : (
                   <>
-                    <p>{addr.address}, {addr.city}, {addr.state}, {addr.country}</p>
+                    <p>
+                      {addr.address}, {addr.city}, {addr.state}, {addr.country}
+                    </p>
                     <div className="address-actions">
-                      <button onClick={() => handleEditAddress(index)} className="edit-button">Editar</button>
-                      <button onClick={() => handleDeleteAddress(addr.id)} className="delete-button">Eliminar</button>
+                      <button onClick={() => handleEditAddress(index)} className="edit-button">
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAddress(addr.id)}
+                        className="delete-button"
+                      >
+                        Eliminar
+                      </button>
                     </div>
                   </>
                 )}
@@ -333,9 +352,18 @@ const Perfil = () => {
             value={newAddress.country}
             onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
           />
-          <button onClick={handleAddAddress} className="add-button">Agregar Dirección</button>
+          <button onClick={handleAddAddress} className="add-button">
+            Agregar Dirección
+          </button>
         </div>
       </section>
+
+      {/* Botón de cerrar sesión */}
+      <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+        <button onClick={handleLogout} className="logout-button">
+          Cerrar Sesión
+        </button>
+      </div>
     </div>
   );
 };

@@ -23,7 +23,6 @@ interface CartProps {
 
 const API_URL = 'http://localhost:8082/api/cart';
 
-// ✅ Formateador para precios (ej: 59900 → 59.900)
 const formatPrice = (price: number) =>
   new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0 }).format(price);
 
@@ -46,33 +45,47 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
   useEffect(() => {
     const fetchCart = async () => {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      const userId = localStorage.getItem('userId');
 
-      try {
-        const res = await fetch(`${API_URL}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+      if (token && userId) {
+        // 🧾 CARRITO DE USUARIO LOGUEADO
+        try {
+          const res = await fetch(`${API_URL}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
 
-        if (!res.ok) throw new Error('Error al obtener el carrito');
-        const data = await res.json();
+          if (!res.ok) throw new Error('Error al obtener el carrito');
+          const data = await res.json();
 
-        const transformedItems: CartItem[] = data.map((item: any) => ({
-          id: item.id.toString(),
-          image: item.imageUrls?.[0] || '/placeholder.png',
-          name: item.productName,
-          price: item.price,
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          stock: item.stock || 100,
-        }));
+          const transformedItems: CartItem[] = data.map((item: any) => ({
+            id: item.id.toString(),
+            image: item.imageUrls?.[0] || '/placeholder.png',
+            name: item.productName,
+            price: item.price,
+            size: item.size,
+            color: item.color,
+            quantity: item.quantity,
+            stock: item.stock || 100,
+          }));
 
-        setCartItems(transformedItems);
-      } catch (err) {
-        console.error('🛑 Error al cargar el carrito:', err);
+          setCartItems(transformedItems);
+        } catch (err) {
+          console.error('🛑 Error al cargar el carrito:', err);
+        }
+      } else {
+        // 🧾 CARRITO DE INVITADO (pendingCartItem)
+        const pending = localStorage.getItem('pendingCartItem');
+        if (pending) {
+          try {
+            const parsed: CartItem = JSON.parse(pending);
+            setCartItems([parsed]);
+          } catch {
+            console.error('Error al parsear pendingCartItem');
+          }
+        }
       }
     };
 
@@ -91,48 +104,63 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
     }
 
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (token) {
+      // Usuario logueado: Actualiza en backend
+      try {
+        const res = await fetch(`${API_URL}/update/${itemId}?quantity=${newQuantity}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
-    try {
-      const res = await fetch(`${API_URL}/update/${itemId}?quantity=${newQuantity}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) throw new Error('Error actualizando cantidad');
-
-      const updatedCart = cartItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
-      );
-      setCartItems(updatedCart);
-    } catch (err) {
-      console.error('🛑 Error actualizando cantidad:', err);
+        if (!res.ok) throw new Error('Error actualizando cantidad');
+      } catch (err) {
+        console.error('🛑 Error actualizando cantidad:', err);
+        return;
+      }
+    } else {
+      // Usuario invitado: actualiza localStorage
+      const updatedItem = { ...item, quantity: newQuantity };
+      localStorage.setItem('pendingCartItem', JSON.stringify(updatedItem));
     }
+
+    const updatedCart = cartItems.map((item) =>
+      item.id === itemId ? { ...item, quantity: newQuantity } : item
+    );
+    setCartItems(updatedCart);
   };
 
   const removeItem = async (itemId: string) => {
     const token = localStorage.getItem('token');
-    if (!token) return;
 
-    try {
-      const res = await fetch(`${API_URL}/remove/${itemId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+    if (token) {
+      // Usuario logueado: elimina del backend
+      try {
+        const res = await fetch(`${API_URL}/remove/${itemId}`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
 
-      if (!res.ok) throw new Error('Error eliminando el producto');
-
-      const updatedCart = cartItems.filter((item) => item.id !== itemId);
-      setCartItems(updatedCart);
-    } catch (err) {
-      console.error('🛑 Error eliminando producto:', err);
+        if (!res.ok) throw new Error('Error eliminando el producto');
+      } catch (err) {
+        console.error('🛑 Error eliminando producto:', err);
+        return;
+      }
+    } else {
+      // Usuario invitado: borra de localStorage solo el item eliminado
+      // Si tienes más de un producto en el futuro, deberías guardar un array en localStorage
+      // Aquí asumo que solo tienes 1 producto en pendingCartItem
+      localStorage.removeItem('pendingCartItem');
     }
+
+    // Elimina el item del estado para actualizar la UI inmediatamente
+    const updatedCart = cartItems.filter(item => item.id !== itemId);
+    setCartItems(updatedCart);
   };
 
   return (

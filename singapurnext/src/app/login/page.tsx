@@ -24,7 +24,6 @@ const Login: React.FC = () => {
   const searchParams = useSearchParams();
   const redirectUrl = searchParams?.get('redirect') || '/';
 
-  // Cambiar entre registrar e iniciar sesión
   const toggleRegister = () => {
     setIsRegistering(!isRegistering);
     setFormData({
@@ -38,13 +37,42 @@ const Login: React.FC = () => {
     setErrorMessage('');
   };
 
-  // Manejar cambios en los inputs
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target;
     setFormData(prevState => ({ ...prevState, [id]: value }));
   };
 
-  // Manejar envío del formulario
+  const sendPendingCartItem = async (token: string, userId: string) => {
+    const pendingItem = localStorage.getItem('pendingCartItem');
+    if (!pendingItem) return;
+
+    try {
+      const item = JSON.parse(pendingItem);
+      const { variantId, quantity } = item;
+
+      const response = await fetch(
+        `${API_URL}/api/cart/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Error al agregar el item pendiente al carrito');
+        return;
+      }
+
+      console.log('Producto pendiente agregado al carrito');
+      localStorage.removeItem('pendingCartItem');
+    } catch (err) {
+      console.error('Error procesando el pendingCartItem:', err);
+    }
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setErrorMessage('');
@@ -57,7 +85,10 @@ const Login: React.FC = () => {
     }
 
     try {
-      const endpoint = isRegistering ? `${API_URL}/api/users` : `${API_URL}/api/auth/login`;
+      const endpoint = isRegistering
+        ? `${API_URL}/api/users`
+        : `${API_URL}/api/auth/login`;
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -73,17 +104,16 @@ const Login: React.FC = () => {
       });
 
       const responseText = await response.text();
-      console.log("Respuesta del servidor:", responseText);
+      console.log('Respuesta del servidor:', responseText);
 
       if (!response.ok) {
         throw new Error('Error en la autenticación');
       }
 
-      // Intentar parsear la respuesta JSON
       let data;
       try {
         data = JSON.parse(responseText);
-      } catch (error) {
+      } catch {
         throw new Error('Respuesta no válida del servidor');
       }
 
@@ -91,23 +121,18 @@ const Login: React.FC = () => {
         const { token, roles, userId } = data;
         if (!token || !userId) throw new Error('Datos de autenticación incompletos');
 
-        // ✅ Priorizar el rol de ADMIN si está presente
         const role = roles.includes('ADMIN') ? 'ADMIN' : roles[0] || 'CUSTOMER';
 
-        // Eliminar el token anterior antes de guardar el nuevo
-        localStorage.removeItem('token');
-        localStorage.removeItem('role');
-        localStorage.removeItem('userId');
-
-        // Guardar los nuevos valores
         localStorage.setItem('token', token);
         localStorage.setItem('role', role);
         localStorage.setItem('userId', String(userId));
-
         Cookies.set('token', token, { expires: 1, secure: true });
 
-        // ✅ Redirección según el rol
-        router.push(role === 'ADMIN' ? '/admin' : '/');
+        // ✅ Enviar el producto pendiente si lo hay
+        await sendPendingCartItem(token, userId);
+
+        // ✅ Redirigir después de login
+        router.push(role === 'ADMIN' ? '/admin' : redirectUrl);
       } else {
         alert('Usuario registrado exitosamente');
         toggleRegister();
