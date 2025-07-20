@@ -137,8 +137,9 @@ const Login: React.FC = () => {
         alert('Usuario registrado exitosamente');
         toggleRegister();
       }
-    } catch (error: any) {
-      setErrorMessage(error.message);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      setErrorMessage(errorMessage);
     } finally {
       setLoading(false);
     }
