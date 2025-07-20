@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';
-import styles from '../menu/page.module.css';
+import styles from '../menu/menu.module.css'; // Usamos la nueva ubicación del archivo de CSS
 
 interface Img {
   id: number;
@@ -116,11 +116,11 @@ const Menu: React.FC = () => {
   if (loading) return <p>Cargando productos...</p>;
 
   return (
-    <div className={`${styles['menu-container']} ${styles['menu-page']}`}>
-      <div className={styles['filter-and-button-container']}>
-        <div className={styles['filter-container']}>
-          <label htmlFor="sort" className={styles['filter-label']}>Ordenar por:</label>
-          <select id="sort" className={styles['filter-select']} value={sortOption} onChange={handleSortChange}>
+    <div className={styles.menuContainer}>
+      <div className={styles.filterAndButtonContainer}>
+        <div className={styles.filterContainer}>
+          <label htmlFor="sort" className={styles.filterLabel}>Ordenar por:</label>
+          <select id="sort" className={styles.filterSelect} value={sortOption} onChange={handleSortChange}>
             <option value="">-- Selecciona --</option>
             <option value="price-asc">Precio: Menor a mayor</option>
             <option value="price-desc">Precio: Mayor a menor</option>
@@ -130,12 +130,11 @@ const Menu: React.FC = () => {
         </div>
       </div>
 
-      <div className={styles['product-grid']}>
+      <div className={styles.productGrid}>
         {sortedProducts.slice(0, visibleCount).length === 0 ? (
           <p>No se encontraron productos que coincidan con los criterios seleccionados.</p>
         ) : (
           sortedProducts.slice(0, visibleCount).map((product) => {
-            // Obtener la primera imagen de la primera variante como imagen principal
             const primaryImage = product.variants[0]?.images?.[0]?.imageUrl || '/placeholder.png';
             const price = product.variants.length > 0
               ? Math.min(...product.variants.map(v => Number(v.price || 0)))
@@ -144,7 +143,7 @@ const Menu: React.FC = () => {
             return (
               <div
                 key={product.id}
-                className={styles['product-card']}
+                className={styles.productCard}
                 onClick={() => handleProductClick(product.id)}
               >
                 <Image
@@ -152,12 +151,12 @@ const Menu: React.FC = () => {
                   alt={product.name}
                   width={240}
                   height={240}
-                  className={styles['product-image']}
+                  className={styles.productImage}
                   style={{ width: '100%', height: 'auto', objectFit: 'cover', borderRadius: '10px' }}
                 />
-                <div className={styles['product-details']}>
-                  <h3 className={styles['product-name']}>{product.name}</h3>
-                  <p className={styles['product-price']}>
+                <div className={styles.productDetails}>
+                  <h3 className={styles.productName}>{product.name}</h3>
+                  <p className={styles.productPrice}>
                     {price > 0 ? `$${price.toLocaleString('es-CO')}` : 'Precio no disponible'}
                   </p>
                 </div>
@@ -168,7 +167,7 @@ const Menu: React.FC = () => {
       </div>
 
       {visibleCount < sortedProducts.length && (
-        <button className={styles['view-all-button']} onClick={handleShowMore}>
+        <button className={styles.viewAllButton} onClick={handleShowMore}>
           Mostrar más
         </button>
       )}

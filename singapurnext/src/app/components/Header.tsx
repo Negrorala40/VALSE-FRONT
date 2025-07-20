@@ -28,7 +28,6 @@ const Header: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -59,13 +58,13 @@ const Header: React.FC = () => {
   };
 
   const handleUserClick = () => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    router.push('/perfil');
-  } else {
-    router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
-  }
-};
+    const token = localStorage.getItem('token');
+    if (token) {
+      router.push('/perfil');
+    } else {
+      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Cookies from 'js-cookie';
-import styles from './page.module.css';
+import styles from './page.module.css'; // Asegúrate de importar los estilos con el nombre correcto
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
 

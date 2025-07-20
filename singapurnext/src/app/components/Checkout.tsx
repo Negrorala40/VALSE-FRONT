@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import './Checkout.css';
 
 interface CartItem {
@@ -35,9 +36,6 @@ const API_CART_URL = 'http://localhost:8082/api/cart';
 const API_SIGNATURE_URL = 'http://localhost:8082/api/bold/signature';
 const API_USER_URL = 'http://localhost:8082/api/users/me';
 const API_ADDRESSES = 'http://localhost:8082/api/addresses';
-
-// Reemplaza con tu API key pública real
-const BOLD_API_KEY = 'TU_LLAVE_PUBLICA';
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -80,7 +78,7 @@ const CheckoutPage = () => {
         });
         if (!res.ok) throw new Error('Error al obtener carrito');
         const data = await res.json();
-        const items: CartItem[] = data.map((item: any) => ({
+        const items: CartItem[] = data.map((item: { id: string; imageUrls: string[]; productName: string; name: string; price: number; size: string; color: string; quantity: number; stock: number }) => ({
           id: item.id,
           image: item.imageUrls?.[0] || '/placeholder.png',
           name: item.productName || item.name,
@@ -253,32 +251,32 @@ const CheckoutPage = () => {
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
 
   useEffect(() => {
-  if (step !== 3) return;
-  if (!signature || !orderId || total === 0 || !selectedAddress || !userData) return;
+    if (step !== 3) return;
+    if (!signature || !orderId || total === 0 || !selectedAddress || !userData) return;
 
-  const container = document.getElementById('bold-button-container');
-  if (container && !container.querySelector('[data-bold-button]')) {
-    const script = document.createElement('script');
+    const container = document.getElementById('bold-button-container');
+    if (container && !container.querySelector('[data-bold-button]')) {
+      const script = document.createElement('script');
 
-    script.setAttribute('data-bold-button', '');
+      script.setAttribute('data-bold-button', '');
 
-    script.setAttribute('data-order-id', orderId); // Identificador único (ORD-XXXXX)
-    script.setAttribute('data-currency', 'COP');
+      script.setAttribute('data-order-id', orderId); // Identificador único (ORD-XXXXX)
+      script.setAttribute('data-currency', 'COP');
 
-    // Total como entero sin decimales
-    const totalInt = Math.round(total);
-    script.setAttribute('data-amount', totalInt.toString());
+      // Total como entero sin decimales
+      const totalInt = Math.round(total);
+      script.setAttribute('data-amount', totalInt.toString());
 
-    script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
-    script.setAttribute('data-integrity-signature', signature);
-    script.setAttribute('data-redirection-url', 'http://localhost:3000/checkout/success');
-    script.setAttribute('data-description', 'Compra desde tienda');
+      script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
+      script.setAttribute('data-integrity-signature', signature);
+      script.setAttribute('data-redirection-url', 'http://localhost:3000/checkout/success');
+      script.setAttribute('data-description', 'Compra desde tienda');
 
-    script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
+      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
 
-    container.appendChild(script);
-  }
-}, [step, signature, orderId, total, selectedAddress, userData]);
+      container.appendChild(script);
+    }
+  }, [step, signature, orderId, total, selectedAddress, userData]);
 
   return (
     <div className="checkout-page">
@@ -372,7 +370,7 @@ const CheckoutPage = () => {
             <ul className="cart-items">
               {cartItems.map((item) => (
                 <li key={item.id} className="cart-item">
-                  <img src={item.image} alt={item.name} />
+                  <Image src={item.image} alt={item.name} width={100} height={100} />
                   <div className="item-info">
                     <p>{item.name}</p>
                     <p>

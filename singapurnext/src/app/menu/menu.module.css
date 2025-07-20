@@ -1,6 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
-
-.menu-container {
+.menuContainer {
   padding: 2rem 0;
   background-color: #ffffff;
   font-family: 'Fredoka', sans-serif;
@@ -9,7 +7,7 @@
 }
 
 /* Filtros */
-.filter-and-button-container {
+.filterAndButtonContainer {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -18,19 +16,19 @@
   gap: 1rem;
 }
 
-.filter-container {
+.filterContainer {
   display: flex;
   align-items: center;
 }
 
-.filter-label {
+.filterLabel {
   margin-right: 8px;
   font-size: 16px;
   font-weight: 600;
   color: #10345c;
 }
 
-.filter-select {
+.filterSelect {
   font-size: 15px;
   padding: 8px 12px;
   border: 2px solid #02f9a6;
@@ -41,14 +39,14 @@
   transition: all 0.3s ease;
 }
 
-.filter-select:focus {
+.filterSelect:focus {
   outline: none;
   border-color: #10345c;
   background-color: #f0f9f6;
 }
 
 /* Grid productos */
-.product-grid {
+.productGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 20px;
@@ -59,7 +57,7 @@
 }
 
 /* Tarjeta producto */
-.product-card {
+.productCard {
   background-color: #fff;
   border: 1.5px solid #e0f7f1;
   border-radius: 12px;
@@ -74,13 +72,13 @@
 }
 
 /* Hover */
-.product-card:hover {
+.productCard:hover {
   transform: translateY(-6px);
   box-shadow: 0 10px 20px rgba(2, 249, 166, 0.15);
 }
 
 /* Imagen */
-.product-image {
+.productImage {
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
@@ -89,25 +87,25 @@
 }
 
 /* Detalles */
-.product-details {
+.productDetails {
   text-align: center;
   margin-top: auto;
 }
 
-.product-name {
+.productName {
   font-size: 16px;
   font-weight: 600;
   color: #10345c;
   margin-bottom: 4px;
 }
 
-.product-price {
+.productPrice {
   font-size: 14px;
   color: #178582;
 }
 
 /* Botón mostrar más */
-.view-all-button {
+.viewAllButton {
   background-color: #10345c;
   color: #ffffff;
   font-family: 'Fredoka', sans-serif;
@@ -121,34 +119,33 @@
   transition: background-color 0.3s ease, transform 0.2s ease;
 }
 
-.view-all-button:hover {
+.viewAllButton:hover {
   background-color: #178582;
   transform: scale(1.05);
 }
 
 /* Responsivo */
-
 @media (max-width: 1024px) {
-  .product-grid {
+  .productGrid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .product-grid {
+  .productGrid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
 
-  .product-card {
+  .productCard {
     padding: 10px;
   }
 
-  .product-name {
+  .productName {
     font-size: 14px;
   }
 
-  .product-price {
+  .productPrice {
     font-size: 12px;
   }
 }

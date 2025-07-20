@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import './Cart.css';
 import { useRouter } from 'next/navigation';
 
@@ -31,6 +31,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
   const router = useRouter();
 
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+
+  // Corregir dependencia de useEffect
+  const memoizedSetCartItems = useCallback(setCartItems, [setCartItems]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -71,7 +74,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
             stock: item.stock || 100,
           }));
 
-          setCartItems(transformedItems);
+          memoizedSetCartItems(transformedItems);
         } catch (err) {
           console.error('🛑 Error al cargar el carrito:', err);
         }
@@ -81,7 +84,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
         if (pending) {
           try {
             const parsed: CartItem = JSON.parse(pending);
-            setCartItems([parsed]);
+            memoizedSetCartItems([parsed]);
           } catch {
             console.error('Error al parsear pendingCartItem');
           }
@@ -90,7 +93,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
     };
 
     fetchCart();
-  }, []);
+  }, [memoizedSetCartItems]);
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -129,7 +132,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
     const updatedCart = cartItems.map((item) =>
       item.id === itemId ? { ...item, quantity: newQuantity } : item
     );
-    setCartItems(updatedCart);
+    memoizedSetCartItems(updatedCart);
   };
 
   const removeItem = async (itemId: string) => {
@@ -160,7 +163,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
 
     // Elimina el item del estado para actualizar la UI inmediatamente
     const updatedCart = cartItems.filter(item => item.id !== itemId);
-    setCartItems(updatedCart);
+    memoizedSetCartItems(updatedCart);
   };
 
   return (

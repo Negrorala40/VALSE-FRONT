@@ -1,3 +1,4 @@
+// src/app/components/Perfil.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -96,7 +97,7 @@ const Perfil = () => {
   useEffect(() => {
     loadUserData();
     loadAddresses();
-  }, []);
+  }, []); // Aquí es donde React se queja de las dependencias faltantes.
 
   const showSuccessCheckmark = (message: string) => {
     setSuccess(message);

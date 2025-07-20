@@ -2,130 +2,131 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image'; // Importa el componente Image de Next.js
 import styles from '../product/page.module.css';
 
-interface Image {
+interface Imagen {
   imageUrl: string;
 }
 
-interface Variant {
+interface Variante {
   id: number;
   color: string;
   size: string;
   stock: number;
   price: number;
   productId: number;
-  images: Image[];
+  images: Imagen[];
 }
 
-interface Product {
+interface Producto {
   id: number;
   name: string;
   description: string;
   gender: string;
   type: string;
-  variants: Variant[];
+  variants: Variante[];
 }
 
-const Product: React.FC = () => {
+const Producto: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productId = searchParams.get('id');
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [producto, setProducto] = useState<Producto | null>(null);
+  const [cargando, setCargando] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
-  const [selectedSize, setSelectedSize] = useState<string>('');
-  const [selectedColor, setSelectedColor] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(1);
-  const [availableStock, setAvailableStock] = useState<number | null>(null);
-  const [displayImageUrl, setDisplayImageUrl] = useState<string | null>(null);
-  const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
+  const [tallaSeleccionada, setTallaSeleccionada] = useState<string>('');
+  const [colorSeleccionado, setColorSeleccionado] = useState<string>('');
+  const [cantidad, setCantidad] = useState<number>(1);
+  const [stockDisponible, setStockDisponible] = useState<number | null>(null);
+  const [imagenUrl, setImagenUrl] = useState<string | null>(null);
+  const [precioSeleccionado, setPrecioSeleccionado] = useState<number | null>(null);
 
   useEffect(() => {
     if (!productId) {
       setError('Producto no encontrado');
-      setLoading(false);
+      setCargando(false);
       return;
     }
 
-    const fetchProduct = async () => {
+    const obtenerProducto = async () => {
       try {
         const response = await fetch(`http://localhost:8082/api/products/${productId}`);
         if (!response.ok) throw new Error('Producto no encontrado');
 
-        const data: Product = await response.json();
-        setProduct(data);
+        const data: Producto = await response.json();
+        setProducto(data);
 
-        const firstVariant = data.variants[0];
-        const firstImage = firstVariant?.images?.[0]?.imageUrl || null;
-        setDisplayImageUrl(firstImage);
+        const primeraVariante = data.variants[0];
+        const primeraImagen = primeraVariante?.images?.[0]?.imageUrl || null;
+        setImagenUrl(primeraImagen);
 
-        const minPrice = Math.min(...data.variants.map((v) => v.price));
-        setSelectedPrice(minPrice);
-      } catch (err: any) {
-        setError(err.message);
+        const precioMinimo = Math.min(...data.variants.map((v) => v.price));
+        setPrecioSeleccionado(precioMinimo);
+      } catch (err: unknown) {
+        setError((err as Error).message);
       } finally {
-        setLoading(false);
+        setCargando(false);
       }
     };
 
-    fetchProduct();
+    obtenerProducto();
   }, [productId]);
 
   useEffect(() => {
-    if (selectedSize && selectedColor && product) {
-      const variant = product.variants.find(
-        (v) => v.color === selectedColor && v.size === selectedSize
+    if (tallaSeleccionada && colorSeleccionado && producto) {
+      const variante = producto.variants.find(
+        (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
       );
 
-      if (variant) {
-        setAvailableStock(variant.stock);
-        setSelectedPrice(variant.price);
+      if (variante) {
+        setStockDisponible(variante.stock);
+        setPrecioSeleccionado(variante.price);
 
-        if (variant.images && variant.images.length > 0) {
-          setDisplayImageUrl(variant.images[0].imageUrl);
+        if (variante.images && variante.images.length > 0) {
+          setImagenUrl(variante.images[0].imageUrl);
         }
       }
-    } else if (product) {
-      const minPrice = Math.min(...product.variants.map((v) => v.price));
-      setSelectedPrice(minPrice);
-      setAvailableStock(null);
+    } else if (producto) {
+      const precioMinimo = Math.min(...producto.variants.map((v) => v.price));
+      setPrecioSeleccionado(precioMinimo);
+      setStockDisponible(null);
     }
-  }, [selectedColor, selectedSize, product]);
+  }, [colorSeleccionado, tallaSeleccionada, producto]);
 
-  const handleColorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newColor = e.target.value;
-    setSelectedColor(newColor);
-    setSelectedSize('');
-    setAvailableStock(null);
+  const manejarCambioColor = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const nuevoColor = e.target.value;
+    setColorSeleccionado(nuevoColor);
+    setTallaSeleccionada('');
+    setStockDisponible(null);
 
-    if (product) {
-      const variant = product.variants.find((v) => v.color === newColor);
-      if (variant) {
-        setSelectedPrice(variant.price);
-        if (variant.images?.[0]?.imageUrl) {
-          setDisplayImageUrl(variant.images[0].imageUrl);
+    if (producto) {
+      const variante = producto.variants.find((v) => v.color === nuevoColor);
+      if (variante) {
+        setPrecioSeleccionado(variante.price);
+        if (variante.images?.[0]?.imageUrl) {
+          setImagenUrl(variante.images[0].imageUrl);
         }
       }
     }
   };
 
-  const handleSizeChange = (size: string) => {
-    setSelectedSize(size);
+  const manejarCambioTalla = (talla: string) => {
+    setTallaSeleccionada(talla);
   };
 
-  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setQuantity(Number(e.target.value));
+  const manejarCambioCantidad = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setCantidad(Number(e.target.value));
 
-  const handleAddToCart = async () => {
-    if (!selectedSize || !selectedColor) {
+  const agregarAlCarrito = async () => {
+    if (!tallaSeleccionada || !colorSeleccionado) {
       alert('Por favor selecciona talla y color');
       return;
     }
 
-    if (quantity > (availableStock || 0)) {
+    if (cantidad > (stockDisponible || 0)) {
       alert('Cantidad seleccionada excede el stock disponible');
       return;
     }
@@ -133,29 +134,29 @@ const Product: React.FC = () => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
 
-    const variant = product?.variants.find(
-      (v) => v.size === selectedSize && v.color === selectedColor
+    const variante = producto?.variants.find(
+      (v) => v.size === tallaSeleccionada && v.color === colorSeleccionado
     );
 
-    if (!variant || !product) {
+    if (!variante || !producto) {
       alert('Variante de producto no encontrada.');
       return;
     }
 
-    const cartItem = {
+    const itemCarrito = {
       userId,
-      variantId: variant.id,
-      quantity,
-      productName: product.name,
-      color: selectedColor,
-      size: selectedSize,
-      imageUrl: variant.images?.[0]?.imageUrl || '',
-      price: variant.price,
+      variantId: variante.id,
+      quantity: cantidad,
+      productName: producto.name,
+      color: colorSeleccionado,
+      size: tallaSeleccionada,
+      imageUrl: variante.images?.[0]?.imageUrl || '',
+      price: variante.price,
     };
 
     if (!token || !userId) {
       // Guardar en localStorage para procesar después
-      localStorage.setItem('pendingCartItem', JSON.stringify(cartItem));
+      localStorage.setItem('pendingCartItem', JSON.stringify(itemCarrito));
       alert('Producto guardado. Inicia sesión para completar la compra.');
       router.push('/login');
       return;
@@ -163,7 +164,7 @@ const Product: React.FC = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8082/api/cart/add?userId=${userId}&productVariantId=${variant.id}&quantity=${quantity}`,
+        `http://localhost:8082/api/cart/add?userId=${userId}&productVariantId=${variante.id}&quantity=${cantidad}`,
         {
           method: 'POST',
           headers: {
@@ -178,57 +179,59 @@ const Product: React.FC = () => {
 
       alert('Producto agregado al carrito con éxito.');
       router.push('/menu');
-    } catch (err: any) {
-      alert('Error al agregar al carrito: ' + err.message);
+    } catch (err: unknown) {
+      alert('Error al agregar al carrito: ' + (err as Error).message);
     }
   };
 
-  if (loading) return <p>Cargando producto...</p>;
+  if (cargando) return <p>Cargando producto...</p>;
   if (error) return <p style={{ color: 'red' }}>{error}</p>;
-  if (!product) return <p>Producto no encontrado. Regresa al menú.</p>;
+  if (!producto) return <p>Producto no encontrado. Regresa al menú.</p>;
 
-  const availableColors = [
-    ...new Set(product.variants.filter((v) => v.stock > 0).map((v) => v.color)),
+  const coloresDisponibles = [
+    ...new Set(producto.variants.filter((v) => v.stock > 0).map((v) => v.color)),
   ];
 
-  const availableSizes = selectedColor
+  const tallasDisponibles = colorSeleccionado
     ? [
         ...new Set(
-          product.variants
-            .filter((v) => v.color === selectedColor && v.stock > 0)
+          producto.variants
+            .filter((v) => v.color === colorSeleccionado && v.stock > 0)
             .map((v) => v.size)
         ),
       ]
     : [];
 
   return (
-    <div className={styles.product}>
-      {displayImageUrl ? (
-        <img
-          src={displayImageUrl}
-          alt={product.name}
-          className={styles['product-image']}
+    <div className={styles.producto}>
+      {imagenUrl ? (
+        <Image
+          src={imagenUrl}
+          alt={producto.name}
+          className={styles['imagen-producto']}
+          width={500} // Definir tamaño de la imagen
+          height={500} // Definir tamaño de la imagen
         />
       ) : (
         <p>Imagen no disponible</p>
       )}
 
-      <div className={styles['product-info']}>
-        <h2>{product.name}</h2>
-        <p>{product.description}</p>
-        <p className={styles['product-price']}>
-          {selectedPrice !== null
-            ? `$${selectedPrice.toLocaleString('es-CO')}`
+      <div className={styles['info-producto']}>
+        <h2>{producto.name}</h2>
+        <p>{producto.description}</p>
+        <p className={styles['precio-producto']}>
+          {precioSeleccionado !== null
+            ? `$${precioSeleccionado.toLocaleString('es-CO')}`
             : 'Seleccione una variante'}
         </p>
 
-        <div className={styles['product-options']}>
+        <div className={styles['opciones-producto']}>
           {/* COLOR */}
-          <div className={styles['color-selector']}>
+          <div className={styles['selector-color']}>
             <label>Color:</label>
-            <select value={selectedColor} onChange={handleColorChange}>
+            <select value={colorSeleccionado} onChange={manejarCambioColor}>
               <option value="">Seleccione un color</option>
-              {availableColors.map((color) => (
+              {coloresDisponibles.map((color) => (
                 <option key={color} value={color}>
                   {color}
                 </option>
@@ -237,20 +240,20 @@ const Product: React.FC = () => {
           </div>
 
           {/* TALLAS */}
-          {selectedColor && (
-            <div className={styles['size-selector']}>
+          {colorSeleccionado && (
+            <div className={styles['selector-talla']}>
               <label>Talla:</label>
-              <div className={styles['size-buttons']}>
-                {availableSizes.map((size) => (
+              <div className={styles['botones-talla']}>
+                {tallasDisponibles.map((talla) => (
                   <button
-                    key={size}
+                    key={talla}
                     type="button"
-                    className={`${styles['size-button']} ${
-                      selectedSize === size ? styles['selected'] : ''
+                    className={`${styles['boton-talla']} ${
+                      tallaSeleccionada === talla ? styles['seleccionado'] : ''
                     }`}
-                    onClick={() => handleSizeChange(size)}
+                    onClick={() => manejarCambioTalla(talla)}
                   >
-                    {size}
+                    {talla}
                   </button>
                 ))}
               </div>
@@ -258,19 +261,19 @@ const Product: React.FC = () => {
           )}
 
           {/* CANTIDAD */}
-          <div className={styles['quantity-selector']}>
+          <div className={styles['selector-cantidad']}>
             <label>Cantidad:</label>
             <input
               type="number"
-              value={quantity}
-              onChange={handleQuantityChange}
+              value={cantidad}
+              onChange={manejarCambioCantidad}
               min={1}
-              max={availableStock || 1}
+              max={stockDisponible || 1}
             />
             <p>
-              {selectedSize && selectedColor
-                ? availableStock !== null
-                  ? availableStock < 3
+              {colorSeleccionado && tallaSeleccionada
+                ? stockDisponible !== null
+                  ? stockDisponible < 3
                     ? 'Últimas unidades'
                     : 'Disponible'
                   : 'No disponible'
@@ -280,8 +283,8 @@ const Product: React.FC = () => {
         </div>
 
         <button
-          className={styles['btn-add-to-cart']}
-          onClick={handleAddToCart}
+          className={styles['btn-agregar-carrito']}
+          onClick={agregarAlCarrito}
         >
           Agregar al Carrito
         </button>
@@ -290,4 +293,4 @@ const Product: React.FC = () => {
   );
 };
 
-export default Product;
+export default Producto;
