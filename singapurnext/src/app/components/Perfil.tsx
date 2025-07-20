@@ -1,7 +1,7 @@
 // src/app/components/Perfil.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './Perfil.css';
 
 interface Address {
@@ -49,12 +49,12 @@ const Perfil = () => {
   const [showCheckmark, setShowCheckmark] = useState<boolean>(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const authHeaders = {
+  const authHeaders = useMemo(() => ({
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
-  };
+  }), [token]);
 
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`${USER_API_URL}/me`, {
@@ -73,9 +73,9 @@ const Perfil = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authHeaders]);
 
-  const loadAddresses = async () => {
+  const loadAddresses = useCallback(async () => {
     try {
       const response = await fetch(ADDRESS_API_URL, {
         method: 'GET',
@@ -92,12 +92,12 @@ const Perfil = () => {
       setError('Error al cargar direcciones');
       console.error(err);
     }
-  };
+  }, [authHeaders]);
 
   useEffect(() => {
     loadUserData();
     loadAddresses();
-  }, []); // Aquí es donde React se queja de las dependencias faltantes.
+  }, [loadUserData, loadAddresses]);
 
   const showSuccessCheckmark = (message: string) => {
     setSuccess(message);

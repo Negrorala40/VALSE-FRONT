@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image'; // Importa el componente Image de Next.js
-import styles from '../product/page.module.css';
+import Image from 'next/image';
+import styles from './Product.module.css';
 
 interface Imagen {
   imageUrl: string;
@@ -28,7 +28,7 @@ interface Producto {
   variants: Variante[];
 }
 
-const Producto: React.FC = () => {
+const ProductContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productId = searchParams.get('id');
@@ -293,4 +293,12 @@ const Producto: React.FC = () => {
   );
 };
 
-export default Producto;
+const Product = () => {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <ProductContent />
+    </Suspense>
+  );
+};
+
+export default Product;

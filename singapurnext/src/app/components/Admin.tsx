@@ -28,13 +28,13 @@ interface Product {
 
 const Admin = () => {
   const router = useRouter();
-  const [role, setRole] = useState<string>("");
+  const [role, setRole] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
 
-  const [name, setName] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
-  const [gender, setGender] = useState<string>("");
-  const [type, setType] = useState<string>("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [gender, setGender] = useState("");
+  const [type, setType] = useState("");
 
   const [variants, setVariants] = useState<Variant[]>([
     {
@@ -56,7 +56,7 @@ const Admin = () => {
       setRole(storedRole);
       fetchProducts();
     }
-  }, [router]); // Añadí router como dependencia para resolver la advertencia
+  }, [router]);
 
   const fetchProducts = async () => {
     try {
@@ -80,16 +80,15 @@ const Admin = () => {
 
   const handleVariantChange = (index: number, field: keyof Variant, value: string | number) => {
     const updatedVariants = [...variants];
-    (updatedVariants[index] as any)[field] = value; // Solucionado para admitir valores de tipo string o number
+    if (field === 'color' || field === 'size') {
+      updatedVariants[index][field] = value as string;
+    } else if (field === 'stock' || field === 'price') {
+      updatedVariants[index][field] = value as number;
+    }
     setVariants(updatedVariants);
   };
 
-  const handleImageChange = (
-    variantIndex: number,
-    imageIndex: number,
-    field: keyof Image,
-    value: string
-  ) => {
+  const handleImageChange = (variantIndex: number, imageIndex: number, field: keyof Image, value: string) => {
     const updatedVariants = [...variants];
     updatedVariants[variantIndex].images[imageIndex][field] = value;
     setVariants(updatedVariants);
@@ -123,7 +122,7 @@ const Admin = () => {
       return;
     }
 
-    for (const variant of variants) { // Usé const ya que la variable 'variant' no se reasigna
+    for (const variant of variants) {
       if (
         !variant.color ||
         !variant.size ||
@@ -297,7 +296,7 @@ const Admin = () => {
               className={styles.input}
               type="number"
               value={variant.stock}
-              onChange={(e) => handleVariantChange(index, "stock", parseInt(e.target.value))}
+              onChange={(e) => handleVariantChange(index, "stock", Number(e.target.value))}
             />
 
             <label className={styles.label}>Precio:</label>
@@ -308,78 +307,63 @@ const Admin = () => {
               onChange={(e) => handleVariantChange(index, "price", parseFloat(e.target.value))}
             />
 
-            <h4>Imágenes</h4>
-            {variant.images.map((image, imageIndex) => (
-              <div key={imageIndex} className={styles.imageBox}>
+            <label className={styles.label}>Imágenes:</label>
+            {variant.images.map((img, imgIndex) => (
+              <div key={imgIndex}>
                 <input
                   className={styles.input}
                   type="text"
-                  value={image.imageUrl}
+                  placeholder="Nombre del archivo"
+                  value={img.fileName}
                   onChange={(e) =>
-                    handleImageChange(index, imageIndex, "imageUrl", e.target.value)
+                    handleImageChange(index, imgIndex, "fileName", e.target.value)
                   }
+                />
+                <input
+                  className={styles.input}
+                  type="text"
                   placeholder="URL de la imagen"
+                  value={img.imageUrl}
+                  onChange={(e) =>
+                    handleImageChange(index, imgIndex, "imageUrl", e.target.value)
+                  }
                 />
               </div>
             ))}
             <button
-              className={styles.button}
               type="button"
+              className={styles.addButton}
               onClick={() => handleAddImage(index)}
             >
-              Agregar Imagen
+              Agregar otra imagen
             </button>
+            <hr />
           </div>
         ))}
-
         <button
-          className={styles.button}
           type="button"
+          className={styles.addButton}
           onClick={handleAddVariant}
         >
-          Agregar Variante
+          Agregar otra variante
         </button>
 
         <button className={styles.button} type="submit">
-          {editingProductId ? "Actualizar Producto" : "Agregar Producto"}
+          {editingProductId ? "Actualizar Producto" : "Guardar Producto"}
         </button>
       </form>
 
-      <hr />
-      <h3>Lista de Productos</h3>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Género</th>
-            <th>Tipo</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((product) => (
-            <tr key={product.id}>
-              <td>{product.name}</td>
-              <td>{product.gender}</td>
-              <td>{product.type}</td>
-              <td>
-                <button
-                  className={styles.button}
-                  onClick={() => handleEdit(product)}
-                >
-                  Editar
-                </button>
-                <button
-                  className={styles.button}
-                  onClick={() => handleDelete(product.id!)}
-                >
-                  Eliminar
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <h2 className={styles.title}>Lista de Productos</h2>
+      <div className={styles.productList}>
+        {products.map((product) => (
+          <div key={product.id} className={styles.productItem}>
+            <h3>{product.name}</h3>
+            <p>{product.description}</p>
+            <button onClick={() => handleEdit(product)}>Editar</button>
+            <button onClick={() => handleDelete(product.id!)}>Eliminar</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

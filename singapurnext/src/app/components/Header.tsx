@@ -103,8 +103,9 @@ const Header: React.FC = () => {
         </button>
         <button
           onClick={handleUserClick}
-          className="btn btn-login"
-          aria-label="Ir a perfil o login"
+          className={`btn btn-login ${isLoggedIn ? 'logged-in' : ''}`}
+          aria-label={isLoggedIn ? "Ir a perfil" : "Iniciar sesión"}
+          title={isLoggedIn ? "Ver perfil" : "Iniciar sesión"}
         >
           <FaUserAstronaut size={25} />
         </button>

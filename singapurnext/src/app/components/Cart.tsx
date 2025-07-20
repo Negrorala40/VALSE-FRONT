@@ -3,6 +3,18 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import './Cart.css';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+
+interface ApiCartItem {
+  id: number;
+  imageUrls: string[];
+  productName: string;
+  price: number;
+  size: string;
+  color: string;
+  quantity: number;
+  stock?: number;
+}
 
 interface CartItem {
   id: string;
@@ -61,9 +73,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
           });
 
           if (!res.ok) throw new Error('Error al obtener el carrito');
-          const data = await res.json();
+          const data: ApiCartItem[] = await res.json();
 
-          const transformedItems: CartItem[] = data.map((item: any) => ({
+          const transformedItems: CartItem[] = data.map((item) => ({
             id: item.id.toString(),
             image: item.imageUrls?.[0] || '/placeholder.png',
             name: item.productName,
@@ -180,7 +192,16 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
           <ul className="cart-items">
             {cartItems.map((item) => (
               <li key={item.id} className="cart-item">
-                <img src={item.image} alt={item.name} />
+                <div className="cart-item-image">
+                  <Image 
+                    src={item.image} 
+                    alt={item.name}
+                    width={100}
+                    height={100}
+                    priority={true}
+                    style={{ objectFit: 'cover' }}
+                  />
+                </div>
                 <div>
                   <p>{item.name}</p>
                   <p>Talla: {item.size}</p>
