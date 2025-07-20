@@ -36,6 +36,9 @@ const API_SIGNATURE_URL = 'http://localhost:8082/api/bold/signature';
 const API_USER_URL = 'http://localhost:8082/api/users/me';
 const API_ADDRESSES = 'http://localhost:8082/api/addresses';
 
+// Reemplaza con tu API key pública real
+const BOLD_API_KEY = 'TU_LLAVE_PUBLICA';
+
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
@@ -250,47 +253,32 @@ const CheckoutPage = () => {
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
 
   useEffect(() => {
-    if (step !== 3) return;
-    if (!signature || !orderId || total === 0 || !selectedAddress || !userData) return;
+  if (step !== 3) return;
+  if (!signature || !orderId || total === 0 || !selectedAddress || !userData) return;
 
-    const container = document.getElementById('bold-button-container');
-    if (container && !container.querySelector('[data-bold-button]')) {
-      const script = document.createElement('script');
-      script.setAttribute('data-bold-button', 'dark-M');
-      script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
-      script.setAttribute('data-amount', total.toString());
-      script.setAttribute('data-currency', 'COP');
-      script.setAttribute('data-order-id', orderId);
-      script.setAttribute('data-integrity-signature', signature);
-      script.setAttribute('data-redirection-url', 'http://localhost:3000/checkout/success');
-      script.setAttribute('data-description', 'Compra desde tienda');
-      script.setAttribute('data-tax', 'vat-19');
-      script.setAttribute(
-        'data-customer-data',
-        JSON.stringify({
-          email: userData.email,
-          fullName: `${userData.firstName} ${userData.lastName}`,
-          phone: userData.phone,
-          dialCode: '+57',
-          documentNumber: '123456789',
-          documentType: 'CC',
-        })
-      );
-      script.setAttribute(
-        'data-billing-address',
-        JSON.stringify({
-          address: selectedAddress.address,
-          zipCode: '110111',
-          city: selectedAddress.city,
-          state: selectedAddress.state,
-          country: selectedAddress.country,
-        })
-      );
+  const container = document.getElementById('bold-button-container');
+  if (container && !container.querySelector('[data-bold-button]')) {
+    const script = document.createElement('script');
 
-      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
-      container.appendChild(script);
-    }
-  }, [step, signature, orderId, total, selectedAddress, userData]);
+    script.setAttribute('data-bold-button', '');
+
+    script.setAttribute('data-order-id', orderId); // Identificador único (ORD-XXXXX)
+    script.setAttribute('data-currency', 'COP');
+
+    // Total como entero sin decimales
+    const totalInt = Math.round(total);
+    script.setAttribute('data-amount', totalInt.toString());
+
+    script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
+    script.setAttribute('data-integrity-signature', signature);
+    script.setAttribute('data-redirection-url', 'http://localhost:3000/checkout/success');
+    script.setAttribute('data-description', 'Compra desde tienda');
+
+    script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
+
+    container.appendChild(script);
+  }
+}, [step, signature, orderId, total, selectedAddress, userData]);
 
   return (
     <div className="checkout-page">
@@ -298,7 +286,7 @@ const CheckoutPage = () => {
 
       {/* Paso 1 - Usuario y dirección */}
       {step === 1 && userData && (
-      <section className={`step step-1 ${step === 1 ? 'step-active' : ''}`}>
+        <section className={`step step-1 ${step === 1 ? 'step-active' : ''}`}>
           <h2>Datos del usuario y dirección de envío</h2>
           <p>
             <strong>Nombre:</strong> {userData.firstName} {userData.lastName}
@@ -382,33 +370,36 @@ const CheckoutPage = () => {
             <p>Tu carrito está vacío.</p>
           ) : (
             <ul className="cart-items">
-  {cartItems.map((item) => (
-    <li key={item.id} className="cart-item">
-      <img src={item.image} alt={item.name} />
-      <div className="item-info">
-        <p>{item.name}</p>
-        <p>Talla: {item.size} | Color: {item.color}</p>
-        <p>Precio: ${item.price}</p>
-        <p>
-          Cantidad:{' '}
-          <input
-            type="number"
-            min={1}
-            max={item.stock || 100}
-            value={item.quantity}
-            onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
-          />
-        </p>
-      </div>
-      <div className="item-actions">
-        <button onClick={() => removeItem(item.id)}>Eliminar</button>
-      </div>
-    </li>
-  ))}
-</ul>
-
+              {cartItems.map((item) => (
+                <li key={item.id} className="cart-item">
+                  <img src={item.image} alt={item.name} />
+                  <div className="item-info">
+                    <p>{item.name}</p>
+                    <p>
+                      Talla: {item.size} | Color: {item.color}
+                    </p>
+                    <p>Precio: ${item.price}</p>
+                    <p>
+                      Cantidad:{' '}
+                      <input
+                        type="number"
+                        min={1}
+                        max={item.stock || 100}
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                      />
+                    </p>
+                  </div>
+                  <div className="item-actions">
+                    <button onClick={() => removeItem(item.id)}>Eliminar</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-          <p><strong>Total:</strong> ${total}</p>
+          <p>
+            <strong>Total:</strong> ${total}
+          </p>
           <button onClick={prevStep}>Volver</button>
           <button onClick={nextStep} disabled={cartItems.length === 0}>
             Siguiente
