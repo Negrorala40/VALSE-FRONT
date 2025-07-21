@@ -1,0 +1,197 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Cookies from 'js-cookie';
+import styles from './page.module.css';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+
+const Login: React.FC = () => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams?.get('redirect') || '/';
+
+  const toggleRegister = () => {
+    setIsRegistering(!isRegistering);
+    setFormData({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+    });
+    setErrorMessage('');
+  };
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = event.target;
+    setFormData(prevState => ({ ...prevState, [id]: value }));
+  };
+
+  const sendPendingCartItem = async (token: string, userId: string) => {
+    const pendingItem = localStorage.getItem('pendingCartItem');
+    if (!pendingItem) return;
+
+    try {
+      const item = JSON.parse(pendingItem);
+      const { variantId, quantity } = item;
+
+      const response = await fetch(
+        `${API_URL}/api/cart/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Error al agregar el item pendiente al carrito');
+        return;
+      }
+
+      console.log('Producto pendiente agregado al carrito');
+      localStorage.removeItem('pendingCartItem');
+    } catch (err) {
+      console.error('Error procesando el pendingCartItem:', err);
+    }
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setErrorMessage('');
+    setLoading(true);
+
+    if (isRegistering && formData.password !== formData.confirmPassword) {
+      setErrorMessage('Las contraseñas no coinciden');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const endpoint = isRegistering
+        ? `${API_URL}/api/users`
+        : `${API_URL}/api/auth/login`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          ...(isRegistering && {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+          }),
+        }),
+      });
+
+      const responseText = await response.text();
+      console.log('Respuesta del servidor:', responseText);
+
+      if (!response.ok) {
+        throw new Error('Error en la autenticación');
+      }
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error('Respuesta no válida del servidor');
+      }
+
+      if (!isRegistering) {
+        const { token, roles, userId } = data;
+        if (!token || !userId) throw new Error('Datos de autenticación incompletos');
+
+        const role = roles.includes('ADMIN') ? 'ADMIN' : roles[0] || 'CUSTOMER';
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('role', role);
+        localStorage.setItem('userId', String(userId));
+        Cookies.set('token', token, { expires: 1, secure: true });
+
+        await sendPendingCartItem(token, userId);
+
+        router.push(role === 'ADMIN' ? '/admin' : redirectUrl);
+      } else {
+        alert('Usuario registrado exitosamente');
+        toggleRegister();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      setErrorMessage(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.loginContainer}>
+      <div className={styles.formContainer}>
+        <h2>{isRegistering ? 'Registrar Usuario' : 'Iniciar Sesión'}</h2>
+        {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
+        <form onSubmit={handleSubmit}>
+          {isRegistering && (
+            <>
+              <div className={styles.formGroup}>
+                <label htmlFor="firstName">Nombre</label>
+                <input type="text" id="firstName" value={formData.firstName} onChange={handleChange} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="lastName">Apellido</label>
+                <input type="text" id="lastName" value={formData.lastName} onChange={handleChange} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="phone">Teléfono</label>
+                <input type="tel" id="phone" value={formData.phone} onChange={handleChange} required />
+              </div>
+            </>
+          )}
+          <div className={styles.formGroup}>
+            <label htmlFor="email">Correo Electrónico</label>
+            <input type="email" id="email" value={formData.email} onChange={handleChange} required />
+          </div>
+          <div className={styles.formGroup}>
+            <label htmlFor="password">Contraseña</label>
+            <input type="password" id="password" value={formData.password} onChange={handleChange} required />
+          </div>
+          {isRegistering && (
+            <div className={styles.formGroup}>
+              <label htmlFor="confirmPassword">Confirmar Contraseña</label>
+              <input type="password" id="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required />
+            </div>
+          )}
+          <button type="submit" className={styles.btnPrimary} disabled={loading}>
+            {loading ? 'Cargando...' : isRegistering ? 'Registrar' : 'Iniciar Sesión'}
+          </button>
+        </form>
+        <p className={styles.toggleText}>
+          {isRegistering ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}
+          <span onClick={toggleRegister} className={styles.toggleLink}>
+            {isRegistering ? ' Inicia Sesión' : ' Regístrate'}
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
