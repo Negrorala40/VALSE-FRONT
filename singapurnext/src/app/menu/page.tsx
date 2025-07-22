@@ -1,15 +1,9 @@
-import React from 'react';
-import Menu from '../components/Menu';
+import MenuWrapper from './MenuWrapper';
 
-const MenuPage: React.FC = () => {
+export default function MenuPage() {
   return (
-    <div>
-      
-      <div style={{marginTop: '4rem'}}>
-        <Menu />
-      </div>
+    <div style={{ marginTop: '4rem' }}>
+      <MenuWrapper />
     </div>
   );
-};
-
-export default MenuPage;
+}
