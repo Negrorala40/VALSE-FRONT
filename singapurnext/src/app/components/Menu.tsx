@@ -51,7 +51,7 @@ const Menu: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [sortOption, setSortOption] = useState<string>('');
 
-  const API_URL = 'http://localhost:8082/api/products';
+  const API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products';
 
   useEffect(() => {
     const fetchProducts = async () => {
