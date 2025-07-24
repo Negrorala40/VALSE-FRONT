@@ -33,7 +33,7 @@ interface CartProps {
   onClose: () => void;
 }
 
-const API_URL = 'amarte--backendamarte--sjfs798q7b8v.code.run';
+const API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run';
 
 const formatPrice = (price: number) =>
   new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0 }).format(price);

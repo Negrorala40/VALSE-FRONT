@@ -32,10 +32,10 @@ interface UserData {
   addresses: Address[];
 }
 
-const API_CART_URL = 'amarte--backendamarte--sjfs798q7b8v.code.run/api/cart';
-const API_SIGNATURE_URL = 'amarte--backendamarte--sjfs798q7b8v.code.run/api/bold/signature';
-const API_USER_URL = 'amarte--backendamarte--sjfs798q7b8v.code.run/api/users/me';
-const API_ADDRESSES = 'amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
+const API_CART_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/cart';
+const API_SIGNATURE_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/bold/signature';
+const API_USER_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/users/me';
+const API_ADDRESSES = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
