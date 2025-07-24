@@ -147,7 +147,7 @@ const Admin = () => {
       const token = localStorage.getItem("token");
 
       const response = editingProductId
-        ? await fetch(`amarte--backendamarte--sjfs798q7b8v.code.run/api/products/${editingProductId}`, {
+        ? await fetch(`https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products/${editingProductId}`, {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
@@ -155,7 +155,7 @@ const Admin = () => {
             },
             body: JSON.stringify(productData),
           })
-        : await fetch("amarte--backendamarte--sjfs798q7b8v.code.run/api/products", {
+        : await fetch("https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -206,7 +206,7 @@ const Admin = () => {
   const handleDelete = async (id: number) => {
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch(`amarte--backendamarte--sjfs798q7b8v.code.run/api/products/${id}`, {
+      const response = await fetch(`https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
