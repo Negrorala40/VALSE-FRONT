@@ -20,7 +20,7 @@ interface User {
   phone: string;
 }
 
-const USER_API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/users';
+const USER_API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/users';
 const ADDRESS_API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
 
 const Perfil = () => {
