@@ -20,8 +20,8 @@ interface User {
   phone: string;
 }
 
-const USER_API_URL = 'http://localhost:8082/api/users';
-const ADDRESS_API_URL = 'http://localhost:8082/api/addresses';
+const USER_API_URL = 'amarte--backendamarte--sjfs798q7b8v.code.run/users';
+const ADDRESS_API_URL = 'amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
 
 const Perfil = () => {
   const [formData, setFormData] = useState<User>({
