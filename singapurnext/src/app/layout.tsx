@@ -4,9 +4,8 @@ import { Fredoka } from "next/font/google";
 import "./globals.css";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
-import { AuthProvider } from "./context/AuthContext";
+import Providers from "./components/Providers"; // Ajusta la ruta según tu estructura
 
-// Fuentes que ya tienes
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -17,7 +16,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Nueva fuente Fredoka que deseas agregar
 const fredoka = Fredoka({
   subsets: ['latin'],
   weight: ['400', '500', '700'],
@@ -25,8 +23,8 @@ const fredoka = Fredoka({
 });
 
 export const metadata: Metadata = {
-  title: 'A marte', // Aquí puedes poner el título que desees
-  description: 'tu felicidad', // Y también la descripción
+  title: 'A marte',
+  description: 'tu felicidad',
 };
 
 export default function RootLayout({
@@ -37,11 +35,11 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${geistSans.variable} ${geistMono.variable} ${fredoka.className}`}>
-        <AuthProvider>
+        <Providers>
           <Header />
           <main className="app-container">{children}</main>
           <Footer />
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

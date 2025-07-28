@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { signIn, useSession } from 'next-auth/react';
 import Cookies from 'js-cookie';
 import styles from './page.module.css';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://amarte--backendamarte--sjfs798q7b8v.code.run';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products';
 
 const Login: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
@@ -18,11 +19,49 @@ const Login: React.FC = () => {
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams?.get('redirect') || '/';
+
+  const { data: session } = useSession();
+
+  // Detectar sesión de Google
+  useEffect(() => {
+    const fetchGoogleToken = async () => {
+      if (!session?.user?.email) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: session.user.email }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Error al autenticar con Google');
+
+        const { token, roles, userId } = data;
+        const role = roles.includes('ADMIN') ? 'ADMIN' : roles[0] || 'CUSTOMER';
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('role', role);
+        localStorage.setItem('userId', String(userId));
+        Cookies.set('token', token, { expires: 1 });
+
+        await sendPendingCartItem(token, userId);
+
+        router.push(role === 'ADMIN' ? '/admin' : redirectUrl);
+      } catch (error) {
+        console.error('Error en login con Google:', error);
+        setErrorMessage(error instanceof Error ? error.message : 'Error desconocido');
+      }
+    };
+
+    fetchGoogleToken();
+  }, [session]);
 
   const toggleRegister = () => {
     setIsRegistering(!isRegistering);
@@ -39,7 +78,7 @@ const Login: React.FC = () => {
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target;
-    setFormData(prevState => ({ ...prevState, [id]: value }));
+    setFormData(prev => ({ ...prev, [id]: value }));
   };
 
   const sendPendingCartItem = async (token: string, userId: string) => {
@@ -50,7 +89,7 @@ const Login: React.FC = () => {
       const item = JSON.parse(pendingItem);
       const { variantId, quantity } = item;
 
-      const response = await fetch(
+      await fetch(
         `${API_URL}/api/cart/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`,
         {
           method: 'POST',
@@ -61,12 +100,6 @@ const Login: React.FC = () => {
         }
       );
 
-      if (!response.ok) {
-        console.error('Error al agregar el item pendiente al carrito');
-        return;
-      }
-
-      console.log('Producto pendiente agregado al carrito');
       localStorage.removeItem('pendingCartItem');
     } catch (err) {
       console.error('Error procesando el pendingCartItem:', err);
@@ -103,19 +136,9 @@ const Login: React.FC = () => {
         }),
       });
 
-      const responseText = await response.text();
-      console.log('Respuesta del servidor:', responseText);
+      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error('Error en la autenticación');
-      }
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        throw new Error('Respuesta no válida del servidor');
-      }
+      if (!response.ok) throw new Error(data.message || 'Error en la autenticación');
 
       if (!isRegistering) {
         const { token, roles, userId } = data;
@@ -126,7 +149,7 @@ const Login: React.FC = () => {
         localStorage.setItem('token', token);
         localStorage.setItem('role', role);
         localStorage.setItem('userId', String(userId));
-        Cookies.set('token', token, { expires: 1, secure: true });
+        Cookies.set('token', token, { expires: 1 });
 
         await sendPendingCartItem(token, userId);
 
@@ -136,10 +159,20 @@ const Login: React.FC = () => {
         toggleRegister();
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      setErrorMessage(errorMessage);
+      setErrorMessage(error instanceof Error ? error.message : 'Error desconocido');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setErrorMessage('');
+    setGoogleLoading(true);
+    try {
+      await signIn('google', { callbackUrl: redirectUrl });
+    } catch (error) {
+      setErrorMessage('Error al iniciar sesión con Google');
+      setGoogleLoading(false);
     }
   };
 
@@ -183,6 +216,18 @@ const Login: React.FC = () => {
             {loading ? 'Cargando...' : isRegistering ? 'Registrar' : 'Iniciar Sesión'}
           </button>
         </form>
+
+        <div className={styles.divider}>o</div>
+
+        <button
+          className={styles.btnGoogle}
+          onClick={handleGoogleLogin}
+          disabled={googleLoading}
+          style={{ opacity: googleLoading ? 0.6 : 1 }}
+        >
+          {googleLoading ? 'Cargando...' : 'Iniciar sesión con Google'}
+        </button>
+
         <p className={styles.toggleText}>
           {isRegistering ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}
           <span onClick={toggleRegister} className={styles.toggleLink}>
