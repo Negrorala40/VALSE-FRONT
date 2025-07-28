@@ -54,14 +54,14 @@ const Login: React.FC = () => {
         await sendPendingCartItem(token, userId);
 
         router.push(role === 'ADMIN' ? '/admin' : redirectUrl);
-      } catch (error) {
-        console.error('Error en login con Google:', error);
-        setErrorMessage(error instanceof Error ? error.message : 'Error desconocido');
+      } catch (err) {
+        console.error('Error en login con Google:', err);
+        setErrorMessage(err instanceof Error ? err.message : 'Error desconocido');
       }
     };
 
     fetchGoogleToken();
-  }, [session]);
+  }, [session, redirectUrl, router]);
 
   const toggleRegister = () => {
     setIsRegistering(!isRegistering);
@@ -158,8 +158,8 @@ const Login: React.FC = () => {
         alert('Usuario registrado exitosamente');
         toggleRegister();
       }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Error desconocido');
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error desconocido');
     } finally {
       setLoading(false);
     }
@@ -170,7 +170,7 @@ const Login: React.FC = () => {
     setGoogleLoading(true);
     try {
       await signIn('google', { callbackUrl: redirectUrl });
-    } catch (error) {
+    } catch {
       setErrorMessage('Error al iniciar sesión con Google');
       setGoogleLoading(false);
     }
