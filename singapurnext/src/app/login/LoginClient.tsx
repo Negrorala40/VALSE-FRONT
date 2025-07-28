@@ -6,7 +6,7 @@ import { signIn, useSession } from 'next-auth/react';
 import Cookies from 'js-cookie';
 import styles from './page.module.css';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products';
+const API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run';
 
 const Login: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
