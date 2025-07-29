@@ -5,7 +5,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './Perfil.css';
 import { signOut } from "next-auth/react";
 
-
 interface Address {
   id: number;
   address: string;
@@ -45,19 +44,20 @@ const Perfil = () => {
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [editedAddress, setEditedAddress] = useState<Address | null>(null);
 
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showCheckmark, setShowCheckmark] = useState<boolean>(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  const authHeaders = useMemo(() => ({
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
-  }), [token]);
+  const authHeaders = useMemo(
+    () => ({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    }),
+    [token]
+  );
 
   const loadUserData = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await fetch(`${USER_API_URL}/me`, {
         method: 'GET',
@@ -72,8 +72,6 @@ const Perfil = () => {
     } catch (err) {
       setError('Error al cargar los datos del usuario');
       console.error(err);
-    } finally {
-      setLoading(false);
     }
   }, [authHeaders]);
 
@@ -207,21 +205,21 @@ const Perfil = () => {
     }
   };
 
-  // NUEVO: función para cerrar sesión
+  // Función para cerrar sesión completamente
   const handleLogout = async () => {
-  // 1. Limpia tu token y demás datos
-  localStorage.clear();
+    // 1. Limpia tu token y demás datos
+    localStorage.clear();
 
-  // 2. Limpia cookies propias si las usas
-  document.cookie.split(";").forEach((c) => {
-    document.cookie = c.replace(/^ +/, "")
-      .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-  });
+    // 2. Limpia cookies propias
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
 
-  // 3. Cierra sesión de NextAuth
-  await signOut({ callbackUrl: "/" });
-};
-
+    // 3. Cierra sesión de NextAuth
+    await signOut({ callbackUrl: "/" });
+  };
 
   return (
     <div className="perfil-container">
@@ -243,7 +241,9 @@ const Perfil = () => {
             <input
               type="text"
               value={formData.firstName}
-              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, firstName: e.target.value })
+              }
               required
             />
           </div>
@@ -252,7 +252,9 @@ const Perfil = () => {
             <input
               type="text"
               value={formData.lastName}
-              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, lastName: e.target.value })
+              }
               required
             />
           </div>
@@ -265,7 +267,9 @@ const Perfil = () => {
             <input
               type="text"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, phone: e.target.value })
+              }
               required
               pattern="\d{10,15}"
             />
@@ -293,11 +297,15 @@ const Perfil = () => {
                     />
                     <input
                       value={editedAddress.city}
-                      onChange={(e) => setEditedAddress({ ...editedAddress, city: e.target.value })}
+                      onChange={(e) =>
+                        setEditedAddress({ ...editedAddress, city: e.target.value })
+                      }
                     />
                     <input
                       value={editedAddress.state}
-                      onChange={(e) => setEditedAddress({ ...editedAddress, state: e.target.value })}
+                      onChange={(e) =>
+                        setEditedAddress({ ...editedAddress, state: e.target.value })
+                      }
                     />
                     <input
                       value={editedAddress.country}
@@ -308,7 +316,10 @@ const Perfil = () => {
                     <button onClick={handleSaveAddress} className="save-button">
                       Guardar
                     </button>
-                    <button onClick={() => setEditIndex(null)} className="cancel-button">
+                    <button
+                      onClick={() => setEditIndex(null)}
+                      className="cancel-button"
+                    >
                       Cancelar
                     </button>
                   </div>
@@ -318,7 +329,10 @@ const Perfil = () => {
                       {addr.address}, {addr.city}, {addr.state}, {addr.country}
                     </p>
                     <div className="address-actions">
-                      <button onClick={() => handleEditAddress(index)} className="edit-button">
+                      <button
+                        onClick={() => handleEditAddress(index)}
+                        className="edit-button"
+                      >
                         Editar
                       </button>
                       <button
@@ -343,25 +357,33 @@ const Perfil = () => {
             type="text"
             placeholder="Dirección"
             value={newAddress.address}
-            onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+            onChange={(e) =>
+              setNewAddress({ ...newAddress, address: e.target.value })
+            }
           />
           <input
             type="text"
             placeholder="Ciudad"
             value={newAddress.city}
-            onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+            onChange={(e) =>
+              setNewAddress({ ...newAddress, city: e.target.value })
+            }
           />
           <input
             type="text"
             placeholder="Estado"
             value={newAddress.state}
-            onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+            onChange={(e) =>
+              setNewAddress({ ...newAddress, state: e.target.value })
+            }
           />
           <input
             type="text"
             placeholder="País"
             value={newAddress.country}
-            onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+            onChange={(e) =>
+              setNewAddress({ ...newAddress, country: e.target.value })
+            }
           />
           <button onClick={handleAddAddress} className="add-button">
             Agregar Dirección
