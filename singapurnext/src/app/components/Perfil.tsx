@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './Perfil.css';
+import { signOut } from "next-auth/react";
+
 
 interface Address {
   id: number;
@@ -206,12 +208,20 @@ const Perfil = () => {
   };
 
   // NUEVO: función para cerrar sesión
-  const handleLogout = () => {
-    localStorage.clear();
-    window.location.href = '/'; // Cambia la ruta si es necesario
-  };
+  const handleLogout = async () => {
+  // 1. Limpia tu token y demás datos
+  localStorage.clear();
 
-  if (loading) return <div className="loading">Cargando...</div>;
+  // 2. Limpia cookies propias si las usas
+  document.cookie.split(";").forEach((c) => {
+    document.cookie = c.replace(/^ +/, "")
+      .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+  });
+
+  // 3. Cierra sesión de NextAuth
+  await signOut({ callbackUrl: "/" });
+};
+
 
   return (
     <div className="perfil-container">
