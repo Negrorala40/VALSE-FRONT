@@ -260,7 +260,7 @@ const CheckoutPage = () => {
 
       script.setAttribute('data-bold-button', '');
 
-      script.setAttribute('data-order-id', orderId); // Identificador único (ORD-XXXXX)
+      script.setAttribute('data-order-id', `ORD-${orderId}`);
       script.setAttribute('data-currency', 'COP');
 
       // Total como entero sin decimales
@@ -269,7 +269,7 @@ const CheckoutPage = () => {
 
       script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
       script.setAttribute('data-integrity-signature', signature);
-      script.setAttribute('data-redirection-url', 'http://localhost:3000/checkout/success');
+      script.setAttribute('data-redirection-url', 'https://singapurnext-qopl.vercel.app/checkout/success');
       script.setAttribute('data-description', 'Compra desde tienda');
 
       script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
