@@ -61,7 +61,7 @@ const Admin = () => {
   const fetchProducts = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("amarte--backendamarte--sjfs798q7b8v.code.run/api/products", {
+      const response = await fetch("https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
