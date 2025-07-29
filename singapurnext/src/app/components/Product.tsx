@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import styles from './Product.module.css';
 
+// Declaración de la URL base
+const API_BASE_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run';
+
 interface Imagen {
   imageUrl: string;
 }
@@ -53,7 +56,7 @@ const ProductContent = () => {
 
     const obtenerProducto = async () => {
       try {
-        const response = await fetch(`http://localhost:8082/api/products/${productId}`);
+        const response = await fetch(`${API_BASE_URL}/api/products/${productId}`);
         if (!response.ok) throw new Error('Producto no encontrado');
 
         const data: Producto = await response.json();
@@ -155,7 +158,6 @@ const ProductContent = () => {
     };
 
     if (!token || !userId) {
-      // Guardar en localStorage para procesar después
       localStorage.setItem('pendingCartItem', JSON.stringify(itemCarrito));
       alert('Producto guardado. Inicia sesión para completar la compra.');
       router.push('/login');
@@ -164,7 +166,7 @@ const ProductContent = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:8082/api/cart/add?userId=${userId}&productVariantId=${variante.id}&quantity=${cantidad}`,
+        `${API_BASE_URL}/api/cart/add?userId=${userId}&productVariantId=${variante.id}&quantity=${cantidad}`,
         {
           method: 'POST',
           headers: {
@@ -209,8 +211,8 @@ const ProductContent = () => {
           src={imagenUrl}
           alt={producto.name}
           className={styles['imagen-producto']}
-          width={500} // Definir tamaño de la imagen
-          height={500} // Definir tamaño de la imagen
+          width={500}
+          height={500}
         />
       ) : (
         <p>Imagen no disponible</p>
@@ -226,7 +228,6 @@ const ProductContent = () => {
         </p>
 
         <div className={styles['opciones-producto']}>
-          {/* COLOR */}
           <div className={styles['selector-color']}>
             <label>Color:</label>
             <select value={colorSeleccionado} onChange={manejarCambioColor}>
@@ -239,7 +240,6 @@ const ProductContent = () => {
             </select>
           </div>
 
-          {/* TALLAS */}
           {colorSeleccionado && (
             <div className={styles['selector-talla']}>
               <label>Talla:</label>
@@ -260,7 +260,6 @@ const ProductContent = () => {
             </div>
           )}
 
-          {/* CANTIDAD */}
           <div className={styles['selector-cantidad']}>
             <label>Cantidad:</label>
             <input
