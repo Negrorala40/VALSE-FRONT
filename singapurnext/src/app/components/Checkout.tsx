@@ -260,7 +260,7 @@ const CheckoutPage = () => {
 
       script.setAttribute('data-bold-button', '');
 
-      script.setAttribute('data-order-id', `ORD-${orderId}`);
+      script.setAttribute('data-order-id', orderId); // ya viene con "ORD-" incluido
       script.setAttribute('data-currency', 'COP');
 
       // Total como entero sin decimales
