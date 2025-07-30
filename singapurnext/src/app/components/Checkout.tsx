@@ -247,56 +247,62 @@ const CheckoutPage = () => {
 
   // Función para crear la orden en el backend
   const createOrder = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      alert('Usuario no autenticado');
-      return;
+  const token = localStorage.getItem('token');
+  if (!token) {
+    alert('Usuario no autenticado');
+    return;
+  }
+  if (!selectedAddress) {
+    alert('Selecciona una dirección');
+    return;
+  }
+  if (cartItems.length === 0) {
+    alert('Carrito vacío');
+    return;
+  }
+
+  try {
+    const body = {
+      addressId: selectedAddress.id,
+      items: cartItems.map((item) => ({
+        productId: item.id, // Este será tratado como productVariantId en el backend
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+      })),
+    };
+
+    const res = await fetch(API_ORDERS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.message || 'Error creando la orden');
     }
-    if (!selectedAddress) {
-      alert('Selecciona una dirección');
-      return;
-    }
-    if (cartItems.length === 0) {
-      alert('Carrito vacío');
-      return;
-    }
 
-    try {
-      const body = {
-        addressId: selectedAddress.id,
-        items: cartItems.map((item) => ({
-          productId: item.id,
-          quantity: item.quantity,
-          size: item.size,
-          color: item.color,
-        })),
-      };
+    const { orderId: newOrderId, amount } = await res.json();
 
-      const res = await fetch(API_ORDERS_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+    setOrderId(newOrderId);
+    setTotal(amount);
+    setOrderCreated(true);
 
-      if (!res.ok) {
-        throw new Error('Error creando la orden');
-      }
+    await fetchSignature(newOrderId, amount, token);
+  } catch (e) {
+  console.error('Error completo:', e);
+  if (e instanceof Error) {
+    alert('No se pudo crear la orden: ' + e.message);
+  } else {
+    alert('No se pudo crear la orden por un error desconocido');
+  }
+}
 
-      const { orderId: newOrderId, amount } = await res.json();
-
-      setOrderId(newOrderId);
-      setTotal(amount);
-      setOrderCreated(true);
-
-      await fetchSignature(newOrderId, amount, token);
-    } catch (e) {
-      console.error(e);
-      alert('No se pudo crear la orden');
-    }
-  };
+};
 
   // Obtener la firma para la orden
   const fetchSignature = async (orderIdParam: string, amountParam: number, token: string) => {
