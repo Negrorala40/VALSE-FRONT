@@ -36,6 +36,7 @@ const API_CART_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/c
 const API_SIGNATURE_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/bold/signature';
 const API_USER_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/users/me';
 const API_ADDRESSES = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
+const API_ORDERS_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/orders';
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -55,6 +56,8 @@ const CheckoutPage = () => {
     state: '',
     country: '',
   });
+
+  const [orderCreated, setOrderCreated] = useState(false);
 
   useEffect(() => {
     const scriptId = 'bold-script';
@@ -78,16 +81,28 @@ const CheckoutPage = () => {
         });
         if (!res.ok) throw new Error('Error al obtener carrito');
         const data = await res.json();
-        const items: CartItem[] = data.map((item: { id: string; imageUrls: string[]; productName: string; name: string; price: number; size: string; color: string; quantity: number; stock: number }) => ({
-          id: item.id,
-          image: item.imageUrls?.[0] || '/placeholder.png',
-          name: item.productName || item.name,
-          price: item.price,
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          stock: item.stock || 100,
-        }));
+        const items: CartItem[] = data.map(
+          (item: {
+            id: string;
+            imageUrls: string[];
+            productName: string;
+            name: string;
+            price: number;
+            size: string;
+            color: string;
+            quantity: number;
+            stock: number;
+          }) => ({
+            id: item.id,
+            image: item.imageUrls?.[0] || '/placeholder.png',
+            name: item.productName || item.name,
+            price: item.price,
+            size: item.size,
+            color: item.color,
+            quantity: item.quantity,
+            stock: item.stock || 100,
+          })
+        );
         setCartItems(items);
         calculateTotal(items);
       } catch (e) {
@@ -109,28 +124,8 @@ const CheckoutPage = () => {
       }
     };
 
-    const fetchSignature = async () => {
-      try {
-        const res = await fetch(API_SIGNATURE_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        if (!res.ok) throw new Error('Error al obtener firma');
-        const { orderId, signature, amount } = await res.json();
-        setOrderId(orderId);
-        setSignature(signature);
-        setTotal(amount);
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
     fetchCart();
     fetchUser();
-    fetchSignature();
   }, []);
 
   const calculateTotal = (items: CartItem[]) => {
@@ -250,169 +245,230 @@ const CheckoutPage = () => {
   const nextStep = () => setStep((prev) => Math.min(prev + 1, 3));
   const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
 
+  // Función para crear la orden en el backend
+  const createOrder = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Usuario no autenticado');
+      return;
+    }
+    if (!selectedAddress) {
+      alert('Selecciona una dirección');
+      return;
+    }
+    if (cartItems.length === 0) {
+      alert('Carrito vacío');
+      return;
+    }
+
+    try {
+      const body = {
+        addressId: selectedAddress.id,
+        items: cartItems.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          size: item.size,
+          color: item.color,
+        })),
+      };
+
+      const res = await fetch(API_ORDERS_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error('Error creando la orden');
+      }
+
+      const { orderId: newOrderId, amount } = await res.json();
+
+      setOrderId(newOrderId);
+      setTotal(amount);
+      setOrderCreated(true);
+
+      await fetchSignature(newOrderId, amount, token);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo crear la orden');
+    }
+  };
+
+  // Obtener la firma para la orden
+  const fetchSignature = async (orderIdParam: string, amountParam: number, token: string) => {
+    try {
+      const res = await fetch(API_SIGNATURE_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderId: orderIdParam, amount: amountParam }),
+      });
+
+      if (!res.ok) throw new Error('Error al obtener firma');
+
+      const { signature } = await res.json();
+      setSignature(signature);
+    } catch (e) {
+      console.error(e);
+      alert('No se pudo obtener la firma');
+    }
+  };
+
+  // Crear la orden cuando llegamos al paso 3 y aún no se ha creado
+  useEffect(() => {
+    if (step === 3 && !orderCreated) {
+      createOrder();
+    }
+  }, [step, orderCreated]);
+
+  // Crear el botón Bold solo si tenemos signature, orderId y total
   useEffect(() => {
     if (step !== 3) return;
-    if (!signature || !orderId || total === 0 || !selectedAddress || !userData) return;
+    if (!signature || !orderId || total === 0) return;
 
     const container = document.getElementById('bold-button-container');
-    if (container && !container.querySelector('[data-bold-button]')) {
-      const script = document.createElement('script');
+    if (!container) return;
 
-      script.setAttribute('data-bold-button', '');
+    // Evitar crear el botón varias veces
+    if (container.querySelector('[data-bold-button]')) return;
 
-      script.setAttribute('data-order-id', orderId); // ya viene con "ORD-" incluido
-      script.setAttribute('data-currency', 'COP');
+    const script = document.createElement('script');
+    script.setAttribute('data-bold-button', '');
+    script.setAttribute('data-order-id', orderId);
+    script.setAttribute('data-currency', 'COP');
+    script.setAttribute('data-amount', Math.round(total).toString());
+    script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
+    script.setAttribute('data-integrity-signature', signature);
+    script.setAttribute('data-redirection-url', 'https://singapurnext-qopl.vercel.app/checkout/success');
+    script.setAttribute('data-description', 'Compra desde tienda');
+    script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
 
-      // Total como entero sin decimales
-      const totalInt = Math.round(total);
-      script.setAttribute('data-amount', totalInt.toString());
-
-      script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
-      script.setAttribute('data-integrity-signature', signature);
-      script.setAttribute('data-redirection-url', 'https://singapurnext-qopl.vercel.app/checkout/success');
-      script.setAttribute('data-description', 'Compra desde tienda');
-
-      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
-
-      container.appendChild(script);
-    }
-  }, [step, signature, orderId, total, selectedAddress, userData]);
+    container.appendChild(script);
+  }, [step, signature, orderId, total]);
 
   return (
-    <div className="checkout-page">
-      <h1>Finalizar compra</h1>
+    <div className="checkout-container">
+      <h1>Checkout</h1>
 
-      {/* Paso 1 - Usuario y dirección */}
-      {step === 1 && userData && (
-        <section className={`step step-1 ${step === 1 ? 'step-active' : ''}`}>
-          <h2>Datos del usuario y dirección de envío</h2>
-          <p>
-            <strong>Nombre:</strong> {userData.firstName} {userData.lastName}
-          </p>
-          <p>
-            <strong>Email:</strong> {userData.email}
-          </p>
-          <p>
-            <strong>Teléfono:</strong> {userData.phone}
-          </p>
-
-          <h3>Selecciona dirección de envío</h3>
-
-          {userData.addresses.length === 0 && <p>No tienes direcciones guardadas.</p>}
-
-          {userData.addresses.map((addr) => (
-            <div key={addr.id} className="address-item">
-              <label>
-                <input
-                  type="radio"
-                  name="selectedAddress"
-                  checked={selectedAddress?.id === addr.id}
-                  onChange={() => setSelectedAddress(addr)}
-                />
-                {addr.address}, {addr.city}, {addr.state}, {addr.country}
-              </label>
-              <button
-                onClick={() => deleteAddress(addr.id)}
-                title="Eliminar dirección"
-                className="btn-delete-address"
-              >
-                &times;
-              </button>
+      {step === 1 && (
+        <div className="step1">
+          <h2>Carrito de compras</h2>
+          {cartItems.length === 0 && <p>Tu carrito está vacío</p>}
+          {cartItems.map((item) => (
+            <div key={item.id} className="cart-item">
+              <Image src={item.image} alt={item.name} width={100} height={100} />
+              <div>
+                <h3>{item.name}</h3>
+                <p>Color: {item.color}</p>
+                <p>Tamaño: {item.size}</p>
+                <p>Precio: ${item.price.toFixed(2)}</p>
+                <div>
+                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
+                  <span>{item.quantity}</span>
+                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
+                </div>
+                <button onClick={() => removeItem(item.id)}>Eliminar</button>
+              </div>
             </div>
           ))}
 
-          {addingAddress ? (
-            <div className="add-address-form">
-              <input
-                type="text"
-                placeholder="Dirección"
-                value={newAddress.address}
-                onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Ciudad"
-                value={newAddress.city}
-                onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="Estado"
-                value={newAddress.state}
-                onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-              />
-              <input
-                type="text"
-                placeholder="País"
-                value={newAddress.country}
-                onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
-              />
-              <button onClick={addAddress}>Agregar dirección</button>
-              <button onClick={() => setAddingAddress(false)}>Cancelar</button>
-            </div>
-          ) : (
-            <button onClick={() => setAddingAddress(true)}>Agregar nueva dirección</button>
-          )}
-
-          <button onClick={nextStep} disabled={!selectedAddress}>
+          <h3>Total: ${total.toFixed(2)}</h3>
+          <button disabled={cartItems.length === 0} onClick={nextStep}>
             Siguiente
           </button>
-        </section>
+        </div>
       )}
 
-      {/* Paso 2 - Carrito */}
       {step === 2 && (
-        <section className={`step step-2 ${step === 2 ? 'step-active' : ''}`}>
-          <h2>Carrito</h2>
-          {cartItems.length === 0 ? (
-            <p>Tu carrito está vacío.</p>
-          ) : (
-            <ul className="cart-items">
-              {cartItems.map((item) => (
-                <li key={item.id} className="cart-item">
-                  <Image src={item.image} alt={item.name} width={100} height={100} />
-                  <div className="item-info">
-                    <p>{item.name}</p>
-                    <p>
-                      Talla: {item.size} | Color: {item.color}
-                    </p>
-                    <p>Precio: ${item.price}</p>
-                    <p>
-                      Cantidad:{' '}
+        <div className="step2">
+          <h2>Dirección de envío</h2>
+
+          {!userData && <p>Cargando usuario...</p>}
+
+          {userData && (
+            <div>
+              <h3>Direcciones guardadas</h3>
+              {userData.addresses.length === 0 && <p>No tienes direcciones guardadas</p>}
+              <ul>
+                {userData.addresses.map((address) => (
+                  <li key={address.id}>
+                    <label>
                       <input
-                        type="number"
-                        min={1}
-                        max={item.stock || 100}
-                        value={item.quantity}
-                        onChange={(e) => updateQuantity(item.id, Number(e.target.value))}
+                        type="radio"
+                        name="address"
+                        checked={selectedAddress?.id === address.id}
+                        onChange={() => setSelectedAddress(address)}
                       />
-                    </p>
-                  </div>
-                  <div className="item-actions">
-                    <button onClick={() => removeItem(item.id)}>Eliminar</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                      {address.address}, {address.city}, {address.state}, {address.country}
+                    </label>
+                    <button onClick={() => deleteAddress(address.id)}>Eliminar</button>
+                  </li>
+                ))}
+              </ul>
+
+              {addingAddress ? (
+                <div className="new-address-form">
+                  <input
+                    type="text"
+                    placeholder="Dirección"
+                    value={newAddress.address}
+                    onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ciudad"
+                    value={newAddress.city}
+                    onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Estado"
+                    value={newAddress.state}
+                    onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    placeholder="País"
+                    value={newAddress.country}
+                    onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                  />
+                  <button onClick={addAddress}>Agregar dirección</button>
+                  <button onClick={() => setAddingAddress(false)}>Cancelar</button>
+                </div>
+              ) : (
+                <button onClick={() => setAddingAddress(true)}>Agregar nueva dirección</button>
+              )}
+
+              <div className="step-navigation">
+                <button onClick={prevStep}>Anterior</button>
+                <button disabled={!selectedAddress} onClick={nextStep}>
+                  Siguiente
+                </button>
+              </div>
+            </div>
           )}
-          <p>
-            <strong>Total:</strong> ${total}
-          </p>
-          <button onClick={prevStep}>Volver</button>
-          <button onClick={nextStep} disabled={cartItems.length === 0}>
-            Siguiente
-          </button>
-        </section>
+        </div>
       )}
 
-      {/* Paso 3 - Pago */}
       {step === 3 && (
-        <section className={`step step-3 ${step === 3 ? 'step-active' : ''}`}>
-          <h2>Método de pago</h2>
-          <p>Total a pagar: ${total}</p>
+        <div className="step3">
+          <h2>Pago</h2>
+          <p>Total a pagar: ${total.toFixed(2)}</p>
+
+          {!orderCreated && <p>Creando orden, por favor espera...</p>}
+
           <div id="bold-button-container"></div>
-          <button onClick={prevStep}>Volver</button>
-        </section>
+
+          <div className="step-navigation">
+            <button onClick={prevStep}>Anterior</button>
+          </div>
+        </div>
       )}
     </div>
   );
