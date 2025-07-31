@@ -13,6 +13,7 @@ interface CartItem {
   color: string;
   quantity: number;
   stock?: number;
+  productVariantId?: string; // Para mapear con el backend
 }
 
 interface Address {
@@ -32,6 +33,16 @@ interface UserData {
   addresses: Address[];
 }
 
+interface OrderResponse {
+  orderId: string;
+  amount: number;
+  status: string;
+}
+
+interface SignatureResponse {
+  signature: string;
+}
+
 const API_CART_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/cart';
 const API_SIGNATURE_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/bold/signature';
 const API_USER_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/users/me';
@@ -43,6 +54,8 @@ const CheckoutPage = () => {
   const [signature, setSignature] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string>('');
   const [total, setTotal] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -58,7 +71,9 @@ const CheckoutPage = () => {
   });
 
   const [orderCreated, setOrderCreated] = useState(false);
+  const [boldButtonCreated, setBoldButtonCreated] = useState(false);
 
+  // Cargar script de Bold al montar el componente
   useEffect(() => {
     const scriptId = 'bold-script';
     if (!document.getElementById(scriptId)) {
@@ -66,67 +81,104 @@ const CheckoutPage = () => {
       script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
       script.async = true;
       script.id = scriptId;
+      script.onload = () => {
+        console.log('Bold script loaded successfully');
+      };
+      script.onerror = () => {
+        console.error('Error loading Bold script');
+        setError('Error cargando el sistema de pagos');
+      };
       document.head.appendChild(script);
     }
   }, []);
 
+  // Cargar datos iniciales
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!token) return;
+    if (!token) {
+      setError('Usuario no autenticado');
+      return;
+    }
 
-    const fetchCart = async () => {
+    const fetchInitialData = async () => {
+      setLoading(true);
       try {
-        const res = await fetch(API_CART_URL, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error('Error al obtener carrito');
-        const data = await res.json();
-        const items: CartItem[] = data.map(
-          (item: {
-            id: string;
-            imageUrls: string[];
-            productName: string;
-            name: string;
-            price: number;
-            size: string;
-            color: string;
-            quantity: number;
-            stock: number;
-          }) => ({
-            id: item.id,
-            image: item.imageUrls?.[0] || '/placeholder.png',
-            name: item.productName || item.name,
-            price: item.price,
-            size: item.size,
-            color: item.color,
-            quantity: item.quantity,
-            stock: item.stock || 100,
-          })
-        );
-        setCartItems(items);
-        calculateTotal(items);
-      } catch (e) {
-        console.error(e);
+        await Promise.all([fetchCart(token), fetchUser(token)]);
+      } catch (err) {
+        console.error('Error loading initial data:', err);
+        setError('Error cargando los datos iniciales');
+      } finally {
+        setLoading(false);
       }
     };
 
-    const fetchUser = async () => {
-      try {
-        const res = await fetch(API_USER_URL, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error('Error al obtener usuario');
-        const user = await res.json();
-        setUserData(user);
-        if (user.addresses.length > 0) setSelectedAddress(user.addresses[0]);
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
-    fetchCart();
-    fetchUser();
+    fetchInitialData();
   }, []);
+
+  const fetchCart = async (token: string) => {
+    try {
+      const res = await fetch(API_CART_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      const items: CartItem[] = data.map(
+        (item: {
+          id: string;
+          imageUrls: string[];
+          productName: string;
+          name: string;
+          price: number;
+          size: string;
+          color: string;
+          quantity: number;
+          stock: number;
+          productVariantId?: string;
+        }) => ({
+          id: item.id,
+          image: item.imageUrls?.[0] || '/placeholder.png',
+          name: item.productName || item.name,
+          price: item.price,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          stock: item.stock || 100,
+          productVariantId: item.productVariantId || item.id, // Usar productVariantId si está disponible
+        })
+      );
+      
+      setCartItems(items);
+      calculateTotal(items);
+    } catch (error) {
+      console.error('Error fetching cart:', error);
+      throw error;
+    }
+  };
+
+  const fetchUser = async (token: string) => {
+    try {
+      const res = await fetch(API_USER_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
+      
+      const user = await res.json();
+      setUserData(user);
+      if (user.addresses && user.addresses.length > 0) {
+        setSelectedAddress(user.addresses[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      throw error;
+    }
+  };
 
   const calculateTotal = (items: CartItem[]) => {
     const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -135,8 +187,10 @@ const CheckoutPage = () => {
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
+    
     const item = cartItems.find((i) => i.id === itemId);
     if (!item) return;
+    
     if (item.stock && newQuantity > item.stock) {
       alert(`No hay suficiente stock disponible (máximo ${item.stock})`);
       return;
@@ -146,18 +200,27 @@ const CheckoutPage = () => {
     if (!token) return;
 
     try {
+      setLoading(true);
       const res = await fetch(`${API_CART_URL}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
       });
+      
       if (!res.ok) throw new Error('Error actualizando cantidad');
+      
       const updatedItems = cartItems.map((i) =>
         i.id === itemId ? { ...i, quantity: newQuantity } : i
       );
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
     } catch (err) {
-      console.error(err);
+      console.error('Error updating quantity:', err);
+      setError('Error actualizando la cantidad');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -165,23 +228,37 @@ const CheckoutPage = () => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
+    if (!confirm('¿Estás seguro de eliminar este producto del carrito?')) return;
+
     try {
+      setLoading(true);
       const res = await fetch(`${API_CART_URL}/remove/${itemId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
       });
+      
       if (!res.ok) throw new Error('Error eliminando producto');
+      
       const updatedItems = cartItems.filter((i) => i.id !== itemId);
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
     } catch (err) {
-      console.error(err);
+      console.error('Error removing item:', err);
+      setError('Error eliminando el producto');
+    } finally {
+      setLoading(false);
     }
   };
 
   const addAddress = async () => {
     const token = localStorage.getItem('token');
-    if (!token) return alert('No autenticado');
+    if (!token) {
+      alert('No autenticado');
+      return;
+    }
 
     if (
       !newAddress.address.trim() ||
@@ -189,17 +266,23 @@ const CheckoutPage = () => {
       !newAddress.state.trim() ||
       !newAddress.country.trim()
     ) {
-      return alert('Completa todos los campos de la dirección');
+      alert('Completa todos los campos de la dirección');
+      return;
     }
 
     try {
+      setLoading(true);
       const res = await fetch(API_ADDRESSES, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          'Content-Type': 'application/json' 
+        },
         body: JSON.stringify(newAddress),
       });
 
       if (!res.ok) throw new Error('Error agregando dirección');
+      
       const createdAddress = await res.json();
 
       if (userData) {
@@ -207,20 +290,28 @@ const CheckoutPage = () => {
         setUserData({ ...userData, addresses: updatedAddresses });
         setSelectedAddress(createdAddress);
       }
+      
       setAddingAddress(false);
       setNewAddress({ address: '', city: '', state: '', country: '' });
     } catch (e) {
-      console.error(e);
+      console.error('Error adding address:', e);
       alert('No se pudo agregar la dirección');
+    } finally {
+      setLoading(false);
     }
   };
 
   const deleteAddress = async (addressId: number) => {
     const token = localStorage.getItem('token');
-    if (!token) return alert('No autenticado');
+    if (!token) {
+      alert('No autenticado');
+      return;
+    }
+    
     if (!confirm('¿Seguro que quieres eliminar esta dirección?')) return;
 
     try {
+      setLoading(true);
       const res = await fetch(`${API_ADDRESSES}/${addressId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
@@ -237,156 +328,336 @@ const CheckoutPage = () => {
         }
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error deleting address:', e);
       alert('No se pudo eliminar la dirección');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const nextStep = () => setStep((prev) => Math.min(prev + 1, 3));
-  const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
+  const nextStep = () => {
+    if (step === 1 && cartItems.length === 0) {
+      alert('Tu carrito está vacío');
+      return;
+    }
+    if (step === 2 && !selectedAddress) {
+      alert('Selecciona una dirección de envío');
+      return;
+    }
+    setStep((prev) => Math.min(prev + 1, 3));
+  };
 
-  // Función para crear la orden en el backend
+  const prevStep = () => {
+    setStep((prev) => Math.max(prev - 1, 1));
+  };
+
+  // Crear la orden en el backend
   const createOrder = async () => {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    alert('Usuario no autenticado');
-    return;
-  }
-  if (!selectedAddress) {
-    alert('Selecciona una dirección');
-    return;
-  }
-  if (cartItems.length === 0) {
-    alert('Carrito vacío');
-    return;
-  }
-
-  try {
-    const body = {
-      addressId: selectedAddress.id,
-      items: cartItems.map((item) => ({
-        productId: item.id, // Este será tratado como productVariantId en el backend
-        quantity: item.quantity,
-        size: item.size,
-        color: item.color,
-      })),
-    };
-
-    const res = await fetch(API_ORDERS_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || 'Error creando la orden');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Usuario no autenticado');
+      return;
+    }
+    
+    if (!selectedAddress) {
+      setError('Selecciona una dirección');
+      return;
+    }
+    
+    if (cartItems.length === 0) {
+      setError('Carrito vacío');
+      return;
     }
 
-    const { orderId: newOrderId, amount } = await res.json();
+    try {
+      setLoading(true);
+      setError('');
 
-    setOrderId(newOrderId);
-    setTotal(amount);
-    setOrderCreated(true);
+      // Preparar el body para la nueva API
+      const body = {
+        addressId: selectedAddress.id,
+        items: cartItems.map((item) => ({
+          productVariantId: item.productVariantId || item.id, // Usar productVariantId
+          quantity: item.quantity,
+        })),
+      };
 
-    await fetchSignature(newOrderId, amount, token);
-  } catch (e) {
-  console.error('Error completo:', e);
-  if (e instanceof Error) {
-    alert('No se pudo crear la orden: ' + e.message);
-  } else {
-    alert('No se pudo crear la orden por un error desconocido');
-  }
-}
+      console.log('Creating order with body:', body);
 
-};
+      const res = await fetch(API_ORDERS_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
 
-  // Obtener la firma para la orden
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `Error ${res.status}: ${res.statusText}`);
+      }
+
+      const orderResponse: OrderResponse = await res.json();
+      console.log('Order created successfully:', orderResponse);
+
+      setOrderId(orderResponse.orderId);
+      setTotal(orderResponse.amount);
+      setOrderCreated(true);
+
+      // Obtener la firma para Bold
+      await fetchSignature(orderResponse.orderId, orderResponse.amount, token);
+
+    } catch (e) {
+      console.error('Error creating order:', e);
+      const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
+      setError('No se pudo crear la orden: ' + errorMessage);
+      setOrderCreated(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Obtener la firma para Bold
   const fetchSignature = async (orderIdParam: string, amountParam: number, token: string) => {
     try {
+      console.log('Fetching signature for order:', orderIdParam, 'amount:', amountParam);
+      
       const res = await fetch(API_SIGNATURE_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ orderId: orderIdParam, amount: amountParam }),
+        body: JSON.stringify({ 
+          orderId: orderIdParam, 
+          amount: Math.round(amountParam) // Asegurar que sea un entero
+        }),
       });
 
-      if (!res.ok) throw new Error('Error al obtener firma');
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || `Error ${res.status}: ${res.statusText}`);
+      }
 
-      const { signature } = await res.json();
-      setSignature(signature);
+      const signatureResponse: SignatureResponse = await res.json();
+      console.log('Signature obtained successfully');
+      
+      setSignature(signatureResponse.signature);
     } catch (e) {
-      console.error(e);
-      alert('No se pudo obtener la firma');
+      console.error('Error fetching signature:', e);
+      const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
+      setError('No se pudo obtener la firma de pago: ' + errorMessage);
     }
   };
 
-  // Crear la orden cuando llegamos al paso 3 y aún no se ha creado
+  // Crear la orden cuando llegamos al paso 3
   useEffect(() => {
-    if (step === 3 && !orderCreated) {
+    if (step === 3 && !orderCreated && !loading) {
       createOrder();
     }
-  }, [step, orderCreated]);
+  }, [step, orderCreated, loading]);
 
-  // Crear el botón Bold solo si tenemos signature, orderId y total
+  // Crear el botón de Bold cuando tenemos todos los datos necesarios
   useEffect(() => {
     if (step !== 3) return;
     if (!signature || !orderId || total === 0) return;
+    if (boldButtonCreated) return;
 
     const container = document.getElementById('bold-button-container');
     if (!container) return;
 
-    // Evitar crear el botón varias veces
-    if (container.querySelector('[data-bold-button]')) return;
+    // Limpiar contenedor
+    container.innerHTML = '';
 
-    const script = document.createElement('script');
-    script.setAttribute('data-bold-button', '');
-    script.setAttribute('data-order-id', orderId);
-    script.setAttribute('data-currency', 'COP');
-    script.setAttribute('data-amount', Math.round(total).toString());
-    script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
-    script.setAttribute('data-integrity-signature', signature);
-    script.setAttribute('data-redirection-url', 'https://singapurnext-qopl.vercel.app/checkout/success');
-    script.setAttribute('data-description', 'Compra desde tienda');
-    script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
+    console.log('Creating Bold button with:', {
+      orderId,
+      amount: Math.round(total),
+      signature: signature.substring(0, 20) + '...'
+    });
 
-    container.appendChild(script);
-  }, [step, signature, orderId, total]);
+    try {
+      // Crear el botón de Bold
+      const script = document.createElement('script');
+      script.setAttribute('data-bold-button', '');
+      script.setAttribute('data-order-id', orderId);
+      script.setAttribute('data-currency', 'COP');
+      script.setAttribute('data-amount', Math.round(total).toString());
+      script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
+      script.setAttribute('data-integrity-signature', signature);
+      script.setAttribute('data-redirection-url', 'https://singapurnext-qopl.vercel.app/checkout/success');
+      script.setAttribute('data-description', 'Compra desde tienda Amarte');
+      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
+
+      script.onload = () => {
+        console.log('Bold button script loaded successfully');
+        setBoldButtonCreated(true);
+      };
+
+      script.onerror = () => {
+        console.error('Error loading Bold button script');
+        setError('Error cargando el botón de pago');
+      };
+
+      container.appendChild(script);
+
+    } catch (e) {
+      console.error('Error creating Bold button:', e);
+      setError('Error creando el botón de pago');
+    }
+  }, [step, signature, orderId, total, boldButtonCreated]);
+
+  // Limpiar estados cuando cambiamos de paso
+  useEffect(() => {
+    if (step !== 3) {
+      setOrderCreated(false);
+      setBoldButtonCreated(false);
+      setSignature(null);
+      setOrderId('');
+      setError('');
+    }
+  }, [step]);
+
+  if (loading && step === 1) {
+    return (
+      <div className="checkout-container">
+        <div className="loading">Cargando...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="checkout-container">
       <h1>Checkout</h1>
 
+      {error && (
+        <div className="error-message" style={{ 
+          background: '#fee', 
+          color: '#c00', 
+          padding: '10px', 
+          borderRadius: '5px', 
+          margin: '10px 0' 
+        }}>
+          {error}
+          <button 
+            onClick={() => setError('')}
+            style={{ marginLeft: '10px', background: 'none', border: 'none', color: '#c00' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Indicador de progreso */}
+      <div className="progress-indicator" style={{
+        display: 'flex',
+        justifyContent: 'center',
+        margin: '20px 0',
+        gap: '20px'
+      }}>
+        <div className={`step-indicator ${step >= 1 ? 'active' : ''}`}>
+          1. Carrito
+        </div>
+        <div className={`step-indicator ${step >= 2 ? 'active' : ''}`}>
+          2. Dirección
+        </div>
+        <div className={`step-indicator ${step >= 3 ? 'active' : ''}`}>
+          3. Pago
+        </div>
+      </div>
+
       {step === 1 && (
         <div className="step1">
           <h2>Carrito de compras</h2>
           {cartItems.length === 0 && <p>Tu carrito está vacío</p>}
+          
           {cartItems.map((item) => (
-            <div key={item.id} className="cart-item">
-              <Image src={item.image} alt={item.name} width={100} height={100} />
-              <div>
+            <div key={item.id} className="cart-item" style={{
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              padding: '15px',
+              margin: '10px 0',
+              display: 'flex',
+              gap: '15px',
+              alignItems: 'center'
+            }}>
+              <Image 
+                src={item.image} 
+                alt={item.name} 
+                width={100} 
+                height={100}
+                style={{ borderRadius: '8px' }}
+              />
+              <div style={{ flex: 1 }}>
                 <h3>{item.name}</h3>
                 <p>Color: {item.color}</p>
                 <p>Tamaño: {item.size}</p>
-                <p>Precio: ${item.price.toFixed(2)}</p>
-                <div>
-                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>-</button>
-                  <span>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
+                <p>Precio: ${item.price.toLocaleString('es-CO')}</p>
+                <p>Stock disponible: {item.stock}</p>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '10px 0' }}>
+                  <button 
+                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                    disabled={loading || item.quantity <= 1}
+                    style={{ padding: '5px 10px' }}
+                  >
+                    -
+                  </button>
+                  <span style={{ padding: '0 10px', fontWeight: 'bold' }}>
+                    {item.quantity}
+                  </span>
+                  <button 
+                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                    disabled={loading || Boolean(item.stock && item.quantity >= item.stock)}
+                    style={{ padding: '5px 10px' }}
+                  >
+                    +
+                  </button>
                 </div>
-                <button onClick={() => removeItem(item.id)}>Eliminar</button>
+                
+                <p>Subtotal: ${(item.price * item.quantity).toLocaleString('es-CO')}</p>
+                
+                <button 
+                  onClick={() => removeItem(item.id)}
+                  disabled={loading}
+                  style={{ 
+                    background: '#dc3545', 
+                    color: 'white', 
+                    border: 'none', 
+                    padding: '8px 15px', 
+                    borderRadius: '5px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {loading ? 'Eliminando...' : 'Eliminar'}
+                </button>
               </div>
             </div>
           ))}
 
-          <h3>Total: ${total.toFixed(2)}</h3>
-          <button disabled={cartItems.length === 0} onClick={nextStep}>
-            Siguiente
+          <div style={{ 
+            background: '#f8f9fa', 
+            padding: '20px', 
+            borderRadius: '8px', 
+            margin: '20px 0' 
+          }}>
+            <h3>Total: ${total.toLocaleString('es-CO')}</h3>
+          </div>
+          
+          <button 
+            disabled={cartItems.length === 0 || loading} 
+            onClick={nextStep}
+            style={{
+              background: (cartItems.length === 0) ? '#ccc' : '#007bff',
+              color: 'white',
+              border: 'none',
+              padding: '15px 30px',
+              borderRadius: '8px',
+              cursor: (cartItems.length === 0) ? 'not-allowed' : 'pointer',
+              fontSize: '16px'
+            }}
+          >
+            {loading ? 'Cargando...' : 'Siguiente'}
           </button>
         </div>
       )}
@@ -395,66 +666,174 @@ const CheckoutPage = () => {
         <div className="step2">
           <h2>Dirección de envío</h2>
 
-          {!userData && <p>Cargando usuario...</p>}
+          {!userData && <p>Cargando datos del usuario...</p>}
 
           {userData && (
             <div>
               <h3>Direcciones guardadas</h3>
-              {userData.addresses.length === 0 && <p>No tienes direcciones guardadas</p>}
-              <ul>
+              {userData.addresses.length === 0 && (
+                <p>No tienes direcciones guardadas. Agrega una nueva dirección.</p>
+              )}
+              
+              <div style={{ margin: '20px 0' }}>
                 {userData.addresses.map((address) => (
-                  <li key={address.id}>
-                    <label>
+                  <div key={address.id} style={{
+                    border: selectedAddress?.id === address.id ? '2px solid #007bff' : '1px solid #ddd',
+                    borderRadius: '8px',
+                    padding: '15px',
+                    margin: '10px 0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  }}>
+                    <label style={{ flex: 1, cursor: 'pointer' }}>
                       <input
                         type="radio"
                         name="address"
                         checked={selectedAddress?.id === address.id}
                         onChange={() => setSelectedAddress(address)}
+                        style={{ marginRight: '10px' }}
                       />
-                      {address.address}, {address.city}, {address.state}, {address.country}
+                      <strong>{address.address}</strong><br/>
+                      {address.city}, {address.state}, {address.country}
                     </label>
-                    <button onClick={() => deleteAddress(address.id)}>Eliminar</button>
-                  </li>
+                    <button 
+                      onClick={() => deleteAddress(address.id)}
+                      disabled={loading}
+                      style={{
+                        background: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 15px',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
                 ))}
-              </ul>
+              </div>
 
               {addingAddress ? (
-                <div className="new-address-form">
-                  <input
-                    type="text"
-                    placeholder="Dirección"
-                    value={newAddress.address}
-                    onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Ciudad"
-                    value={newAddress.city}
-                    onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Estado"
-                    value={newAddress.state}
-                    onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-                  />
-                  <input
-                    type="text"
-                    placeholder="País"
-                    value={newAddress.country}
-                    onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
-                  />
-                  <button onClick={addAddress}>Agregar dirección</button>
-                  <button onClick={() => setAddingAddress(false)}>Cancelar</button>
+                <div className="new-address-form" style={{
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  margin: '20px 0'
+                }}>
+                  <h4>Nueva dirección</h4>
+                  <div style={{ display: 'grid', gap: '10px' }}>
+                    <input
+                      type="text"
+                      placeholder="Dirección completa"
+                      value={newAddress.address}
+                      onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Ciudad"
+                      value={newAddress.city}
+                      onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Estado/Departamento"
+                      value={newAddress.state}
+                      onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="País"
+                      value={newAddress.country}
+                      onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
+                    />
+                  </div>
+                  <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+                    <button 
+                      onClick={addAddress}
+                      disabled={loading}
+                      style={{
+                        background: '#28a745',
+                        color: 'white',
+                        border: 'none',
+                        padding: '10px 20px',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {loading ? 'Agregando...' : 'Agregar dirección'}
+                    </button>
+                    <button 
+                      onClick={() => setAddingAddress(false)}
+                      disabled={loading}
+                      style={{
+                        background: '#6c757d',
+                        color: 'white',
+                        border: 'none',
+                        padding: '10px 20px',
+                        borderRadius: '5px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <button onClick={() => setAddingAddress(true)}>Agregar nueva dirección</button>
+                <button 
+                  onClick={() => setAddingAddress(true)}
+                  style={{
+                    background: '#17a2b8',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '5px',
+                    cursor: 'pointer',
+                    margin: '10px 0'
+                  }}
+                >
+                  Agregar nueva dirección
+                </button>
               )}
 
-              <div className="step-navigation">
-                <button onClick={prevStep}>Anterior</button>
-                <button disabled={!selectedAddress} onClick={nextStep}>
-                  Siguiente
+              <div className="step-navigation" style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginTop: '30px'
+              }}>
+                <button 
+                  onClick={prevStep}
+                  style={{
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    padding: '15px 30px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  Anterior
+                </button>
+                <button 
+                  disabled={!selectedAddress || loading} 
+                  onClick={nextStep}
+                  style={{
+                    background: !selectedAddress ? '#ccc' : '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    padding: '15px 30px',
+                    borderRadius: '8px',
+                    cursor: !selectedAddress ? 'not-allowed' : 'pointer',
+                    fontSize: '16px'
+                  }}
+                >
+                  {loading ? 'Cargando...' : 'Siguiente'}
                 </button>
               </div>
             </div>
@@ -465,14 +844,89 @@ const CheckoutPage = () => {
       {step === 3 && (
         <div className="step3">
           <h2>Pago</h2>
-          <p>Total a pagar: ${total.toFixed(2)}</p>
+          
+          {/* Resumen de la orden */}
+          <div style={{
+            background: '#f8f9fa',
+            padding: '20px',
+            borderRadius: '8px',
+            margin: '20px 0'
+          }}>
+            <h3>Resumen de tu orden</h3>
+            <p><strong>Total a pagar: ${total.toLocaleString('es-CO')} COP</strong></p>
+            {selectedAddress && (
+              <p>
+                <strong>Dirección de envío:</strong><br/>
+                {selectedAddress.address}<br/>
+                {selectedAddress.city}, {selectedAddress.state}, {selectedAddress.country}
+              </p>
+            )}
+            {orderId && (
+              <p><strong>Número de orden:</strong> {orderId}</p>
+            )}
+          </div>
 
-          {!orderCreated && <p>Creando orden, por favor espera...</p>}
+          {/* Estados de carga y error */}
+          {loading && !orderCreated && (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <p>Creando orden, por favor espera...</p>
+              <div className="spinner" style={{
+                border: '4px solid #f3f3f3',
+                borderTop: '4px solid #007bff',
+                borderRadius: '50%',
+                width: '40px',
+                height: '40px',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto'
+              }}></div>
+            </div>
+          )}
 
-          <div id="bold-button-container"></div>
+          {orderCreated && !signature && !error && (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <p>Preparando sistema de pago...</p>
+            </div>
+          )}
 
-          <div className="step-navigation">
-            <button onClick={prevStep}>Anterior</button>
+          {/* Contenedor del botón de Bold */}
+          {orderCreated && signature && (
+            <div style={{ margin: '20px 0', textAlign: 'center' }}>
+              <p style={{ marginBottom: '15px', color: '#28a745' }}>
+                ✓ Orden creada exitosamente. Procede con el pago:
+              </p>
+              <div id="bold-button-container" style={{
+                minHeight: '60px',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                {!boldButtonCreated && (
+                  <p>Cargando botón de pago...</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="step-navigation" style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: '30px'
+          }}>
+            <button 
+              onClick={prevStep}
+              disabled={loading}
+              style={{
+                background: '#6c757d',
+                color: 'white',
+                border: 'none',
+                padding: '15px 30px',
+                borderRadius: '8px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '16px'
+              }}
+            >
+              Anterior
+            </button>
           </div>
         </div>
       )}
