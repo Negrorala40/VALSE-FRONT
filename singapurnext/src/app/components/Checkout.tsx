@@ -91,6 +91,7 @@ const CheckoutPage = () => {
     setTotal(newTotal);
   }, []);
 
+  // Función fetchCart mejorada
   const fetchCart = useCallback(async (token: string) => {
     try {
       const res = await fetch(API_CART_URL, {
@@ -102,6 +103,8 @@ const CheckoutPage = () => {
       }
       
       const data = await res.json();
+      console.log('Datos del carrito recibidos:', data);
+      
       const items: CartItem[] = data.map(
         (item: {
           id: string;
@@ -113,18 +116,31 @@ const CheckoutPage = () => {
           color: string;
           quantity: number;
           stock: number;
-          productVariantId?: string;
-        }) => ({
-          id: item.id,
-          image: item.imageUrls?.[0] || '/placeholder.png',
-          name: item.productName || item.name,
-          price: item.price,
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          stock: item.stock || 100,
-          productVariantId: item.productVariantId || item.id, // Usar productVariantId si está disponible
-        })
+          productVariantId?: string | number;
+        }) => {
+          // Mejor manejo del productVariantId
+          let variantId = item.productVariantId;
+          if (typeof variantId === 'number') {
+            variantId = variantId.toString();
+          }
+          if (!variantId || variantId === '') {
+            variantId = item.id;
+          }
+          
+          console.log(`Producto ${item.name}: id=${item.id}, productVariantId=${variantId}`);
+          
+          return {
+            id: item.id,
+            image: item.imageUrls?.[0] || '/placeholder.png',
+            name: item.productName || item.name,
+            price: item.price,
+            size: item.size,
+            color: item.color,
+            quantity: item.quantity,
+            stock: item.stock || 100,
+            productVariantId: variantId,
+          };
+        }
       );
       
       setCartItems(items);
@@ -348,7 +364,7 @@ const CheckoutPage = () => {
   // Obtener la firma para Bold
   const fetchSignature = useCallback(async (orderIdParam: string, amountParam: number, token: string) => {
     try {
-      console.log('Fetching signature for order:', orderIdParam, 'amount:', amountParam);
+      console.log('Obteniendo firma para orden:', orderIdParam, 'monto:', amountParam);
       
       const res = await fetch(API_SIGNATURE_URL, {
         method: 'POST',
@@ -368,17 +384,17 @@ const CheckoutPage = () => {
       }
 
       const signatureResponse: SignatureResponse = await res.json();
-      console.log('Signature obtained successfully');
+      console.log('Firma obtenida exitosamente');
       
       setSignature(signatureResponse.signature);
     } catch (e) {
-      console.error('Error fetching signature:', e);
+      console.error('Error obteniendo firma:', e);
       const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
       setError('No se pudo obtener la firma de pago: ' + errorMessage);
     }
   }, []);
 
-  // Crear la orden en el backend
+  // Función createOrder mejorada
   const createOrder = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -400,16 +416,31 @@ const CheckoutPage = () => {
       setLoading(true);
       setError('');
 
-      // Preparar el body para la API - USAR LONG EN VEZ DE STRING
+      // Validar y preparar los items con mejor manejo de errores
+      const items = cartItems.map((item) => {
+        const variantId = item.productVariantId || item.id;
+        const numericId = parseInt(variantId);
+        
+        if (isNaN(numericId) || numericId <= 0) {
+          throw new Error(`ID de producto inválido para ${item.name}: ${variantId}`);
+        }
+        
+        if (!item.quantity || item.quantity <= 0) {
+          throw new Error(`Cantidad inválida para ${item.name}: ${item.quantity}`);
+        }
+        
+        return {
+          productVariantId: numericId,
+          quantity: item.quantity,
+        };
+      });
+
       const body = {
         addressId: selectedAddress.id,
-        items: cartItems.map((item) => ({
-          productVariantId: parseInt(item.productVariantId || item.id), // Convertir a número
-          quantity: item.quantity,
-        })),
+        items: items,
       };
 
-      console.log('Creating order with body:', body);
+      console.log('Creando orden con body:', JSON.stringify(body, null, 2));
 
       const res = await fetch(API_ORDERS_URL, {
         method: 'POST',
@@ -420,42 +451,46 @@ const CheckoutPage = () => {
         body: JSON.stringify(body),
       });
 
-      console.log('Response status:', res.status);
+      console.log('Estado de respuesta:', res.status);
 
-      // Mejorar el manejo de respuestas de error
+      // Mejor manejo de respuestas de error
       if (!res.ok) {
         let errorMessage = `Error ${res.status}: ${res.statusText}`;
         try {
           const errorData = await res.json();
-          console.log('Error response:', errorData);
+          console.log('Respuesta de error completa:', errorData);
           errorMessage = errorData.message || errorData.error || errorMessage;
         } catch (parseError) {
-          console.error('Error parsing error response:', parseError);
-          // Si no se puede parsear la respuesta de error, usar el mensaje por defecto
+          console.error('Error parseando respuesta de error:', parseError);
         }
         throw new Error(errorMessage);
       }
 
-      // Asegurar que la respuesta se puede parsear como JSON
+      // Parsear respuesta exitosa
       let orderResponse;
       try {
         orderResponse = await res.json();
       } catch (parseError) {
-        console.error('Error parsing success response:', parseError);
+        console.error('Error parseando respuesta exitosa:', parseError);
         throw new Error('Error al procesar la respuesta del servidor');
       }
 
-      console.log('Order created successfully:', orderResponse);
+      console.log('Orden creada exitosamente:', orderResponse);
 
-      setOrderId(orderResponse.orderId);
+      // Validar que la respuesta tenga los campos esperados
+      if (!orderResponse.orderId || orderResponse.amount === undefined) {
+        throw new Error('Respuesta del servidor incompleta');
+      }
+
+      setOrderId(orderResponse.orderId.toString());
       setTotal(orderResponse.amount);
       setOrderCreated(true);
 
       // Obtener la firma para Bold
-      await fetchSignature(orderResponse.orderId, orderResponse.amount, token);
+      await fetchSignature(orderResponse.orderId.toString(), orderResponse.amount, token);
 
     } catch (e) {
-      console.error('Error creating order:', e);
+      console.error('Error creando orden:', e);
       const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
       setError('No se pudo crear la orden: ' + errorMessage);
       setOrderCreated(false);
@@ -483,7 +518,7 @@ const CheckoutPage = () => {
     // Limpiar contenedor
     container.innerHTML = '';
 
-    console.log('Creating Bold button with:', {
+    console.log('Creando botón Bold con:', {
       orderId,
       amount: Math.round(total),
       signature: signature.substring(0, 20) + '...'
@@ -503,19 +538,19 @@ const CheckoutPage = () => {
       script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
 
       script.onload = () => {
-        console.log('Bold button script loaded successfully');
+        console.log('Script del botón Bold cargado exitosamente');
         setBoldButtonCreated(true);
       };
 
       script.onerror = () => {
-        console.error('Error loading Bold button script');
+        console.error('Error cargando script del botón Bold');
         setError('Error cargando el botón de pago');
       };
 
       container.appendChild(script);
 
     } catch (e) {
-      console.error('Error creating Bold button:', e);
+      console.error('Error creando botón Bold:', e);
       setError('Error creando el botón de pago');
     }
   }, [step, signature, orderId, total, boldButtonCreated]);
