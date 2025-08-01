@@ -352,71 +352,87 @@ const CheckoutPage = () => {
   };
 
   // Crear la orden en el backend
-  const createOrder = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Usuario no autenticado');
-      return;
-    }
-    
-    if (!selectedAddress) {
-      setError('Selecciona una dirección');
-      return;
-    }
-    
-    if (cartItems.length === 0) {
-      setError('Carrito vacío');
-      return;
-    }
+const createOrder = async () => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    setError('Usuario no autenticado');
+    return;
+  }
+  
+  if (!selectedAddress) {
+    setError('Selecciona una dirección');
+    return;
+  }
+  
+  if (cartItems.length === 0) {
+    setError('Carrito vacío');
+    return;
+  }
 
-    try {
-      setLoading(true);
-      setError('');
+  try {
+    setLoading(true);
+    setError('');
 
-      // Preparar el body para la nueva API
-      const body = {
-        addressId: selectedAddress.id,
-        items: cartItems.map((item) => ({
-          productVariantId: item.productVariantId || item.id, // Usar productVariantId
-          quantity: item.quantity,
-        })),
-      };
+    // Preparar el body para la nueva API - CONVERTIR A LONG
+    const body = {
+      addressId: selectedAddress.id,
+      items: cartItems.map((item) => ({
+        productVariantId: parseInt(item.productVariantId || item.id), // Convertir a número
+        quantity: item.quantity,
+      })),
+    };
 
-      console.log('Creating order with body:', body);
+    console.log('Creating order with body:', body);
 
-      const res = await fetch(API_ORDERS_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+    const res = await fetch(API_ORDERS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-      if (!res.ok) {
+    // Mejorar el manejo de respuestas de error
+    if (!res.ok) {
+      let errorMessage = `Error ${res.status}: ${res.statusText}`;
+      try {
         const errorData = await res.json();
-        throw new Error(errorData.message || `Error ${res.status}: ${res.statusText}`);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch (parseError) {
+        console.error('Error parsing error response:', parseError);
+        // Si no se puede parsear la respuesta de error, usar el mensaje por defecto
       }
-
-      const orderResponse: OrderResponse = await res.json();
-      console.log('Order created successfully:', orderResponse);
-
-      setOrderId(orderResponse.orderId);
-      setTotal(orderResponse.amount);
-      setOrderCreated(true);
-
-      // Obtener la firma para Bold
-      await fetchSignature(orderResponse.orderId, orderResponse.amount, token);
-
-    } catch (e) {
-      console.error('Error creating order:', e);
-      const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
-      setError('No se pudo crear la orden: ' + errorMessage);
-      setOrderCreated(false);
-    } finally {
-      setLoading(false);
+      throw new Error(errorMessage);
     }
-  };
+
+    // Asegurar que la respuesta se puede parsear como JSON
+    let orderResponse: OrderResponse;
+    try {
+      orderResponse = await res.json();
+    } catch (parseError) {
+      console.error('Error parsing success response:', parseError);
+      throw new Error('Error al procesar la respuesta del servidor');
+    }
+
+    console.log('Order created successfully:', orderResponse);
+
+    setOrderId(orderResponse.orderId);
+    setTotal(orderResponse.amount);
+    setOrderCreated(true);
+
+    // Obtener la firma para Bold
+    await fetchSignature(orderResponse.orderId, orderResponse.amount, token);
+
+  } catch (e) {
+    console.error('Error creating order:', e);
+    const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
+    setError('No se pudo crear la orden: ' + errorMessage);
+    setOrderCreated(false);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Obtener la firma para Bold
   const fetchSignature = async (orderIdParam: string, amountParam: number, token: string) => {
