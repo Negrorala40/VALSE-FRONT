@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import './Checkout.css';
 
@@ -31,12 +31,6 @@ interface UserData {
   email: string;
   phone: string;
   addresses: Address[];
-}
-
-interface OrderResponse {
-  orderId: string;
-  amount: number;
-  status: string;
 }
 
 interface SignatureResponse {
@@ -92,30 +86,12 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Usuario no autenticado');
-      return;
-    }
-
-    const fetchInitialData = async () => {
-      setLoading(true);
-      try {
-        await Promise.all([fetchCart(token), fetchUser(token)]);
-      } catch (err) {
-        console.error('Error loading initial data:', err);
-        setError('Error cargando los datos iniciales');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInitialData();
+  const calculateTotal = useCallback((items: CartItem[]) => {
+    const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    setTotal(newTotal);
   }, []);
 
-  const fetchCart = async (token: string) => {
+  const fetchCart = useCallback(async (token: string) => {
     try {
       const res = await fetch(API_CART_URL, {
         headers: { Authorization: `Bearer ${token}` },
@@ -157,9 +133,9 @@ const CheckoutPage = () => {
       console.error('Error fetching cart:', error);
       throw error;
     }
-  };
+  }, [calculateTotal]);
 
-  const fetchUser = async (token: string) => {
+  const fetchUser = useCallback(async (token: string) => {
     try {
       const res = await fetch(API_USER_URL, {
         headers: { Authorization: `Bearer ${token}` },
@@ -178,12 +154,30 @@ const CheckoutPage = () => {
       console.error('Error fetching user:', error);
       throw error;
     }
-  };
+  }, []);
 
-  const calculateTotal = (items: CartItem[]) => {
-    const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    setTotal(newTotal);
-  };
+  // Cargar datos iniciales
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Usuario no autenticado');
+      return;
+    }
+
+    const fetchInitialData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchCart(token), fetchUser(token)]);
+      } catch (err) {
+        console.error('Error loading initial data:', err);
+        setError('Error cargando los datos iniciales');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [fetchCart, fetchUser]);
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -351,91 +345,8 @@ const CheckoutPage = () => {
     setStep((prev) => Math.max(prev - 1, 1));
   };
 
-  // Crear la orden en el backend
-const createOrder = async () => {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    setError('Usuario no autenticado');
-    return;
-  }
-  
-  if (!selectedAddress) {
-    setError('Selecciona una dirección');
-    return;
-  }
-  
-  if (cartItems.length === 0) {
-    setError('Carrito vacío');
-    return;
-  }
-
-  try {
-    setLoading(true);
-    setError('');
-
-    // Preparar el body para la nueva API - CONVERTIR A LONG
-    const body = {
-      addressId: selectedAddress.id,
-      items: cartItems.map((item) => ({
-        productVariantId: parseInt(item.productVariantId || item.id), // Convertir a número
-        quantity: item.quantity,
-      })),
-    };
-
-    console.log('Creating order with body:', body);
-
-    const res = await fetch(API_ORDERS_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    // Mejorar el manejo de respuestas de error
-    if (!res.ok) {
-      let errorMessage = `Error ${res.status}: ${res.statusText}`;
-      try {
-        const errorData = await res.json();
-        errorMessage = errorData.message || errorData.error || errorMessage;
-      } catch (parseError) {
-        console.error('Error parsing error response:', parseError);
-        // Si no se puede parsear la respuesta de error, usar el mensaje por defecto
-      }
-      throw new Error(errorMessage);
-    }
-
-    // Asegurar que la respuesta se puede parsear como JSON
-    let orderResponse: OrderResponse;
-    try {
-      orderResponse = await res.json();
-    } catch (parseError) {
-      console.error('Error parsing success response:', parseError);
-      throw new Error('Error al procesar la respuesta del servidor');
-    }
-
-    console.log('Order created successfully:', orderResponse);
-
-    setOrderId(orderResponse.orderId);
-    setTotal(orderResponse.amount);
-    setOrderCreated(true);
-
-    // Obtener la firma para Bold
-    await fetchSignature(orderResponse.orderId, orderResponse.amount, token);
-
-  } catch (e) {
-    console.error('Error creating order:', e);
-    const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
-    setError('No se pudo crear la orden: ' + errorMessage);
-    setOrderCreated(false);
-  } finally {
-    setLoading(false);
-  }
-};
-
   // Obtener la firma para Bold
-  const fetchSignature = async (orderIdParam: string, amountParam: number, token: string) => {
+  const fetchSignature = useCallback(async (orderIdParam: string, amountParam: number, token: string) => {
     try {
       console.log('Fetching signature for order:', orderIdParam, 'amount:', amountParam);
       
@@ -465,14 +376,100 @@ const createOrder = async () => {
       const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
       setError('No se pudo obtener la firma de pago: ' + errorMessage);
     }
-  };
+  }, []);
+
+  // Crear la orden en el backend
+  const createOrder = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Usuario no autenticado');
+      return;
+    }
+    
+    if (!selectedAddress) {
+      setError('Selecciona una dirección');
+      return;
+    }
+    
+    if (cartItems.length === 0) {
+      setError('Carrito vacío');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError('');
+
+      // Preparar el body para la API - USAR LONG EN VEZ DE STRING
+      const body = {
+        addressId: selectedAddress.id,
+        items: cartItems.map((item) => ({
+          productVariantId: parseInt(item.productVariantId || item.id), // Convertir a número
+          quantity: item.quantity,
+        })),
+      };
+
+      console.log('Creating order with body:', body);
+
+      const res = await fetch(API_ORDERS_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      console.log('Response status:', res.status);
+
+      // Mejorar el manejo de respuestas de error
+      if (!res.ok) {
+        let errorMessage = `Error ${res.status}: ${res.statusText}`;
+        try {
+          const errorData = await res.json();
+          console.log('Error response:', errorData);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+          // Si no se puede parsear la respuesta de error, usar el mensaje por defecto
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Asegurar que la respuesta se puede parsear como JSON
+      let orderResponse;
+      try {
+        orderResponse = await res.json();
+      } catch (parseError) {
+        console.error('Error parsing success response:', parseError);
+        throw new Error('Error al procesar la respuesta del servidor');
+      }
+
+      console.log('Order created successfully:', orderResponse);
+
+      setOrderId(orderResponse.orderId);
+      setTotal(orderResponse.amount);
+      setOrderCreated(true);
+
+      // Obtener la firma para Bold
+      await fetchSignature(orderResponse.orderId, orderResponse.amount, token);
+
+    } catch (e) {
+      console.error('Error creating order:', e);
+      const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
+      setError('No se pudo crear la orden: ' + errorMessage);
+      setOrderCreated(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedAddress, cartItems, fetchSignature]);
 
   // Crear la orden cuando llegamos al paso 3
   useEffect(() => {
     if (step === 3 && !orderCreated && !loading) {
       createOrder();
     }
-  }, [step, orderCreated, loading]);
+  }, [step, orderCreated, loading, createOrder]);
 
   // Crear el botón de Bold cuando tenemos todos los datos necesarios
   useEffect(() => {
