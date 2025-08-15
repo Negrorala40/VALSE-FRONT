@@ -510,7 +510,7 @@ const CheckoutPage = () => {
     if (step === 3 && !orderCreated && !loading) {
       createOrder();
     }
-  }, [step, orderCreated, loading, createOrder]);
+  }, [step]); // SOLO DEPENDER DE step PARA EVITAR BUCLES
 
   // Crear el botón de Bold cuando tenemos todos los datos necesarios
   useEffect(() => {
