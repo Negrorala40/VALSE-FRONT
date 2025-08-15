@@ -13,7 +13,7 @@ interface CartItem {
   color: string;
   quantity: number;
   stock?: number;
-  productVariantId?: string; // Para mapear con el backend
+  productVariantId?: string;
 }
 
 interface Address {
@@ -35,6 +35,23 @@ interface UserData {
 
 interface SignatureResponse {
   signature: string;
+}
+
+// Interfaces para la respuesta del backend
+interface OrderResponse {
+  id: number;
+  orderDate: string;
+  status: string;
+  totalPrice: number;
+  userId: number;
+  shippingAddressId: number;
+  orderItems: Array<{
+    id: number;
+    quantity: number;
+    price: number;
+    orderId: number;
+    productVariantId: number;
+  }>;
 }
 
 const API_CART_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/cart';
@@ -118,7 +135,6 @@ const CheckoutPage = () => {
           stock: number;
           productVariantId?: string | number;
         }) => {
-          // Mejor manejo del productVariantId
           let variantId = item.productVariantId;
           if (typeof variantId === 'number') {
             variantId = variantId.toString();
@@ -374,7 +390,7 @@ const CheckoutPage = () => {
         },
         body: JSON.stringify({ 
           orderId: orderIdParam, 
-          amount: Math.round(amountParam) // Asegurar que sea un entero
+          amount: Math.round(amountParam)
         }),
       });
 
@@ -394,7 +410,7 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Función createOrder mejorada
+  // Función createOrder corregida para coincidir con tu controlador Java
   const createOrder = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -412,32 +428,20 @@ const CheckoutPage = () => {
       return;
     }
 
+    if (!userData) {
+      setError('Datos de usuario no disponibles');
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
 
-      // Validar y preparar los items con mejor manejo de errores
-      const items = cartItems.map((item) => {
-        const variantId = item.productVariantId || item.id;
-        const numericId = parseInt(variantId);
-        
-        if (isNaN(numericId) || numericId <= 0) {
-          throw new Error(`ID de producto inválido para ${item.name}: ${variantId}`);
-        }
-        
-        if (!item.quantity || item.quantity <= 0) {
-          throw new Error(`Cantidad inválida para ${item.name}: ${item.quantity}`);
-        }
-        
-        return {
-          productVariantId: numericId,
-          quantity: item.quantity,
-        };
-      });
-
+      // Preparar el body según tu controlador Java
+      // Tu controlador espera: userId y shippingAddressId
       const body = {
-        addressId: selectedAddress.id,
-        items: items,
+        userId: userData.id,
+        shippingAddressId: selectedAddress.id
       };
 
       console.log('Creando orden con body:', JSON.stringify(body, null, 2));
@@ -453,13 +457,12 @@ const CheckoutPage = () => {
 
       console.log('Estado de respuesta:', res.status);
 
-      // Mejor manejo de respuestas de error
       if (!res.ok) {
         let errorMessage = `Error ${res.status}: ${res.statusText}`;
         try {
-          const errorData = await res.json();
-          console.log('Respuesta de error completa:', errorData);
-          errorMessage = errorData.message || errorData.error || errorMessage;
+          const errorData = await res.text();
+          console.log('Respuesta de error:', errorData);
+          errorMessage = errorData || errorMessage;
         } catch (parseError) {
           console.error('Error parseando respuesta de error:', parseError);
         }
@@ -467,7 +470,7 @@ const CheckoutPage = () => {
       }
 
       // Parsear respuesta exitosa
-      let orderResponse;
+      let orderResponse: OrderResponse;
       try {
         orderResponse = await res.json();
       } catch (parseError) {
@@ -478,16 +481,19 @@ const CheckoutPage = () => {
       console.log('Orden creada exitosamente:', orderResponse);
 
       // Validar que la respuesta tenga los campos esperados
-      if (!orderResponse.orderId || orderResponse.amount === undefined) {
+      if (!orderResponse.id || orderResponse.totalPrice === undefined) {
         throw new Error('Respuesta del servidor incompleta');
       }
 
-      setOrderId(orderResponse.orderId.toString());
-      setTotal(orderResponse.amount);
+      setOrderId(orderResponse.id.toString());
+      setTotal(orderResponse.totalPrice);
       setOrderCreated(true);
 
       // Obtener la firma para Bold
-      await fetchSignature(orderResponse.orderId.toString(), orderResponse.amount, token);
+      await fetchSignature(orderResponse.id.toString(), orderResponse.totalPrice, token);
+
+      // Limpiar el carrito local después de crear la orden exitosamente
+      setCartItems([]);
 
     } catch (e) {
       console.error('Error creando orden:', e);
@@ -497,7 +503,7 @@ const CheckoutPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedAddress, cartItems, fetchSignature]);
+  }, [selectedAddress, cartItems, userData, fetchSignature]);
 
   // Crear la orden cuando llegamos al paso 3
   useEffect(() => {
@@ -978,6 +984,42 @@ const CheckoutPage = () => {
           </div>
         </div>
       )}
+
+      {/* CSS para la animación del spinner */}
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .step-indicator {
+          padding: 10px 20px;
+          border-radius: 25px;
+          background: #f8f9fa;
+          color: #6c757d;
+          font-weight: 500;
+          transition: all 0.3s ease;
+        }
+        
+        .step-indicator.active {
+          background: #007bff;
+          color: white;
+        }
+        
+        .checkout-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 20px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .loading {
+          text-align: center;
+          padding: 50px;
+          font-size: 18px;
+          color: #6c757d;
+        }
+      `}</style>
     </div>
   );
 };
