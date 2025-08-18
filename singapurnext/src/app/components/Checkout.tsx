@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import './Checkout.css';
 
@@ -82,24 +82,35 @@ const CheckoutPage = () => {
   });
 
   const [orderCreated, setOrderCreated] = useState(false);
-  const [boldButtonCreated, setBoldButtonCreated] = useState(false);
+  
+  // Usar useRef para manejar el contenedor del botón Bold
+  const boldContainerRef = useRef<HTMLDivElement>(null);
+  const boldScriptRef = useRef<HTMLScriptElement | null>(null);
+  const boldScriptLoadedRef = useRef<boolean>(false);
 
   // Cargar script de Bold al montar el componente
   useEffect(() => {
+    if (boldScriptLoadedRef.current) return;
+    
     const scriptId = 'bold-script';
-    if (!document.getElementById(scriptId)) {
+    const existingScript = document.getElementById(scriptId);
+    
+    if (!existingScript) {
       const script = document.createElement('script');
       script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
       script.async = true;
       script.id = scriptId;
       script.onload = () => {
-        console.log('Bold script loaded successfully');
+        console.log('Bold library script loaded successfully');
+        boldScriptLoadedRef.current = true;
       };
       script.onerror = () => {
-        console.error('Error loading Bold script');
+        console.error('Error loading Bold library script');
         setError('Error cargando el sistema de pagos');
       };
       document.head.appendChild(script);
+    } else {
+      boldScriptLoadedRef.current = true;
     }
   }, []);
 
@@ -410,7 +421,7 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Función createOrder corregida para coincidir con tu controlador Java
+  // Función createOrder corregida
   const createOrder = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -437,10 +448,8 @@ const CheckoutPage = () => {
       setLoading(true);
       setError('');
 
-      // Preparar el body según tu controlador Java
-      // Tu controlador espera: userId y shippingAddressId
+      // Preparar el body según tu controlador Java corregido
       const body = {
-        userId: userData.id,
         shippingAddressId: selectedAddress.id
       };
 
@@ -469,15 +478,7 @@ const CheckoutPage = () => {
         throw new Error(errorMessage);
       }
 
-      // Parsear respuesta exitosa
-      let orderResponse: OrderResponse;
-      try {
-        orderResponse = await res.json();
-      } catch (parseError) {
-        console.error('Error parseando respuesta exitosa:', parseError);
-        throw new Error('Error al procesar la respuesta del servidor');
-      }
-
+      const orderResponse: OrderResponse = await res.json();
       console.log('Orden creada exitosamente:', orderResponse);
 
       // Validar que la respuesta tenga los campos esperados
@@ -510,19 +511,33 @@ const CheckoutPage = () => {
     if (step === 3 && !orderCreated && !loading) {
       createOrder();
     }
-  }, [step]); // SOLO DEPENDER DE step PARA EVITAR BUCLES
+  }, [step, createOrder, loading, orderCreated]);
+
+  // Función para limpiar el botón Bold anterior
+  const cleanupBoldButton = useCallback(() => {
+    if (boldScriptRef.current && boldScriptRef.current.parentNode) {
+      try {
+        boldScriptRef.current.parentNode.removeChild(boldScriptRef.current);
+      } catch {
+        console.log('Script ya fue removido o no existe');
+      }
+    }
+    boldScriptRef.current = null;
+    
+    if (boldContainerRef.current) {
+      boldContainerRef.current.innerHTML = '';
+    }
+  }, []);
 
   // Crear el botón de Bold cuando tenemos todos los datos necesarios
   useEffect(() => {
     if (step !== 3) return;
     if (!signature || !orderId || total === 0) return;
-    if (boldButtonCreated) return;
+    if (!boldScriptLoadedRef.current) return;
+    if (!boldContainerRef.current) return;
 
-    const container = document.getElementById('bold-button-container');
-    if (!container) return;
-
-    // Limpiar contenedor
-    container.innerHTML = '';
+    // Limpiar botón anterior si existe
+    cleanupBoldButton();
 
     console.log('Creando botón Bold con:', {
       orderId,
@@ -531,7 +546,7 @@ const CheckoutPage = () => {
     });
 
     try {
-      // Crear el botón de Bold
+      // Crear el script del botón de Bold
       const script = document.createElement('script');
       script.setAttribute('data-bold-button', '');
       script.setAttribute('data-order-id', orderId);
@@ -545,7 +560,6 @@ const CheckoutPage = () => {
 
       script.onload = () => {
         console.log('Script del botón Bold cargado exitosamente');
-        setBoldButtonCreated(true);
       };
 
       script.onerror = () => {
@@ -553,24 +567,32 @@ const CheckoutPage = () => {
         setError('Error cargando el botón de pago');
       };
 
-      container.appendChild(script);
+      boldScriptRef.current = script;
+      boldContainerRef.current.appendChild(script);
 
     } catch (e) {
       console.error('Error creando botón Bold:', e);
       setError('Error creando el botón de pago');
     }
-  }, [step, signature, orderId, total, boldButtonCreated]);
+  }, [step, signature, orderId, total, cleanupBoldButton]);
 
-  // Limpiar estados cuando cambiamos de paso
+  // Limpiar cuando cambiamos de paso
   useEffect(() => {
     if (step !== 3) {
       setOrderCreated(false);
-      setBoldButtonCreated(false);
       setSignature(null);
       setOrderId('');
       setError('');
+      cleanupBoldButton();
     }
-  }, [step]);
+  }, [step, cleanupBoldButton]);
+
+  // Cleanup al desmontar el componente
+  useEffect(() => {
+    return () => {
+      cleanupBoldButton();
+    };
+  }, [cleanupBoldButton]);
 
   if (loading && step === 1) {
     return (
@@ -942,19 +964,23 @@ const CheckoutPage = () => {
             </div>
           )}
 
-          {/* Contenedor del botón de Bold */}
+          {/* Contenedor del botón de Bold - Usando ref */}
           {orderCreated && signature && (
             <div style={{ margin: '20px 0', textAlign: 'center' }}>
               <p style={{ marginBottom: '15px', color: '#28a745' }}>
                 ✓ Orden creada exitosamente. Procede con el pago:
               </p>
-              <div id="bold-button-container" style={{
-                minHeight: '60px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                {!boldButtonCreated && (
+              <div 
+                ref={boldContainerRef}
+                id="bold-button-container" 
+                style={{
+                  minHeight: '60px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}
+              >
+                {!boldScriptRef.current && (
                   <p>Cargando botón de pago...</p>
                 )}
               </div>
