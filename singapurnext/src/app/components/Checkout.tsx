@@ -549,7 +549,7 @@ const CheckoutPage = () => {
       // Crear el script del botón de Bold
       const script = document.createElement('script');
       script.setAttribute('data-bold-button', '');
-      script.setAttribute('data-order-id', `ORD-${orderId}`);
+      script.setAttribute('data-order-id', orderId);
       script.setAttribute('data-currency', 'COP');
       script.setAttribute('data-amount', Math.round(total).toString());
       script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
