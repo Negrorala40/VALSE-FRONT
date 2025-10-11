@@ -1,5 +1,6 @@
 'use client';
 
+import { MENU_PRODUCTS } from '../utils/Api'; // Ajusta la ruta si está en otra carpeta
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
@@ -51,13 +52,10 @@ const Menu: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [sortOption, setSortOption] = useState<string>('');
 
-  const API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products';
-  //const API_URL = 'http://localhost:8080/api/products';
-
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await axios.get<Product[]>(API_URL);
+        const response = await axios.get<Product[]>(MENU_PRODUCTS);
         setProducts(response.data);
         setLoading(false);
       } catch (error) {
