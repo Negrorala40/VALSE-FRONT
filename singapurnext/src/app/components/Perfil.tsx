@@ -1,6 +1,7 @@
 // src/app/components/Perfil.tsx
 'use client';
 
+import { PERFIL_INF, ADDRESS } from '../utils/Api';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './Perfil.css';
 import { signOut } from "next-auth/react";
@@ -20,9 +21,6 @@ interface User {
   email: string;
   phone: string;
 }
-
-const USER_API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/users';
-const ADDRESS_API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
 
 const Perfil = () => {
   const [formData, setFormData] = useState<User>({
@@ -59,7 +57,7 @@ const Perfil = () => {
 
   const loadUserData = useCallback(async () => {
     try {
-      const response = await fetch(`${USER_API_URL}/me`, {
+      const response = await fetch(`${PERFIL_INF}/me`, {
         method: 'GET',
         headers: authHeaders,
       });
@@ -77,7 +75,7 @@ const Perfil = () => {
 
   const loadAddresses = useCallback(async () => {
     try {
-      const response = await fetch(ADDRESS_API_URL, {
+      const response = await fetch(ADDRESS, {
         method: 'GET',
         headers: authHeaders,
       });
@@ -110,7 +108,7 @@ const Perfil = () => {
 
   const handleAddAddress = async () => {
     try {
-      const response = await fetch(ADDRESS_API_URL, {
+      const response = await fetch(ADDRESS, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(newAddress),
@@ -132,7 +130,7 @@ const Perfil = () => {
     if (!confirmDelete) return;
 
     try {
-      const response = await fetch(`${ADDRESS_API_URL}/${addressId}`, {
+      const response = await fetch(`${ADDRESS}/${addressId}`, {
         method: 'DELETE',
         headers: authHeaders,
       });
@@ -159,7 +157,7 @@ const Perfil = () => {
     if (!confirmUpdate) return;
 
     try {
-      const response = await fetch(`${ADDRESS_API_URL}/${editedAddress.id}`, {
+      const response = await fetch(`${ADDRESS}/${editedAddress.id}`, {
         method: 'PUT',
         headers: authHeaders,
         body: JSON.stringify(editedAddress),
@@ -188,7 +186,7 @@ const Perfil = () => {
         password: '',
       };
 
-      const response = await fetch(`${USER_API_URL}/me`, {
+      const response = await fetch(`${PERFIL_INF}/me`, {
         method: 'PUT',
         headers: authHeaders,
         body: JSON.stringify(payload),

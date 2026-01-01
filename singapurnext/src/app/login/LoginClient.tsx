@@ -1,14 +1,74 @@
-  'use client';
-  import { API_URL } from '../utils/Api'; // Ajusta la ruta si está en otra carpeta
-  import React, { useState, useEffect } from 'react';
-  import { useRouter, useSearchParams } from 'next/navigation';
-  import { signIn, useSession } from 'next-auth/react';
-  import Cookies from 'js-cookie';
-  import styles from './page.module.css';
+'use client';
+import { API_URL } from '../utils/Api';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { signIn, useSession } from 'next-auth/react';
+import Cookies from 'js-cookie';
+import styles from './page.module.css';
 
-  const Login: React.FC = () => {
-    const [isRegistering, setIsRegistering] = useState(false);
-    const [formData, setFormData] = useState({
+const Login: React.FC = () => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams?.get('redirect') || '/';
+  const { data: session } = useSession();
+
+  // 🔹 Detectar sesión de Google
+  useEffect(() => {
+    const fetchGoogleToken = async () => {
+      if (!session?.user?.email) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: session.user.email }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Error al autenticar con Google');
+
+        const { token, roles, userId } = data;
+        // 🔸 Ajuste de roles con prefijo
+        const role = Array.isArray(roles)
+          ? roles.includes('ROLE_ADMIN')
+            ? 'ROLE_ADMIN'
+            : roles[0] || 'ROLE_CUSTOMER'
+          : 'ROLE_CUSTOMER';
+
+        localStorage.setItem('token', token);
+        localStorage.setItem('role', role);
+        localStorage.setItem('userId', String(userId));
+        Cookies.set('token', token, { expires: 1 });
+
+        await sendPendingCartItem(token, userId);
+
+        // 🔸 Redirección corregida
+        router.push(role === 'ROLE_ADMIN' ? '/admin' : redirectUrl);
+      } catch (err) {
+        console.error('Error en login con Google:', err);
+        setErrorMessage(err instanceof Error ? err.message : 'Error desconocido');
+      }
+    };
+
+    fetchGoogleToken();
+  }, [session, redirectUrl, router]);
+
+  const toggleRegister = () => {
+    setIsRegistering(!isRegistering);
+    setFormData({
       firstName: '',
       lastName: '',
       email: '',
@@ -16,243 +76,193 @@
       password: '',
       confirmPassword: '',
     });
-    const [loading, setLoading] = useState(false);
-    const [googleLoading, setGoogleLoading] = useState(false);
-    const [errorMessage, setErrorMessage] = useState('');
+    setErrorMessage('');
+  };
 
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    const redirectUrl = searchParams?.get('redirect') || '/';
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = event.target;
+    setFormData(prev => ({ ...prev, [id]: value }));
+  };
 
-    const { data: session } = useSession();
+  const sendPendingCartItem = async (token: string, userId: string) => {
+    const pendingItem = localStorage.getItem('pendingCartItem');
+    if (!pendingItem) return;
 
-    // Detectar sesión de Google
-    useEffect(() => {
-      const fetchGoogleToken = async () => {
-        if (!session?.user?.email) return;
+    try {
+      const item = JSON.parse(pendingItem);
+      const { variantId, quantity } = item;
 
-        try {
-          const response = await fetch(`${API_URL}/api/auth/google`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: session.user.email }),
-          });
-
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.error || 'Error al autenticar con Google');
-
-          const { token, roles, userId } = data;
-          const role = roles.includes('ADMIN') ? 'ADMIN' : roles[0] || 'CUSTOMER';
-
-          localStorage.setItem('token', token);
-          localStorage.setItem('role', role);
-          localStorage.setItem('userId', String(userId));
-          Cookies.set('token', token, { expires: 1 });
-
-          await sendPendingCartItem(token, userId);
-
-          router.push(role === 'ADMIN' ? '/admin' : redirectUrl);
-        } catch (err) {
-          console.error('Error en login con Google:', err);
-          setErrorMessage(err instanceof Error ? err.message : 'Error desconocido');
+      await fetch(
+        `${API_URL}/api/cart/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
         }
-      };
+      );
 
-      fetchGoogleToken();
-    }, [session, redirectUrl, router]);
+      localStorage.removeItem('pendingCartItem');
+    } catch (err) {
+      console.error('Error procesando el pendingCartItem:', err);
+    }
+  };
 
-    const toggleRegister = () => {
-      setIsRegistering(!isRegistering);
-      setFormData({
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        password: '',
-        confirmPassword: '',
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setErrorMessage('');
+    setLoading(true);
+
+    if (isRegistering && formData.password !== formData.confirmPassword) {
+      setErrorMessage('Las contraseñas no coinciden');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const endpoint = isRegistering
+        ? `${API_URL}/api/users`
+        : `${API_URL}/api/auth/login`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          ...(isRegistering && {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+          }),
+        }),
       });
-      setErrorMessage('');
-    };
 
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const { id, value } = event.target;
-      setFormData(prev => ({ ...prev, [id]: value }));
-    };
-
-    const sendPendingCartItem = async (token: string, userId: string) => {
-      const pendingItem = localStorage.getItem('pendingCartItem');
-      if (!pendingItem) return;
-
+      const rawText = await response.text();
+      let data;
       try {
-        const item = JSON.parse(pendingItem);
-        const { variantId, quantity } = item;
-
-        await fetch(
-          `${API_URL}/api/cart/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        localStorage.removeItem('pendingCartItem');
-      } catch (err) {
-        console.error('Error procesando el pendingCartItem:', err);
+        data = JSON.parse(rawText);
+      } catch {
+        data = null;
       }
-    };
 
-    const handleSubmit = async (event: React.FormEvent) => {
-      event.preventDefault();
-      setErrorMessage('');
-      setLoading(true);
-
-      if (isRegistering && formData.password !== formData.confirmPassword) {
-        setErrorMessage('Las contraseñas no coinciden');
+      if (!response.ok) {
+        if (rawText) {
+          setErrorMessage(rawText);
+        } else if (response.status === 404 && data && data.message) {
+          setErrorMessage(data.message);
+        } else if (response.status === 401 && data && data.message) {
+          setErrorMessage(data.message);
+        } else {
+          setErrorMessage((data && data.message) || 'Error en la autenticación');
+        }
         setLoading(false);
         return;
       }
 
-      try {
-        const endpoint = isRegistering
-          ? `${API_URL}/api/users`
-          : `${API_URL}/api/auth/login`;
+      if (!isRegistering) {
+        const { token, roles, userId } = data;
+        if (!token || !userId) throw new Error('Datos de autenticación incompletos');
 
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            ...(isRegistering && {
-              firstName: formData.firstName,
-              lastName: formData.lastName,
-              phone: formData.phone,
-            }),
-          }),
-        });
+        // 🔸 Ajuste de roles con prefijo
+        const role = Array.isArray(roles)
+          ? roles.includes('ROLE_ADMIN')
+            ? 'ROLE_ADMIN'
+            : roles[0] || 'ROLE_CUSTOMER'
+          : 'ROLE_CUSTOMER';
 
-        const rawText = await response.text();
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch {
-          data = null;
-        }
+        localStorage.setItem('token', token);
+        localStorage.setItem('role', role);
+        localStorage.setItem('userId', String(userId));
+        Cookies.set('token', token, { expires: 1 });
 
-        if (!response.ok) {
-          if (rawText) {
-            setErrorMessage(rawText);
-          } else if (response.status === 404 && data && data.message) {
-            setErrorMessage(data.message); // "❌ El email no existe"
-          } else if (response.status === 401 && data && data.message) {
-            setErrorMessage(data.message); // "❌ Contraseña incorrecta"
-          } else {
-            setErrorMessage((data && data.message) || 'Error en la autenticación');
-          }
-          setLoading(false);
-          return;
-        }
+        await sendPendingCartItem(token, userId);
 
-        if (!isRegistering) {
-          const { token, roles, userId } = data;
-          if (!token || !userId) throw new Error('Datos de autenticación incompletos');
-
-          const role = Array.isArray(roles) && roles.includes('ADMIN') ? 'ADMIN' : (Array.isArray(roles) ? roles[0] : 'CUSTOMER');
-
-          localStorage.setItem('token', token);
-          localStorage.setItem('role', role);
-          localStorage.setItem('userId', String(userId));
-          Cookies.set('token', token, { expires: 1 });
-
-          await sendPendingCartItem(token, userId);
-
-          router.push(role === 'ADMIN' ? '/admin' : redirectUrl);
-        } else {
-          alert('Usuario registrado exitosamente');
-          toggleRegister();
-        }
-      } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : 'Error desconocido');
-      } finally {
-        setLoading(false);
+        router.push(role === 'ROLE_ADMIN' ? '/admin' : redirectUrl);
+      } else {
+        alert('Usuario registrado exitosamente');
+        toggleRegister();
       }
-    };
-
-    const handleGoogleLogin = async () => {
-      setErrorMessage('');
-      setGoogleLoading(true);
-      try {
-        await signIn('google', { callbackUrl: redirectUrl });
-      } catch {
-        setErrorMessage('Error al iniciar sesión con Google');
-        setGoogleLoading(false);
-      }
-    };
-
-    return (
-      <div className={styles.loginContainer}>
-        <div className={styles.formContainer}>
-          <h2>{isRegistering ? 'Registrar Usuario' : 'Iniciar Sesión'}</h2>
-          {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
-          <form onSubmit={handleSubmit}>
-            {isRegistering && (
-              <>
-                <div className={styles.formGroup}>
-                  <label htmlFor="firstName">Nombre</label>
-                  <input type="text" id="firstName" value={formData.firstName} onChange={handleChange} required />
-                </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="lastName">Apellido</label>
-                  <input type="text" id="lastName" value={formData.lastName} onChange={handleChange} required />
-                </div>
-                <div className={styles.formGroup}>
-                  <label htmlFor="phone">Teléfono</label>
-                  <input type="tel" id="phone" value={formData.phone} onChange={handleChange} required />
-                </div>
-              </>
-            )}
-            <div className={styles.formGroup}>
-              <label htmlFor="email">Correo Electrónico</label>
-              <input type="email" id="email" value={formData.email} onChange={handleChange} required />
-            </div>
-            <div className={styles.formGroup}>
-              <label htmlFor="password">Contraseña</label>
-              <input type="password" id="password" value={formData.password} onChange={handleChange} required />
-            </div>
-            {isRegistering && (
-              <div className={styles.formGroup}>
-                <label htmlFor="confirmPassword">Confirmar Contraseña</label>
-                <input type="password" id="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required />
-              </div>
-            )}
-            <button type="submit" className={styles.btnPrimary} disabled={loading}>
-              {loading ? 'Cargando...' : isRegistering ? 'Registrar' : 'Iniciar Sesión'}
-            </button>
-          </form>
-
-          <div className={styles.divider}>o</div>
-
-          <button
-            className={styles.btnGoogle}
-            onClick={handleGoogleLogin}
-            disabled={googleLoading}
-            style={{ opacity: googleLoading ? 0.6 : 1 }}
-          >
-            {googleLoading ? 'Cargando...' : 'Iniciar sesión con Google'}
-          </button>
-
-          <p className={styles.toggleText}>
-            {isRegistering ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}
-            <span onClick={toggleRegister} className={styles.toggleLink}>
-              {isRegistering ? ' Inicia Sesión' : ' Regístrate'}
-            </span>
-          </p>
-        </div>
-      </div>
-    );
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  export default Login;
+  const handleGoogleLogin = async () => {
+    setErrorMessage('');
+    setGoogleLoading(true);
+    try {
+      await signIn('google', { callbackUrl: redirectUrl });
+    } catch {
+      setErrorMessage('Error al iniciar sesión con Google');
+      setGoogleLoading(false);
+    }
+  };
+
+  return (
+    <div className={styles.loginContainer}>
+      <div className={styles.formContainer}>
+        <h2>{isRegistering ? 'Registrar Usuario' : 'Iniciar Sesión'}</h2>
+        {errorMessage && <p className={styles.errorText}>{errorMessage}</p>}
+        <form onSubmit={handleSubmit}>
+          {isRegistering && (
+            <>
+              <div className={styles.formGroup}>
+                <label htmlFor="firstName">Nombre</label>
+                <input type="text" id="firstName" value={formData.firstName} onChange={handleChange} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="lastName">Apellido</label>
+                <input type="text" id="lastName" value={formData.lastName} onChange={handleChange} required />
+              </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="phone">Teléfono</label>
+                <input type="tel" id="phone" value={formData.phone} onChange={handleChange} required />
+              </div>
+            </>
+          )}
+          <div className={styles.formGroup}>
+            <label htmlFor="email">Correo Electrónico</label>
+            <input type="email" id="email" value={formData.email} onChange={handleChange} required />
+          </div>
+          <div className={styles.formGroup}>
+            <label htmlFor="password">Contraseña</label>
+            <input type="password" id="password" value={formData.password} onChange={handleChange} required />
+          </div>
+          {isRegistering && (
+            <div className={styles.formGroup}>
+              <label htmlFor="confirmPassword">Confirmar Contraseña</label>
+              <input type="password" id="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required />
+            </div>
+          )}
+          <button type="submit" className={styles.btnPrimary} disabled={loading}>
+            {loading ? 'Cargando...' : isRegistering ? 'Registrar' : 'Iniciar Sesión'}
+          </button>
+        </form>
+
+        <div className={styles.divider}>o</div>
+
+        <button
+          className={styles.btnGoogle}
+          onClick={handleGoogleLogin}
+          disabled={googleLoading}
+          style={{ opacity: googleLoading ? 0.6 : 1 }}
+        >
+          {googleLoading ? 'Cargando...' : 'Iniciar sesión con Google'}
+        </button>
+
+        <p className={styles.toggleText}>
+          {isRegistering ? '¿Ya tienes una cuenta?' : '¿No tienes una cuenta?'}
+          <span onClick={toggleRegister} className={styles.toggleLink}>
+            {isRegistering ? ' Inicia Sesión' : ' Regístrate'}
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default Login;

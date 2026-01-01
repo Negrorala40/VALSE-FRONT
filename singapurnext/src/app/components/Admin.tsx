@@ -1,5 +1,6 @@
 "use client";
 
+import { MENU_PRODUCTS } from "../utils/Api";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./Admin.module.css";
@@ -53,7 +54,7 @@ const Admin = () => {
 
   useEffect(() => {
     const storedRole = localStorage.getItem("role");
-    if (storedRole !== "ADMIN") {
+    if (storedRole !== "ROLE_ADMIN") {
       router.push("/");
     } else {
       setRole(storedRole);
@@ -64,7 +65,7 @@ const Admin = () => {
   const fetchProducts = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products", {
+      const response = await fetch(MENU_PRODUCTS, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -216,7 +217,7 @@ const Admin = () => {
       const token = localStorage.getItem("token");
 
       const response = editingProductId
-        ? await fetch(`https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products/${editingProductId}`, {
+        ? await fetch(`${MENU_PRODUCTS}/${editingProductId}`, {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
@@ -224,7 +225,7 @@ const Admin = () => {
             },
             body: JSON.stringify(productData),
           })
-        : await fetch("https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products", {
+        : await fetch(MENU_PRODUCTS, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -285,7 +286,7 @@ const Admin = () => {
 
     const token = localStorage.getItem("token");
     try {
-      const response = await fetch(`https://amarte--backendamarte--sjfs798q7b8v.code.run/api/products/${id}`, {
+      const response = await fetch(`${MENU_PRODUCTS}/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -306,7 +307,7 @@ const Admin = () => {
     }
   };
 
-  if (role !== "ADMIN") return null;
+  if (role !== "ROLE_ADMIN") return null;
 
   return (
     <div className={styles.container}>

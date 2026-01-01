@@ -1,5 +1,6 @@
 'use client';
 
+import { CART } from '../utils/Api'; // Ajusta la ruta si está en otra carpeta
 import React, { useEffect, useRef, useCallback } from 'react';
 import './Cart.css';
 import { useRouter } from 'next/navigation';
@@ -32,9 +33,6 @@ interface CartProps {
   setCartItems: React.Dispatch<React.SetStateAction<CartItem[]>>;
   onClose: () => void;
 }
-
-const API_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/cart';
-
 const formatPrice = (price: number) =>
   new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0 }).format(price);
 
@@ -65,7 +63,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
       if (token && userId) {
         // 🧾 CARRITO DE USUARIO LOGUEADO
         try {
-          const res = await fetch(`${API_URL}`, {
+          const res = await fetch(`${CART}`, {
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
@@ -122,7 +120,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
     if (token) {
       // Usuario logueado: Actualiza en backend
       try {
-        const res = await fetch(`${API_URL}/update/${itemId}?quantity=${newQuantity}`, {
+        const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
           method: 'PUT',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -153,7 +151,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
     if (token) {
       // Usuario logueado: elimina del backend
       try {
-        const res = await fetch(`${API_URL}/remove/${itemId}`, {
+        const res = await fetch(`${CART}/remove/${itemId}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
