@@ -1,5 +1,5 @@
 'use client';
-import { API_URL } from '../utils/Api';
+import { LOGIN_URL, CART } from '../utils/Api'; // Cambia API_URL por LOGIN_URL
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn, useSession } from 'next-auth/react';
@@ -31,7 +31,7 @@ const Login: React.FC = () => {
       if (!session?.user?.email) return;
 
       try {
-        const response = await fetch(`${API_URL}/api/auth/google`, {
+        const response = await fetch(`${LOGIN_URL.replace('/login', '/google')}`, { // Ajuste para endpoint de Google
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: session.user.email }),
@@ -93,7 +93,7 @@ const Login: React.FC = () => {
       const { variantId, quantity } = item;
 
       await fetch(
-        `${API_URL}/api/cart/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`,
+        `${CART}/add?userId=${userId}&productVariantId=${variantId}&quantity=${quantity}`, // Usa CART constante
         {
           method: 'POST',
           headers: {
@@ -122,8 +122,8 @@ const Login: React.FC = () => {
 
     try {
       const endpoint = isRegistering
-        ? `${API_URL}/api/users`
-        : `${API_URL}/api/auth/login`;
+        ? `${LOGIN_URL.replace('/auth/login', '/users')}` // Ajuste para registro
+        : LOGIN_URL; // Usa LOGIN_URL directamente
 
       const response = await fetch(endpoint, {
         method: 'POST',

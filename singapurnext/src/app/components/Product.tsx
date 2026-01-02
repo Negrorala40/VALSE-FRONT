@@ -3,10 +3,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
+import axios from 'axios';
 import styles from './Product.module.css';
-
-// Declaración de la URL base
-const API_BASE_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run';
+import { PRODUCT_DETAIL, ADD_TO_CART } from '../utils/Api'; // Ajusta la ruta según tu estructura
 
 interface Imagen {
   imageUrl: string;
@@ -56,10 +55,8 @@ const ProductContent = () => {
 
     const obtenerProducto = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/products/${productId}`);
-        if (!response.ok) throw new Error('Producto no encontrado');
-
-        const data: Producto = await response.json();
+        const response = await axios.get<Producto>(PRODUCT_DETAIL(productId));
+        const data = response.data;
         setProducto(data);
 
         const primeraVariante = data.variants[0];
@@ -69,7 +66,7 @@ const ProductContent = () => {
         const precioMinimo = Math.min(...data.variants.map((v) => v.price));
         setPrecioSeleccionado(precioMinimo);
       } catch (err: unknown) {
-        setError((err as Error).message);
+        setError((err as Error).message || 'Error al cargar el producto');
       } finally {
         setCargando(false);
       }
@@ -165,10 +162,14 @@ const ProductContent = () => {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/cart/add?userId=${userId}&productVariantId=${variante.id}&quantity=${cantidad}`,
+      const response = await axios.post(
+        ADD_TO_CART,
         {
-          method: 'POST',
+          userId,
+          productVariantId: variante.id,
+          quantity: cantidad,
+        },
+        {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
@@ -176,13 +177,18 @@ const ProductContent = () => {
         }
       );
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Error desconocido');
-
-      alert('Producto agregado al carrito con éxito.');
-      router.push('/menu');
+      if (response.status === 200 || response.status === 201) {
+        alert('Producto agregado al carrito con éxito.');
+        router.push('/menu');
+      } else {
+        throw new Error('Error al agregar al carrito');
+      }
     } catch (err: unknown) {
-      alert('Error al agregar al carrito: ' + (err as Error).message);
+      if (axios.isAxiosError(err)) {
+        alert('Error al agregar al carrito: ' + (err.response?.data?.message || err.message));
+      } else {
+        alert('Error al agregar al carrito: ' + (err as Error).message);
+      }
     }
   };
 
@@ -213,6 +219,7 @@ const ProductContent = () => {
           className={styles['imagen-producto']}
           width={500}
           height={500}
+          priority
         />
       ) : (
         <p>Imagen no disponible</p>
