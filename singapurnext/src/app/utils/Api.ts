@@ -9,10 +9,11 @@ export const PRODUCT_DETAIL = (id: string | number) => `${API_URL}/api/products/
 // Login
 export const LOGIN_URL = `${API_URL}/api/auth/login`;
 
-// Perfil
-export const PERFIL_INF = (userId: string | number) => `${API_URL}/api/users/${userId}`;
+// Perfil - Usa /me que es el endpoint común para obtener datos del usuario autenticado
+export const PERFIL_ME = `${API_URL}/api/users/me`;
+
+// Direcciones
 export const ADDRESS = `${API_URL}/api/addresses`;
-export const USER_ADDRESSES = (userId: string | number) => `${API_URL}/api/addresses/user/${userId}`;
 
 // Carrito
 export const CART = `${API_URL}/api/cart`;
