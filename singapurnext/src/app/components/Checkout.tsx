@@ -44,7 +44,6 @@ interface SignatureResponse {
   signature: string;
 }
 
-// Interfaces para la respuesta del backend
 interface OrderResponse {
   id: number;
   orderDate: string;
@@ -84,12 +83,16 @@ const CheckoutPage = () => {
 
   const [orderCreated, setOrderCreated] = useState(false);
   
-  // Usar useRef para manejar el contenedor del botón Bold
+  // Refs para Bold
   const boldContainerRef = useRef<HTMLDivElement>(null);
   const boldScriptRef = useRef<HTMLScriptElement | null>(null);
   const boldScriptLoadedRef = useRef<boolean>(false);
+  
+  // 🔥 NUEVO: Ref para controlar múltiples fetchs
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const hasFetchedRef = useRef(false);
 
-  // Cargar script de Bold al montar el componente
+  // Cargar script de Bold
   useEffect(() => {
     if (boldScriptLoadedRef.current) return;
     
@@ -120,11 +123,11 @@ const CheckoutPage = () => {
     setTotal(newTotal);
   }, []);
 
-  // Función fetchCart mejorada
-  const fetchCart = useCallback(async (token: string) => {
+  const fetchCart = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       const res = await fetch(CART, {
         headers: { Authorization: `Bearer ${token}` },
+        signal // Pasar la señal de aborto
       });
       
       if (!res.ok) {
@@ -173,16 +176,20 @@ const CheckoutPage = () => {
       
       setCartItems(items);
       calculateTotal(items);
-    } catch (error) {
-      console.error('Error fetching cart:', error);
-      throw error;
+    } catch (error: any) {
+      // No mostrar error si fue cancelado
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching cart:', error);
+        throw error;
+      }
     }
   }, [calculateTotal]);
 
-  const fetchUser = useCallback(async (token: string) => {
+  const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       const res = await fetch(PERFIL_ME, {
         headers: { Authorization: `Bearer ${token}` },
+        signal // Pasar la señal de aborto
       });
       
       if (!res.ok) {
@@ -190,17 +197,37 @@ const CheckoutPage = () => {
       }
       
       const user = await res.json();
+      
+      // 🔥 SOLUCIÓN CRÍTICA: Filtrar duplicados inmediatamente
+      if (user.addresses && Array.isArray(user.addresses)) {
+        // Usar un Map para eliminar duplicados por ID
+        const uniqueAddresses = new Map();
+        user.addresses.forEach((address: Address) => {
+          if (!uniqueAddresses.has(address.id)) {
+            uniqueAddresses.set(address.id, address);
+          }
+        });
+        
+        // Convertir de nuevo a array
+        user.addresses = Array.from(uniqueAddresses.values());
+        
+        console.log('Direcciones después de filtrar duplicados:', user.addresses);
+      }
+      
       setUserData(user);
       if (user.addresses && user.addresses.length > 0) {
         setSelectedAddress(user.addresses[0]);
       }
-    } catch (error) {
-      console.error('Error fetching user:', error);
-      throw error;
+    } catch (error: any) {
+      // No mostrar error si fue cancelado
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching user:', error);
+        throw error;
+      }
     }
   }, []);
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales - SOLUCIÓN COMPLETA
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -208,19 +235,53 @@ const CheckoutPage = () => {
       return;
     }
 
+    // 🔥 PREVENIR MÚLTIPLES FETCHS
+    if (hasFetchedRef.current) {
+      console.log('Ya se cargaron los datos, evitando fetch duplicado');
+      return;
+    }
+
     const fetchInitialData = async () => {
       setLoading(true);
+      
+      // Cancelar cualquier fetch anterior
+      if (fetchControllerRef.current) {
+        fetchControllerRef.current.abort();
+      }
+      
+      // Crear nuevo AbortController
+      fetchControllerRef.current = new AbortController();
+      const signal = fetchControllerRef.current.signal;
+      
       try {
-        await Promise.all([fetchCart(token), fetchUser(token)]);
-      } catch (err) {
-        console.error('Error loading initial data:', err);
-        setError('Error cargando los datos iniciales');
+        hasFetchedRef.current = true;
+        
+        // Ejecutar fetchs en paralelo pero con señal de aborto
+        await Promise.all([
+          fetchCart(token, signal),
+          fetchUser(token, signal)
+        ]);
+        
+      } catch (err: any) {
+        // Solo mostrar error si no fue una cancelación
+        if (err.name !== 'AbortError') {
+          console.error('Error loading initial data:', err);
+          setError('Error cargando los datos iniciales');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchInitialData();
+
+    // 🔥 LIMPIAR AL DESMONTAR
+    return () => {
+      if (fetchControllerRef.current) {
+        fetchControllerRef.current.abort();
+      }
+      // No resetear hasFetchedRef aquí para prevenir recargas
+    };
   }, [fetchCart, fetchUser]);
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
@@ -323,14 +384,35 @@ const CheckoutPage = () => {
       
       const createdAddress = await res.json();
 
-      if (userData) {
-        const updatedAddresses = [...userData.addresses, createdAddress];
-        setUserData({ ...userData, addresses: updatedAddresses });
-        setSelectedAddress(createdAddress);
-      }
+      // 🔥 ACTUALIZAR CON FUNCIÓN PARA EVITAR DUPLICADOS
+      setUserData(prevUserData => {
+        if (!prevUserData) return prevUserData;
+        
+        // Verificar si ya existe una dirección con el mismo ID o datos
+        const existsById = prevUserData.addresses.some(addr => addr.id === createdAddress.id);
+        const existsByData = prevUserData.addresses.some(addr => 
+          addr.address === createdAddress.address &&
+          addr.city === createdAddress.city &&
+          addr.state === createdAddress.state &&
+          addr.country === createdAddress.country
+        );
+        
+        if (existsById || existsByData) {
+          console.log('La dirección ya existe, no se agregará duplicado');
+          return prevUserData;
+        }
+        
+        // Agregar nueva dirección al inicio del array
+        return {
+          ...prevUserData,
+          addresses: [createdAddress, ...prevUserData.addresses]
+        };
+      });
       
+      setSelectedAddress(createdAddress);
       setAddingAddress(false);
       setNewAddress({ address: '', city: '', state: '', country: '' });
+      
     } catch (e) {
       console.error('Error adding address:', e);
       alert('No se pudo agregar la dirección');
@@ -357,14 +439,23 @@ const CheckoutPage = () => {
 
       if (!res.ok) throw new Error('Error eliminando dirección');
 
-      if (userData) {
-        const updatedAddresses = userData.addresses.filter((a) => a.id !== addressId);
-        setUserData({ ...userData, addresses: updatedAddresses });
+      // 🔥 ACTUALIZAR CON FUNCIÓN PARA MANTENER INTEGRIDAD
+      setUserData(prevUserData => {
+        if (!prevUserData) return prevUserData;
+        
+        const updatedAddresses = prevUserData.addresses.filter((a) => a.id !== addressId);
+        
+        return {
+          ...prevUserData,
+          addresses: updatedAddresses
+        };
+      });
 
-        if (selectedAddress?.id === addressId) {
-          setSelectedAddress(updatedAddresses[0] || null);
-        }
-      }
+      // Actualizar dirección seleccionada si se eliminó la actual
+      setSelectedAddress(prevSelected => 
+        prevSelected?.id === addressId ? null : prevSelected
+      );
+      
     } catch (e) {
       console.error('Error deleting address:', e);
       alert('No se pudo eliminar la dirección');
@@ -389,7 +480,6 @@ const CheckoutPage = () => {
     setStep((prev) => Math.max(prev - 1, 1));
   };
 
-  // Obtener la firma para Bold
   const fetchSignature = useCallback(async (orderIdParam: string, amountParam: number, token: string) => {
     try {
       console.log('Obteniendo firma para orden:', orderIdParam, 'monto:', amountParam);
@@ -422,7 +512,6 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Función createOrder corregida
   const createOrder = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -449,7 +538,6 @@ const CheckoutPage = () => {
       setLoading(true);
       setError('');
 
-      // Preparar el body según tu controlador Java corregido
       const body = {
         shippingAddressId: selectedAddress.id
       };
@@ -482,7 +570,6 @@ const CheckoutPage = () => {
       const orderResponse: OrderResponse = await res.json();
       console.log('Orden creada exitosamente:', orderResponse);
 
-      // Validar que la respuesta tenga los campos esperados
       if (!orderResponse.id || orderResponse.totalPrice === undefined) {
         throw new Error('Respuesta del servidor incompleta');
       }
@@ -491,10 +578,8 @@ const CheckoutPage = () => {
       setTotal(orderResponse.totalPrice);
       setOrderCreated(true);
 
-      // Obtener la firma para Bold
       await fetchSignature(orderResponse.id.toString(), orderResponse.totalPrice, token);
 
-      // Limpiar el carrito local después de crear la orden exitosamente
       setCartItems([]);
 
     } catch (e) {
@@ -514,7 +599,6 @@ const CheckoutPage = () => {
     }
   }, [step, createOrder, loading, orderCreated]);
 
-  // Función para limpiar el botón Bold anterior
   const cleanupBoldButton = useCallback(() => {
     if (boldScriptRef.current && boldScriptRef.current.parentNode) {
       try {
@@ -530,14 +614,13 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Crear el botón de Bold cuando tenemos todos los datos necesarios
+  // Crear el botón de Bold
   useEffect(() => {
     if (step !== 3) return;
     if (!signature || !orderId || total === 0) return;
     if (!boldScriptLoadedRef.current) return;
     if (!boldContainerRef.current) return;
 
-    // Limpiar botón anterior si existe
     cleanupBoldButton();
 
     console.log('Creando botón Bold con:', {
@@ -547,7 +630,6 @@ const CheckoutPage = () => {
     });
 
     try {
-      // Crear el script del botón de Bold
       const script = document.createElement('script');
       script.setAttribute('data-bold-button', '');
       script.setAttribute('data-order-id', orderId);
@@ -588,329 +670,273 @@ const CheckoutPage = () => {
     }
   }, [step, cleanupBoldButton]);
 
-  // Cleanup al desmontar el componente
+  // Cleanup al desmontar
   useEffect(() => {
     return () => {
       cleanupBoldButton();
+      if (fetchControllerRef.current) {
+        fetchControllerRef.current.abort();
+      }
     };
   }, [cleanupBoldButton]);
+
+  // 🔥 DEBUG: Mostrar direcciones actuales
+  useEffect(() => {
+    if (userData?.addresses) {
+      console.log('Direcciones en estado:', userData.addresses);
+      console.log('IDs únicos:', [...new Set(userData.addresses.map(a => a.id))]);
+    }
+  }, [userData?.addresses]);
 
   if (loading && step === 1) {
     return (
       <div className="checkout-container">
-        <div className="loading">Cargando...</div>
+        <div className="loading">
+          <div className="spinner"></div>
+          <p>Cargando tu carrito...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="checkout-container">
-      <h1>Checkout</h1>
+    <div className="checkout-container fade-in">
+      <h1>Checkout Amarte</h1>
 
       {error && (
-        <div className="error-message" style={{ 
-          background: '#fee', 
-          color: '#c00', 
-          padding: '10px', 
-          borderRadius: '5px', 
-          margin: '10px 0' 
-        }}>
-          {error}
-          <button 
-            onClick={() => setError('')}
-            style={{ marginLeft: '10px', background: 'none', border: 'none', color: '#c00' }}
-          >
-            ✕
-          </button>
+        <div className="error-message">
+          <span>{error}</span>
+          <button onClick={() => setError('')}>✕</button>
         </div>
       )}
 
       {/* Indicador de progreso */}
-      <div className="progress-indicator" style={{
-        display: 'flex',
-        justifyContent: 'center',
-        margin: '20px 0',
-        gap: '20px'
-      }}>
+      <div className="progress-indicator">
         <div className={`step-indicator ${step >= 1 ? 'active' : ''}`}>
-          1. Carrito
+          Carrito
         </div>
         <div className={`step-indicator ${step >= 2 ? 'active' : ''}`}>
-          2. Dirección
+          Dirección
         </div>
         <div className={`step-indicator ${step >= 3 ? 'active' : ''}`}>
-          3. Pago
+          Pago
         </div>
       </div>
 
       {step === 1 && (
         <div className="step1">
-          <h2>Carrito de compras</h2>
-          {cartItems.length === 0 && <p>Tu carrito está vacío</p>}
+          <h2>🛒 Tu Carrito</h2>
           
-          {cartItems.map((item) => (
-            <div key={item.id} className="cart-item" style={{
-              border: '1px solid #ddd',
-              borderRadius: '8px',
-              padding: '15px',
-              margin: '10px 0',
-              display: 'flex',
-              gap: '15px',
-              alignItems: 'center'
-            }}>
-              <Image 
-                src={item.image} 
-                alt={item.name} 
-                width={100} 
-                height={100}
-                style={{ borderRadius: '8px' }}
-              />
-              <div style={{ flex: 1 }}>
-                <h3>{item.name}</h3>
-                <p>Color: {item.color}</p>
-                <p>Tamaño: {item.size}</p>
-                <p>Precio: ${item.price.toLocaleString('es-CO')}</p>
-                <p>Stock disponible: {item.stock}</p>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '10px 0' }}>
-                  <button 
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    disabled={loading || item.quantity <= 1}
-                    style={{ padding: '5px 10px' }}
-                  >
-                    -
-                  </button>
-                  <span style={{ padding: '0 10px', fontWeight: 'bold' }}>
-                    {item.quantity}
-                  </span>
-                  <button 
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    disabled={loading || Boolean(item.stock && item.quantity >= item.stock)}
-                    style={{ padding: '5px 10px' }}
-                  >
-                    +
-                  </button>
+          {cartItems.length === 0 ? (
+            <div className="text-center mt-3">
+              <p>Tu carrito está vacío</p>
+              <button 
+                className="btn-info mt-2"
+                onClick={() => window.location.href = '/'}
+              >
+                ← Volver a la tienda
+              </button>
+            </div>
+          ) : (
+            <>
+              {cartItems.map((item) => (
+                <div key={`cart-${item.id}-${item.productVariantId || ''}`} className="cart-item">
+                  <Image 
+                    src={item.image} 
+                    alt={item.name} 
+                    width={120} 
+                    height={120}
+                    className="cart-item-image"
+                  />
+                  <div className="cart-item-content">
+                    <h3>{item.name}</h3>
+                    <p><strong>Color:</strong> {item.color}</p>
+                    <p><strong>Tamaño:</strong> {item.size}</p>
+                    <p><strong>Precio:</strong> ${item.price.toLocaleString('es-CO')}</p>
+                    <p><strong>Stock:</strong> {item.stock}</p>
+                    
+                    <div className="quantity-controls">
+                      <button 
+                        className="quantity-btn"
+                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        disabled={loading || item.quantity <= 1}
+                      >
+                        -
+                      </button>
+                      <span className="quantity-display">{item.quantity}</span>
+                      <button 
+                        className="quantity-btn"
+                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        disabled={loading || Boolean(item.stock && item.quantity >= item.stock)}
+                      >
+                        +
+                      </button>
+                    </div>
+                    
+                    <p><strong>Subtotal:</strong> ${(item.price * item.quantity).toLocaleString('es-CO')}</p>
+                    
+                    <button 
+                      className="btn-danger mt-1"
+                      onClick={() => removeItem(item.id)}
+                      disabled={loading}
+                    >
+                      {loading ? 'Eliminando...' : '🗑️ Eliminar'}
+                    </button>
+                  </div>
                 </div>
-                
-                <p>Subtotal: ${(item.price * item.quantity).toLocaleString('es-CO')}</p>
-                
+              ))}
+
+              <div className="total-summary">
+                <h3>Total del Carrito</h3>
+                <div className="total-amount">
+                  ${total.toLocaleString('es-CO')} COP
+                </div>
+              </div>
+              
+              <div className="step-navigation">
                 <button 
-                  onClick={() => removeItem(item.id)}
-                  disabled={loading}
-                  style={{ 
-                    background: '#dc3545', 
-                    color: 'white', 
-                    border: 'none', 
-                    padding: '8px 15px', 
-                    borderRadius: '5px',
-                    cursor: 'pointer'
-                  }}
+                  className="btn-secondary"
+                  onClick={() => window.location.href = '/'}
                 >
-                  {loading ? 'Eliminando...' : 'Eliminar'}
+                  ← Seguir comprando
+                </button>
+                <button 
+                  className="btn-primary"
+                  disabled={cartItems.length === 0 || loading} 
+                  onClick={nextStep}
+                >
+                  {loading ? 'Cargando...' : 'Continuar →'}
                 </button>
               </div>
-            </div>
-          ))}
-
-          <div style={{ 
-            background: '#f8f9fa', 
-            padding: '20px', 
-            borderRadius: '8px', 
-            margin: '20px 0' 
-          }}>
-            <h3>Total: ${total.toLocaleString('es-CO')}</h3>
-          </div>
-          
-          <button 
-            disabled={cartItems.length === 0 || loading} 
-            onClick={nextStep}
-            style={{
-              background: (cartItems.length === 0) ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              padding: '15px 30px',
-              borderRadius: '8px',
-              cursor: (cartItems.length === 0) ? 'not-allowed' : 'pointer',
-              fontSize: '16px'
-            }}
-          >
-            {loading ? 'Cargando...' : 'Siguiente'}
-          </button>
+            </>
+          )}
         </div>
       )}
 
       {step === 2 && (
         <div className="step2">
-          <h2>Dirección de envío</h2>
+          <h2>📍 Dirección de Envío</h2>
 
-          {!userData && <p>Cargando datos del usuario...</p>}
-
-          {userData && (
-            <div>
-              <h3>Direcciones guardadas</h3>
-              {userData.addresses.length === 0 && (
-                <p>No tienes direcciones guardadas. Agrega una nueva dirección.</p>
+          {!userData ? (
+            <div className="loading">
+              <div className="spinner"></div>
+              <p>Cargando tus datos...</p>
+            </div>
+          ) : (
+            <div className="address-section">
+              <h3>Direcciones Guardadas</h3>
+              {userData.addresses.length === 0 ? (
+                <p className="text-center mb-3">No tienes direcciones guardadas</p>
+              ) : (
+                <div className="address-list">
+                  {userData.addresses.map((address, index) => {
+                    // 🔥 KEY ABSOLUTAMENTE ÚNICO
+                    const uniqueKey = `address-${address.id}-${index}-${address.address.substring(0, 5)}`;
+                    
+                    return (
+                      <div 
+                        key={uniqueKey}
+                        className={`address-option ${selectedAddress?.id === address.id ? 'selected' : ''}`}
+                      >
+                        <label>
+                          <input
+                            type="radio"
+                            name="address"
+                            checked={selectedAddress?.id === address.id}
+                            onChange={() => setSelectedAddress(address)}
+                          />
+                          <div className="address-text">
+                            <strong>Dirección:</strong> {address.address}<br/>
+                            <strong>Ciudad:</strong> {address.city}<br/>
+                            <strong>Estado:</strong> {address.state}<br/>
+                            <strong>País:</strong> {address.country}
+                          </div>
+                        </label>
+                        <button 
+                          className="btn-danger"
+                          onClick={() => deleteAddress(address.id)}
+                          disabled={loading}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-              
-              <div style={{ margin: '20px 0' }}>
-                {userData.addresses.map((address) => (
-                  <div key={address.id} style={{
-                    border: selectedAddress?.id === address.id ? '2px solid #007bff' : '1px solid #ddd',
-                    borderRadius: '8px',
-                    padding: '15px',
-                    margin: '10px 0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}>
-                    <label style={{ flex: 1, cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="address"
-                        checked={selectedAddress?.id === address.id}
-                        onChange={() => setSelectedAddress(address)}
-                        style={{ marginRight: '10px' }}
-                      />
-                      <strong>{address.address}</strong><br/>
-                      {address.city}, {address.state}, {address.country}
-                    </label>
-                    <button 
-                      onClick={() => deleteAddress(address.id)}
-                      disabled={loading}
-                      style={{
-                        background: '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 15px',
-                        borderRadius: '5px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                ))}
-              </div>
 
               {addingAddress ? (
-                <div className="new-address-form" style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  padding: '20px',
-                  margin: '20px 0'
-                }}>
-                  <h4>Nueva dirección</h4>
-                  <div style={{ display: 'grid', gap: '10px' }}>
+                <div className="new-address-form">
+                  <h3>➕ Nueva Dirección</h3>
+                  <div className="form-grid">
                     <input
                       type="text"
                       placeholder="Dirección completa"
+                      className="form-input"
                       value={newAddress.address}
                       onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
                     />
                     <input
                       type="text"
                       placeholder="Ciudad"
+                      className="form-input"
                       value={newAddress.city}
                       onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
                     />
                     <input
                       type="text"
                       placeholder="Estado/Departamento"
+                      className="form-input"
                       value={newAddress.state}
                       onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
                     />
                     <input
                       type="text"
                       placeholder="País"
+                      className="form-input"
                       value={newAddress.country}
                       onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
-                      style={{ padding: '10px', borderRadius: '5px', border: '1px solid #ddd' }}
                     />
                   </div>
-                  <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+                  <div className="form-actions">
                     <button 
+                      className="btn-success"
                       onClick={addAddress}
                       disabled={loading}
-                      style={{
-                        background: '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        padding: '10px 20px',
-                        borderRadius: '5px',
-                        cursor: 'pointer'
-                      }}
                     >
-                      {loading ? 'Agregando...' : 'Agregar dirección'}
+                      {loading ? 'Agregando...' : '✅ Agregar'}
                     </button>
                     <button 
+                      className="btn-secondary"
                       onClick={() => setAddingAddress(false)}
                       disabled={loading}
-                      style={{
-                        background: '#6c757d',
-                        color: 'white',
-                        border: 'none',
-                        padding: '10px 20px',
-                        borderRadius: '5px',
-                        cursor: 'pointer'
-                      }}
                     >
-                      Cancelar
+                      ❌ Cancelar
                     </button>
                   </div>
                 </div>
               ) : (
                 <button 
+                  className="btn-info"
                   onClick={() => setAddingAddress(true)}
-                  style={{
-                    background: '#17a2b8',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 20px',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
-                    margin: '10px 0'
-                  }}
                 >
-                  Agregar nueva dirección
+                  ➕ Agregar Nueva Dirección
                 </button>
               )}
 
-              <div className="step-navigation" style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: '30px'
-              }}>
+              <div className="step-navigation mt-3">
                 <button 
+                  className="btn-secondary"
                   onClick={prevStep}
-                  style={{
-                    background: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    padding: '15px 30px',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontSize: '16px'
-                  }}
                 >
-                  Anterior
+                  ← Anterior
                 </button>
                 <button 
+                  className="btn-primary"
                   disabled={!selectedAddress || loading} 
                   onClick={nextStep}
-                  style={{
-                    background: !selectedAddress ? '#ccc' : '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    padding: '15px 30px',
-                    borderRadius: '8px',
-                    cursor: !selectedAddress ? 'not-allowed' : 'pointer',
-                    fontSize: '16px'
-                  }}
                 >
-                  {loading ? 'Cargando...' : 'Siguiente'}
+                  {loading ? 'Cargando...' : 'Continuar al Pago →'}
                 </button>
               </div>
             </div>
@@ -920,133 +946,75 @@ const CheckoutPage = () => {
 
       {step === 3 && (
         <div className="step3">
-          <h2>Pago</h2>
+          <h2>💳 Procesar Pago</h2>
           
-          {/* Resumen de la orden */}
-          <div style={{
-            background: '#f8f9fa',
-            padding: '20px',
-            borderRadius: '8px',
-            margin: '20px 0'
-          }}>
-            <h3>Resumen de tu orden</h3>
-            <p><strong>Total a pagar: ${total.toLocaleString('es-CO')} COP</strong></p>
+          <div className="total-summary">
+            <h3>Resumen de tu Orden</h3>
+            <div className="total-amount">
+              ${total.toLocaleString('es-CO')} COP
+            </div>
             {selectedAddress && (
-              <p>
-                <strong>Dirección de envío:</strong><br/>
+              <div className="address-text mt-2">
+                <strong>📍 Dirección de envío:</strong><br/>
                 {selectedAddress.address}<br/>
                 {selectedAddress.city}, {selectedAddress.state}, {selectedAddress.country}
-              </p>
+              </div>
             )}
             {orderId && (
-              <p><strong>Número de orden:</strong> {orderId}</p>
+              <p className="text-center mt-2">
+                <strong>Orden #:</strong> {orderId}
+              </p>
             )}
           </div>
 
-          {/* Estados de carga y error */}
+          {/* Estados de carga */}
           {loading && !orderCreated && (
-            <div style={{ textAlign: 'center', padding: '20px' }}>
-              <p>Creando orden, por favor espera...</p>
-              <div className="spinner" style={{
-                border: '4px solid #f3f3f3',
-                borderTop: '4px solid #007bff',
-                borderRadius: '50%',
-                width: '40px',
-                height: '40px',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto'
-              }}></div>
+            <div className="loading">
+              <div className="spinner"></div>
+              <p>Creando tu orden, por favor espera...</p>
             </div>
           )}
 
           {orderCreated && !signature && !error && (
-            <div style={{ textAlign: 'center', padding: '20px' }}>
-              <p>Preparando sistema de pago...</p>
+            <div className="loading">
+              <div className="spinner"></div>
+              <p>Preparando sistema de pago seguro...</p>
             </div>
           )}
 
-          {/* Contenedor del botón de Bold - Usando ref */}
+          {/* Botón de Bold */}
           {orderCreated && signature && (
-            <div style={{ margin: '20px 0', textAlign: 'center' }}>
-              <p style={{ marginBottom: '15px', color: '#28a745' }}>
-                ✓ Orden creada exitosamente. Procede con el pago:
-              </p>
+            <div className="text-center">
+              <p className="success-message">✅ Orden creada exitosamente. Procede con el pago:</p>
               <div 
                 ref={boldContainerRef}
-                id="bold-button-container" 
-                style={{
-                  minHeight: '60px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center'
-                }}
+                id="bold-button-container"
               >
-                {!boldScriptRef.current && (
-                  <p>Cargando botón de pago...</p>
-                )}
+                <p>Cargando botón de pago...</p>
               </div>
             </div>
           )}
 
-          <div className="step-navigation" style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: '30px'
-          }}>
+          <div className="step-navigation">
             <button 
+              className="btn-secondary"
               onClick={prevStep}
               disabled={loading}
-              style={{
-                background: '#6c757d',
-                color: 'white',
-                border: 'none',
-                padding: '15px 30px',
-                borderRadius: '8px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontSize: '16px'
-              }}
             >
-              Anterior
+              ← Anterior
             </button>
+            {!orderCreated && (
+              <button 
+                className="btn-primary"
+                onClick={createOrder}
+                disabled={loading}
+              >
+                {loading ? 'Procesando...' : 'Crear Orden'}
+              </button>
+            )}
           </div>
         </div>
       )}
-
-      {/* CSS para la animación del spinner */}
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        .step-indicator {
-          padding: 10px 20px;
-          border-radius: 25px;
-          background: #f8f9fa;
-          color: #6c757d;
-          font-weight: 500;
-          transition: all 0.3s ease;
-        }
-        
-        .step-indicator.active {
-          background: #007bff;
-          color: white;
-        }
-        
-        .checkout-container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 20px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        
-        .loading {
-          text-align: center;
-          padding: 50px;
-          font-size: 18px;
-          color: #6c757d;
-        }
-      `}</style>
     </div>
   );
 };
