@@ -3,6 +3,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import './Checkout.css';
+import { 
+  CART, 
+  PERFIL_ME, 
+  ADDRESS, 
+  ORDERS, 
+  BOLD_SIGNATURE 
+} from '../utils/Api';
 
 interface CartItem {
   id: string;
@@ -53,12 +60,6 @@ interface OrderResponse {
     productVariantId: number;
   }>;
 }
-
-const API_CART_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/cart';
-const API_SIGNATURE_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/bold/signature';
-const API_USER_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/users/me';
-const API_ADDRESSES = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/addresses';
-const API_ORDERS_URL = 'https://amarte--backendamarte--sjfs798q7b8v.code.run/api/orders';
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -122,7 +123,7 @@ const CheckoutPage = () => {
   // Función fetchCart mejorada
   const fetchCart = useCallback(async (token: string) => {
     try {
-      const res = await fetch(API_CART_URL, {
+      const res = await fetch(CART, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -180,7 +181,7 @@ const CheckoutPage = () => {
 
   const fetchUser = useCallback(async (token: string) => {
     try {
-      const res = await fetch(API_USER_URL, {
+      const res = await fetch(PERFIL_ME, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -238,7 +239,7 @@ const CheckoutPage = () => {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_CART_URL}/update/${itemId}?quantity=${newQuantity}`, {
+      const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT',
         headers: { 
           Authorization: `Bearer ${token}`, 
@@ -269,7 +270,7 @@ const CheckoutPage = () => {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_CART_URL}/remove/${itemId}`, {
+      const res = await fetch(`${CART}/remove/${itemId}`, {
         method: 'DELETE',
         headers: { 
           Authorization: `Bearer ${token}`, 
@@ -309,7 +310,7 @@ const CheckoutPage = () => {
 
     try {
       setLoading(true);
-      const res = await fetch(API_ADDRESSES, {
+      const res = await fetch(ADDRESS, {
         method: 'POST',
         headers: { 
           Authorization: `Bearer ${token}`, 
@@ -349,7 +350,7 @@ const CheckoutPage = () => {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_ADDRESSES}/${addressId}`, {
+      const res = await fetch(`${ADDRESS}/${addressId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -393,7 +394,7 @@ const CheckoutPage = () => {
     try {
       console.log('Obteniendo firma para orden:', orderIdParam, 'monto:', amountParam);
       
-      const res = await fetch(API_SIGNATURE_URL, {
+      const res = await fetch(BOLD_SIGNATURE, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -455,7 +456,7 @@ const CheckoutPage = () => {
 
       console.log('Creando orden con body:', JSON.stringify(body, null, 2));
 
-      const res = await fetch(API_ORDERS_URL, {
+      const res = await fetch(ORDERS, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

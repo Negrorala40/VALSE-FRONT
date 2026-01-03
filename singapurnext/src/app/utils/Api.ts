@@ -18,3 +18,9 @@ export const ADDRESS = `${API_URL}/api/addresses`;
 // Carrito
 export const CART = `${API_URL}/api/cart`;
 export const ADD_TO_CART = `${API_URL}/api/cart/add`;
+
+// Órdenes
+export const ORDERS = `${API_URL}/api/orders`;
+
+// Bold Payments
+export const BOLD_SIGNATURE = `${API_URL}/api/bold/signature`;
