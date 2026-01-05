@@ -171,12 +171,13 @@ const Header: React.FC = () => {
       </div>
 
       {cartOpen && (
-        <Cart
-          cartItems={cartItems}
-          setCartItems={setCartItems}
-          onClose={toggleCart}
-        />
-      )}
+  <Cart
+    cartItems={cartItems}
+    setCartItems={setCartItems}
+    onClose={toggleCart}
+    isOpen={cartOpen}
+  />
+)}
 
       {/* Slide-out Menu */}
       <div ref={menuRef} className={`side-menu ${menuOpen ? 'open' : ''}`}>

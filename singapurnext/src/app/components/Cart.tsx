@@ -1,7 +1,7 @@
 'use client';
 
-import { CART } from '../utils/Api'; // Ajusta la ruta si está en otra carpeta
-import React, { useEffect, useRef, useCallback } from 'react';
+import { CART } from '../utils/Api';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import './Cart.css';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -32,28 +32,46 @@ interface CartProps {
   cartItems: CartItem[];
   setCartItems: React.Dispatch<React.SetStateAction<CartItem[]>>;
   onClose: () => void;
+  isOpen: boolean;
 }
+
 const formatPrice = (price: number) =>
   new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0 }).format(price);
 
-const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
+const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen }) => {
   const cartRef = useRef<HTMLDivElement | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
 
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
 
-  // Corregir dependencia de useEffect
   const memoizedSetCartItems = useCallback(setCartItems, [setCartItems]);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setIsClosing(false);
+    }, 400);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (cartRef.current && !cartRef.current.contains(event.target as Node)) {
-        onClose();
+      if (isOpen && cartRef.current && !cartRef.current.contains(event.target as Node)) {
+        handleClose();
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [onClose]);
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.body.style.overflow = 'auto';
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     const fetchCart = async () => {
@@ -61,7 +79,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
       const userId = localStorage.getItem('userId');
 
       if (token && userId) {
-        // 🧾 CARRITO DE USUARIO LOGUEADO
         try {
           const res = await fetch(`${CART}`, {
             headers: {
@@ -75,7 +92,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
 
           const transformedItems: CartItem[] = data.map((item) => ({
             id: item.id.toString(),
-            image: item.imageUrls?.[0] || '/placeholder.png',
+            image: item.imageUrls?.[0] || '/images/placeholder.png',
             name: item.productName,
             price: item.price,
             size: item.size,
@@ -89,7 +106,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
           console.error('🛑 Error al cargar el carrito:', err);
         }
       } else {
-        // 🧾 CARRITO DE INVITADO (pendingCartItem)
         const pending = localStorage.getItem('pendingCartItem');
         if (pending) {
           try {
@@ -102,8 +118,10 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
       }
     };
 
-    fetchCart();
-  }, [memoizedSetCartItems]);
+    if (isOpen) {
+      fetchCart();
+    }
+  }, [memoizedSetCartItems, isOpen]);
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -118,7 +136,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
 
     const token = localStorage.getItem('token');
     if (token) {
-      // Usuario logueado: Actualiza en backend
       try {
         const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
           method: 'PUT',
@@ -134,7 +151,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
         return;
       }
     } else {
-      // Usuario invitado: actualiza localStorage
       const updatedItem = { ...item, quantity: newQuantity };
       localStorage.setItem('pendingCartItem', JSON.stringify(updatedItem));
     }
@@ -149,7 +165,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
     const token = localStorage.getItem('token');
 
     if (token) {
-      // Usuario logueado: elimina del backend
       try {
         const res = await fetch(`${CART}/remove/${itemId}`, {
           method: 'DELETE',
@@ -165,82 +180,159 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose }) => {
         return;
       }
     } else {
-      // Usuario invitado: borra de localStorage solo el item eliminado
-      // Si tienes más de un producto en el futuro, deberías guardar un array en localStorage
-      // Aquí asumo que solo tienes 1 producto en pendingCartItem
       localStorage.removeItem('pendingCartItem');
     }
 
-    // Elimina el item del estado para actualizar la UI inmediatamente
     const updatedCart = cartItems.filter(item => item.id !== itemId);
     memoizedSetCartItems(updatedCart);
   };
 
+  const handleCheckout = () => {
+    if (cartItems.length === 0) {
+      alert('Tu carrito está vacío');
+      return;
+    }
+    
+    router.push('/checkout');
+    handleClose();
+  };
+
+  const handleContinueShopping = () => {
+    router.push('/menu');
+    handleClose();
+  };
+
   return (
-    <div ref={cartRef} className="cart-panel open">
-      <div className="cart-header">
-        <h2>Tu carrito 🚀</h2>
-        <button className="close-btn" onClick={onClose}>✕</button>
-      </div>
+    <>
+      {/* Overlay */}
+      {isOpen && (
+        <div 
+          className={`cart-overlay ${isClosing ? 'closing' : ''}`}
+          onClick={handleClose}
+        />
+      )}
 
-      {cartItems.length === 0 ? (
-        <p className="empty-message">Tu carrito está vacío.</p>
-      ) : (
-        <>
-          <ul className="cart-items">
-            {cartItems.map((item) => (
-              <li key={item.id} className="cart-item">
-                <div className="cart-item-image">
-                  <Image 
-                    src={item.image} 
-                    alt={item.name}
-                    width={100}
-                    height={100}
-                    priority={true}
-                    style={{ objectFit: 'cover' }}
-                  />
-                </div>
-                <div>
-                  <p>{item.name}</p>
-                  <p>Talla: {item.size}</p>
-                  <p>Color: {item.color}</p>
-                  <p>${formatPrice(item.price)}</p>
-                  <div className="quantity-selector">
-                    <button
-                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                      disabled={item.quantity <= 1}
-                    >
-                      -
-                    </button>
-                    <span>{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                      disabled={item.stock !== undefined && item.quantity >= item.stock}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-                <button className="btn-remove" onClick={() => removeItem(item.id)}>Eliminar</button>
-              </li>
-            ))}
-          </ul>
+      {/* Panel del carrito */}
+      <div 
+        ref={cartRef} 
+        className={`cart-panel ${isOpen ? 'open' : ''} ${isClosing ? 'closing' : ''}`}
+      >
+        <div className="cart-header">
+          <div className="cart-title">
+            <div className="rocket-icon-container">
+              <Image
+                src="/images/logos/logCohete.svg"
+                alt="Cohete"
+                width={28}
+                height={28}
+                className="rocket-icon"
+                priority={true}
+                loading="eager"
+              />
+            </div>
+            <h2>Tu carrito</h2>
+          </div>
+          <button 
+            className="close-btn" 
+            onClick={handleClose}
+            aria-label="Cerrar carrito"
+          >
+            ✕
+          </button>
+        </div>
 
-          <div className="cart-summary">
-            <p>Total: ${formatPrice(totalPrice)}</p>
-            <button
-              className="btn-checkout"
-              onClick={() => {
-                router.push('/checkout');
-                onClose();
-              }}
+        {cartItems.length === 0 ? (
+          <div className="cart-empty">
+            <div className="cart-empty-icon">🛒</div>
+            <p className="empty-message">Tu carrito está vacío</p>
+            <button 
+              onClick={handleContinueShopping}
+              className="cart-continue-btn"
             >
-              Ir a Pagar
+              Ver productos
             </button>
           </div>
-        </>
-      )}
-    </div>
+        ) : (
+          <>
+            <div className="cart-items-container">
+              <ul className="cart-items">
+                {cartItems.map((item, index) => (
+                  <li key={`${item.id}-${index}`} className="cart-item">
+                    <div className="cart-item-image">
+                      <Image 
+                        src={item.image} 
+                        alt={item.name}
+                        width={70}
+                        height={70}
+                        loading="lazy" // 🔥 CAMBIADO: lazy en lugar de priority
+                        style={{ objectFit: 'cover' }}
+                      />
+                    </div>
+                    <div className="cart-item-content">
+                      <div className="cart-item-details">
+                        <p className="cart-item-name">{item.name}</p>
+                        <p className="cart-item-info">
+                          <span>Talla: {item.size}</span>
+                          <span>Color: {item.color}</span>
+                        </p>
+                        <p className="cart-item-price">${formatPrice(item.price)}</p>
+                      </div>
+                      <div className="cart-item-controls">
+                        <div className="quantity-selector">
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            disabled={item.quantity <= 1}
+                            aria-label="Reducir cantidad"
+                          >
+                            -
+                          </button>
+                          <span className="quantity-value">{item.quantity}</span>
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            disabled={item.stock !== undefined && item.quantity >= item.stock}
+                            aria-label="Aumentar cantidad"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <button 
+                          className="btn-remove" 
+                          onClick={() => removeItem(item.id)}
+                          aria-label="Eliminar producto"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="cart-summary">
+              <div className="cart-total">
+                <span className="total-label">Total:</span>
+                <span className="total-amount">${formatPrice(totalPrice)}</span>
+              </div>
+              <div className="cart-actions">
+                <button
+                  className="btn-checkout"
+                  onClick={handleCheckout}
+                >
+                  Proceder al Pago
+                </button>
+                <button
+                  className="cart-continue-btn"
+                  onClick={handleContinueShopping}
+                >
+                  Seguir Comprando
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 };
 
