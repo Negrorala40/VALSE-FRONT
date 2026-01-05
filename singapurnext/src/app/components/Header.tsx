@@ -29,6 +29,7 @@ const Header: React.FC = () => {
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLDivElement | null>(null);
@@ -41,6 +42,12 @@ const Header: React.FC = () => {
     setSubmenuOpen(submenuOpen === menu ? null : menu);
   const toggleSearch = () => setSearchOpen(!searchOpen);
   const toggleCart = () => setCartOpen(!cartOpen);
+
+  // Logo configuration - Ruta SVG únicamente
+  const logoConfig = {
+    src: '/images/logos/logver.svg',
+    alt: 'Amarte Colombia - Moda sostenible',
+  };
 
   // Revisar token sólo en cliente después de montar el componente
   useEffect(() => {
@@ -111,8 +118,31 @@ const Header: React.FC = () => {
         </button>
       </div>
 
+      {/* 🔥 LOGO - SIN estilos inline */}
       <Link href="/" className="logo" aria-label="Inicio">
-        <Image src="/images/AmarteLog.png" alt="Logo Amarte" width={75} height={50} priority />
+        <div className="logo-container">
+          <Image
+            src={logoConfig.src}
+            alt={logoConfig.alt}
+              width={150}  // 🔥 Tamaño del logo - solo aquí
+            height={85}   // 🔥 Proporción mantenida
+            priority={true}
+            loading="eager"
+            onLoad={() => setLogoLoaded(true)}
+            onError={(e) => {
+              console.error('Error cargando logo SVG:', e);
+              const target = e.target as HTMLImageElement;
+              target.src = '/images/logos/logver.png';
+            }}
+            className={`logo-image ${logoLoaded ? 'loaded' : 'loading'}`}
+            sizes="(max-width: 768px) 80px, 110px"
+            quality={100}
+            unoptimized={false}
+          />
+          
+          {/* Placeholder con clase CSS */}
+          {!logoLoaded && <div className="logo-placeholder" />}
+        </div>
       </Link>
 
       <div className="header-right">
