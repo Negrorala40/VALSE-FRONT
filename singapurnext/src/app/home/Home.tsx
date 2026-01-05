@@ -1,15 +1,49 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import styles from './page.module.css';
 
 const Home = () => {
+  const categoriesRef = useRef<HTMLDivElement>(null);
+  const valuesRef = useRef<HTMLElement>(null);
+  const ctaRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState({
+    categories: false,
+    values: false,
+    cta: false
+  });
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const section = entry.target.getAttribute('data-section');
+            if (section === 'categories') setIsVisible(prev => ({...prev, categories: true}));
+            if (section === 'values') setIsVisible(prev => ({...prev, values: true}));
+            if (section === 'cta') setIsVisible(prev => ({...prev, cta: true}));
+          }
+        });
+      },
+      {
+        threshold: 0.2,
+        rootMargin: '0px 0px -50px 0px'
+      }
+    );
+
+    if (categoriesRef.current) observer.observe(categoriesRef.current);
+    if (valuesRef.current) observer.observe(valuesRef.current);
+    if (ctaRef.current) observer.observe(ctaRef.current);
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className={styles.homeContainer}>
       <main className={styles.mainContent}>
-        {/* Hero Section con fondo moderno */}
+        {/* Hero Section */}
         <section className={styles.heroSection}>
           <div className={styles.heroOverlay}>
             <div className={styles.heroContent}>
@@ -32,7 +66,11 @@ const Home = () => {
         </section>
 
         {/* Categorías principales */}
-        <div className={styles.categoriesContainer}>
+        <div 
+          ref={categoriesRef} 
+          data-section="categories"
+          className={`${styles.categoriesContainer} ${isVisible.categories ? styles.visible : ''}`}
+        >
           <h2 className={styles.sectionTitle}>Explora por Categoría</h2>
           <p className={styles.sectionSubtitle}>
             Descubre prendas diseñadas con pasión y compromiso ambiental
@@ -52,11 +90,7 @@ const Home = () => {
                 <div className={styles.categoryOverlay}></div>
               </div>
               <div className={styles.categoryContent}>
-                <h3 className={styles.categoryTitle}>Hombre</h3>
-                <p className={styles.categoryDescription}>
-                  Estilo y comodidad en cada prenda
-                </p>
-                <span className={styles.categoryLink}>Ver colección →</span>
+                <h3 className={styles.categoryTitle}>HOMBRE</h3>
               </div>
             </Link>
 
@@ -73,11 +107,7 @@ const Home = () => {
                 <div className={styles.categoryOverlay}></div>
               </div>
               <div className={styles.categoryContent}>
-                <h3 className={styles.categoryTitle}>Mujer</h3>
-                <p className={styles.categoryDescription}>
-                  Elegancia y sostenibilidad
-                </p>
-                <span className={styles.categoryLink}>Ver colección →</span>
+                <h3 className={styles.categoryTitle}>MUJER</h3>
               </div>
             </Link>
 
@@ -94,11 +124,7 @@ const Home = () => {
                 <div className={styles.categoryOverlay}></div>
               </div>
               <div className={styles.categoryContent}>
-                <h3 className={styles.categoryTitle}>Unisex</h3>
-                <p className={styles.categoryDescription}>
-                  Estilo sin género, diseño para todos
-                </p>
-                <span className={styles.categoryLink}>Ver colección →</span>
+                <h3 className={styles.categoryTitle}>UNISEX</h3>
               </div>
             </Link>
 
@@ -116,18 +142,18 @@ const Home = () => {
                 <div className={styles.categoryOverlay}></div>
               </div>
               <div className={styles.categoryContent}>
-                <h3 className={styles.categoryTitle}>Ofertas</h3>
-                <p className={styles.categoryDescription}>
-                  Aprovecha nuestras promociones
-                </p>
-                <span className={styles.categoryLink}>Ver ofertas →</span>
+                <h3 className={styles.categoryTitle}>OFERTAS</h3>
               </div>
             </Link>
           </div>
         </div>
 
         {/* Valores de la marca */}
-        <section className={styles.valuesSection}>
+        <section 
+          ref={valuesRef}
+          data-section="values"
+          className={`${styles.valuesSection} ${isVisible.values ? styles.visible : ''}`}
+        >
           <div className={styles.valuesContainer}>
             <h2 className={styles.valuesTitle}>Nuestros Valores</h2>
             <div className={styles.valuesGrid}>
@@ -167,7 +193,11 @@ const Home = () => {
         </section>
 
         {/* Call to Action */}
-        <section className={styles.ctaSection}>
+        <section 
+          ref={ctaRef}
+          data-section="cta"
+          className={`${styles.ctaSection} ${isVisible.cta ? styles.visible : ''}`}
+        >
           <div className={styles.ctaContainer}>
             <h2 className={styles.ctaTitle}>¿Listo para vestir con conciencia?</h2>
             <p className={styles.ctaText}>

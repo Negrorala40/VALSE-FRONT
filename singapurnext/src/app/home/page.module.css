@@ -16,6 +16,60 @@
   --gradient-accent: linear-gradient(90deg, var(--secondary-green) 0%, var(--accent-purple) 50%, var(--accent-red) 100%);
 }
 
+/* === Animaciones === */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* === Contenedor principal === */
 .homeContainer {
   min-height: 100vh;
@@ -30,82 +84,6 @@
   padding: 0 1rem;
 }
 
-/* === Animaciones de Scroll Reveal === */
-@keyframes revealUp {
-  from {
-    opacity: 0;
-    transform: translateY(80px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes revealDown {
-  from {
-    opacity: 0;
-    transform: translateY(-60px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes revealScale {
-  from {
-    opacity: 0;
-    transform: scale(0.85);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes revealLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-80px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes revealRight {
-  from {
-    opacity: 0;
-    transform: translateX(80px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes revealFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes revealRotate {
-  from {
-    opacity: 0;
-    transform: rotate(-5deg) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(0) scale(1);
-  }
-}
-
 /* === Hero Section === */
 .heroSection {
   position: relative;
@@ -115,18 +93,17 @@
   overflow: hidden;
   margin-bottom: 4rem;
   background: linear-gradient(135deg, rgba(16, 51, 89, 0.9) 0%, rgba(61, 178, 138, 0.7) 100%);
-  animation: revealFade 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .heroSection::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(circle at 20% 80%, rgba(255, 212, 73, 0.2) 0%, transparent 50%),
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(255, 212, 73, 0.2) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(128, 111, 247, 0.2) 0%, transparent 50%),
     radial-gradient(circle at 40% 40%, rgba(233, 86, 109, 0.15) 0%, transparent 50%);
   z-index: 1;
-  animation: revealScale 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both;
 }
 
 .heroSection::after {
@@ -143,12 +120,10 @@
 .heroOverlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(16, 51, 89, 0.85) 0%,
-    rgba(16, 51, 89, 0.6) 50%,
-    rgba(61, 178, 138, 0.4) 100%
-  );
+  background: linear-gradient(135deg, 
+    rgba(16, 51, 89, 0.85) 0%, 
+    rgba(16, 51, 89, 0.6) 50%, 
+    rgba(61, 178, 138, 0.4) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -169,7 +144,7 @@
   margin-bottom: 1.5rem;
   letter-spacing: -0.5px;
   line-height: 1.1;
-  animation: revealDown 1s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
+  animation: fadeIn 1s ease-out;
 }
 
 .titleHighlight {
@@ -192,7 +167,6 @@
   height: 4px;
   background: var(--gradient-accent);
   border-radius: 2px;
-  animation: revealScale 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.6s both;
 }
 
 .heroSubtitle {
@@ -200,7 +174,7 @@
   margin-bottom: 3rem;
   opacity: 0.9;
   line-height: 1.6;
-  animation: revealUp 1s cubic-bezier(0.4, 0, 0.2, 1) 0.4s both;
+  animation: fadeIn 1s ease-out 0.3s both;
 }
 
 .heroButtons {
@@ -208,7 +182,7 @@
   gap: 1.5rem;
   justify-content: center;
   flex-wrap: wrap;
-  animation: revealUp 1s cubic-bezier(0.4, 0, 0.2, 1) 0.6s both;
+  animation: fadeIn 1s ease-out 0.6s both;
 }
 
 .primaryButton,
@@ -270,9 +244,14 @@
 /* === Categories Section === */
 .categoriesContainer {
   padding: 4rem 0;
-  animation: revealUp linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 30%;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.categoriesContainer.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .sectionTitle {
@@ -282,9 +261,6 @@
   text-align: center;
   margin-bottom: 1rem;
   position: relative;
-  animation: revealDown linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 25%;
 }
 
 .sectionTitle::after {
@@ -306,9 +282,6 @@
   max-width: 600px;
   margin: 0 auto 3rem;
   line-height: 1.6;
-  animation: revealUp linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 25%;
 }
 
 .categoriesGrid {
@@ -319,45 +292,39 @@
   margin: 0 auto;
 }
 
-/* Tarjetas de categoría: imagen fullscreen con solo título centrado */
+/* Tarjetas de categoría con título en esquina inferior izquierda */
 .categoryCard {
   text-decoration: none;
   color: inherit;
-  border-radius: 24px;
+  border-radius: 20px;
   overflow: hidden;
   position: relative;
-  display: block;
   aspect-ratio: 4 / 3;
   box-shadow: 0 10px 30px var(--shadow-light);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: revealScale linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 30%;
+  opacity: 0;
+  transform: translateY(30px);
 }
 
-.categoryCard:nth-child(1) {
-  animation-name: revealLeft;
-  animation-range: entry 0% entry 35%;
+.categoriesContainer.visible .categoryCard:nth-child(1) {
+  animation: slideInLeft 0.6s ease-out 0.1s forwards;
 }
 
-.categoryCard:nth-child(2) {
-  animation-name: revealRight;
-  animation-range: entry 0% entry 35%;
+.categoriesContainer.visible .categoryCard:nth-child(2) {
+  animation: slideInRight 0.6s ease-out 0.2s forwards;
 }
 
-.categoryCard:nth-child(3) {
-  animation-name: revealLeft;
-  animation-range: entry 5% entry 40%;
+.categoriesContainer.visible .categoryCard:nth-child(3) {
+  animation: slideInLeft 0.6s ease-out 0.3s forwards;
 }
 
-.categoryCard:nth-child(4) {
-  animation-name: revealRight;
-  animation-range: entry 5% entry 40%;
+.categoriesContainer.visible .categoryCard:nth-child(4) {
+  animation: slideInRight 0.6s ease-out 0.4s forwards;
 }
 
 .categoryCard:hover {
-  transform: translateY(-12px) scale(1.02);
-  box-shadow: 0 25px 50px var(--shadow-medium);
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 40px var(--shadow-medium);
 }
 
 .categoryImageContainer {
@@ -379,11 +346,16 @@
   transform: scale(1.1);
 }
 
-/* Overlay oscuro con gradiente para legibilidad del texto */
+/* Overlay oscuro en la parte inferior para mejor legibilidad */
 .categoryOverlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(16, 51, 89, 0.85) 0%, rgba(16, 51, 89, 0.5) 40%, rgba(16, 51, 89, 0.3) 100%);
+  background: linear-gradient(
+    to top,
+    rgba(16, 51, 89, 0.8) 0%,
+    rgba(16, 51, 89, 0.4) 40%,
+    transparent 70%
+  );
   z-index: 1;
   transition: background 0.4s ease;
 }
@@ -391,9 +363,9 @@
 .categoryCard:hover .categoryOverlay {
   background: linear-gradient(
     to top,
-    rgba(61, 178, 138, 0.85) 0%,
-    rgba(16, 51, 89, 0.5) 40%,
-    rgba(16, 51, 89, 0.2) 100%
+    rgba(61, 178, 138, 0.8) 0%,
+    rgba(61, 178, 138, 0.4) 40%,
+    transparent 70%
   );
 }
 
@@ -407,48 +379,33 @@
   border-radius: 25px;
   font-weight: 700;
   font-size: 0.9rem;
-  z-index: 3;
+  z-index: 2;
   box-shadow: 0 4px 15px rgba(233, 86, 109, 0.3);
-  animation: pulse 2s infinite;
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow: 0 4px 15px rgba(233, 86, 109, 0.3);
-  }
-  50% {
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(233, 86, 109, 0.4);
-  }
-}
-
-/* Solo mostrar título centrado, quitar descripción y link */
+/* Título en esquina inferior izquierda */
 .categoryContent {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  bottom: 20px;
+  left: 20px;
   z-index: 2;
-  padding: 1.5rem;
+  padding: 0;
 }
 
 .categoryTitle {
-  font-size: 2.5rem;
+  font-size: 2.2rem;
   font-weight: 800;
   color: var(--white);
   text-transform: uppercase;
-  letter-spacing: 3px;
-  text-align: center;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  transition: all 0.4s ease;
+  letter-spacing: 2px;
+  margin: 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
 }
 
 .categoryCard:hover .categoryTitle {
-  transform: scale(1.1);
-  letter-spacing: 5px;
+  transform: translateY(-5px);
+  letter-spacing: 3px;
 }
 
 /* Ocultar descripción y link */
@@ -463,9 +420,14 @@
   padding: 5rem 0;
   border-radius: 40px;
   margin: 4rem 0;
-  animation: revealUp linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 25%;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.valuesSection.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .valuesContainer {
@@ -481,9 +443,6 @@
   text-align: center;
   margin-bottom: 3rem;
   position: relative;
-  animation: revealDown linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 20%;
 }
 
 .valuesTitle::after {
@@ -512,21 +471,24 @@
   padding: 2rem;
   text-align: center;
   transition: all 0.3s ease;
-  animation: revealUp linear both;
-  animation-timeline: view();
+  opacity: 0;
+  transform: translateY(30px);
 }
 
-.valueCard:nth-child(1) {
-  animation-range: entry 0% entry 25%;
+.valuesSection.visible .valueCard:nth-child(1) {
+  animation: slideInUp 0.6s ease-out 0.1s forwards;
 }
-.valueCard:nth-child(2) {
-  animation-range: entry 5% entry 30%;
+
+.valuesSection.visible .valueCard:nth-child(2) {
+  animation: slideInUp 0.6s ease-out 0.2s forwards;
 }
-.valueCard:nth-child(3) {
-  animation-range: entry 10% entry 35%;
+
+.valuesSection.visible .valueCard:nth-child(3) {
+  animation: slideInUp 0.6s ease-out 0.3s forwards;
 }
-.valueCard:nth-child(4) {
-  animation-range: entry 15% entry 40%;
+
+.valuesSection.visible .valueCard:nth-child(4) {
+  animation: slideInUp 0.6s ease-out 0.4s forwards;
 }
 
 .valueCard:hover {
@@ -538,9 +500,6 @@
 .valueIcon {
   font-size: 3rem;
   margin-bottom: 1rem;
-  animation: revealScale linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 30%;
 }
 
 .valueTitle {
@@ -560,9 +519,14 @@
 .ctaSection {
   padding: 6rem 0;
   text-align: center;
-  animation: revealUp linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 25%;
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+.ctaSection.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .ctaContainer {
@@ -577,9 +541,6 @@
   color: var(--primary-blue);
   margin-bottom: 1.5rem;
   line-height: 1.2;
-  animation: revealDown linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 20%;
 }
 
 .ctaText {
@@ -587,9 +548,6 @@
   color: var(--gray-dark);
   margin-bottom: 3rem;
   line-height: 1.6;
-  animation: revealUp linear both;
-  animation-timeline: view();
-  animation-range: entry 0% entry 25%;
 }
 
 .ctaButtons {
@@ -597,9 +555,6 @@
   gap: 1.5rem;
   justify-content: center;
   flex-wrap: wrap;
-  animation: revealUp linear both;
-  animation-timeline: view();
-  animation-range: entry 5% entry 30%;
 }
 
 .ctaPrimaryButton,
@@ -651,8 +606,7 @@
   }
 
   .categoryTitle {
-    font-size: 2rem;
-    letter-spacing: 2px;
+    font-size: 1.8rem;
   }
 }
 
@@ -694,8 +648,7 @@
   }
 
   .categoryTitle {
-    font-size: 1.8rem;
-    letter-spacing: 2px;
+    font-size: 1.6rem;
   }
 
   .valuesGrid {
@@ -711,49 +664,6 @@
   .ctaSecondaryButton {
     width: 100%;
     max-width: 300px;
-  }
-
-  /* Fallback animations for mobile (no scroll-driven) */
-  .categoriesContainer,
-  .valuesSection,
-  .ctaSection,
-  .sectionTitle,
-  .sectionSubtitle,
-  .valuesTitle,
-  .ctaTitle,
-  .ctaText,
-  .ctaButtons,
-  .categoryCard,
-  .valueCard,
-  .valueIcon {
-    animation: revealUp 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    animation-timeline: auto;
-  }
-
-  .categoryCard:nth-child(1) {
-    animation-delay: 0.1s;
-  }
-  .categoryCard:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-  .categoryCard:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-  .categoryCard:nth-child(4) {
-    animation-delay: 0.4s;
-  }
-
-  .valueCard:nth-child(1) {
-    animation-delay: 0.1s;
-  }
-  .valueCard:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-  .valueCard:nth-child(3) {
-    animation-delay: 0.3s;
-  }
-  .valueCard:nth-child(4) {
-    animation-delay: 0.4s;
   }
 }
 
@@ -793,8 +703,7 @@
   }
 
   .categoryTitle {
-    font-size: 1.5rem;
-    letter-spacing: 1px;
+    font-size: 1.4rem;
   }
 
   .valuesGrid {
