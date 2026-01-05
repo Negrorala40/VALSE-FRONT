@@ -92,8 +92,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
           const transformedItems: CartItem[] = data.map((item) => ({
             id: item.id.toString(),
-            image: item.imageUrls?.[0] || '/images/placeholder.png',
-            name: item.productName,
+            image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png', // Asegura que no sea vacío
+            name: item.productName?.trim() || 'Producto sin nombre', // Asegura que no sea vacío
             price: item.price,
             size: item.size,
             color: item.color,
@@ -109,11 +109,25 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         const pending = localStorage.getItem('pendingCartItem');
         if (pending) {
           try {
-            const parsed: CartItem = JSON.parse(pending);
-            memoizedSetCartItems([parsed]);
+            const parsed = JSON.parse(pending);
+            // Valida y asegura los campos del item del localStorage
+            const validatedItem: CartItem = {
+              id: parsed.id?.toString() || `pending-${Date.now()}`,
+              image: parsed.imageUrl?.trim() || parsed.image?.trim() || '/images/placeholder.png',
+              name: parsed.productName?.trim() || parsed.name?.trim() || 'Producto sin nombre',
+              price: parsed.price || 0,
+              size: parsed.size || '',
+              color: parsed.color || '',
+              quantity: parsed.quantity || 1,
+              stock: parsed.stock || 100,
+            };
+            memoizedSetCartItems([validatedItem]);
           } catch {
             console.error('Error al parsear pendingCartItem');
+            memoizedSetCartItems([]);
           }
+        } else {
+          memoizedSetCartItems([]);
         }
       }
     };
@@ -202,6 +216,22 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     handleClose();
   };
 
+  // Función para validar y limpiar URL de imagen
+  const getSafeImageUrl = (url: string | undefined): string => {
+    if (!url || url.trim() === '') {
+      return '/images/placeholder.png';
+    }
+    return url.trim();
+  };
+
+  // Función para obtener nombre seguro
+  const getSafeName = (name: string | undefined): string => {
+    if (!name || name.trim() === '') {
+      return 'Producto sin nombre';
+    }
+    return name.trim();
+  };
+
   return (
     <>
       {/* Overlay */}
@@ -256,56 +286,67 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           <>
             <div className="cart-items-container">
               <ul className="cart-items">
-                {cartItems.map((item, index) => (
-                  <li key={`${item.id}-${index}`} className="cart-item">
-                    <div className="cart-item-image">
-                      <Image 
-                        src={item.image} 
-                        alt={item.name}
-                        width={70}
-                        height={70}
-                        loading="lazy" // 🔥 CAMBIADO: lazy en lugar de priority
-                        style={{ objectFit: 'cover' }}
-                      />
-                    </div>
-                    <div className="cart-item-content">
-                      <div className="cart-item-details">
-                        <p className="cart-item-name">{item.name}</p>
-                        <p className="cart-item-info">
-                          <span>Talla: {item.size}</span>
-                          <span>Color: {item.color}</span>
-                        </p>
-                        <p className="cart-item-price">${formatPrice(item.price)}</p>
+                {cartItems.map((item, index) => {
+                  // Validar y obtener valores seguros
+                  const safeImage = getSafeImageUrl(item.image);
+                  const safeName = getSafeName(item.name);
+                  
+                  return (
+                    <li key={`${item.id}-${index}`} className="cart-item">
+                      <div className="cart-item-image">
+                        <Image 
+                          src={safeImage} 
+                          alt={safeName}
+                          width={70}
+                          height={70}
+                          loading="lazy"
+                          style={{ objectFit: 'cover' }}
+                          onError={(e) => {
+                            // Fallback si la imagen falla
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/images/placeholder.png';
+                          }}
+                        />
                       </div>
-                      <div className="cart-item-controls">
-                        <div className="quantity-selector">
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            disabled={item.quantity <= 1}
-                            aria-label="Reducir cantidad"
+                      <div className="cart-item-content">
+                        <div className="cart-item-details">
+                          <p className="cart-item-name">{safeName}</p>
+                          <p className="cart-item-info">
+                            <span>Talla: {item.size || 'No especificada'}</span>
+                            <span>Color: {item.color || 'No especificado'}</span>
+                          </p>
+                          <p className="cart-item-price">${formatPrice(item.price || 0)}</p>
+                        </div>
+                        <div className="cart-item-controls">
+                          <div className="quantity-selector">
+                            <button
+                              onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                              disabled={item.quantity <= 1}
+                              aria-label="Reducir cantidad"
+                            >
+                              -
+                            </button>
+                            <span className="quantity-value">{item.quantity}</span>
+                            <button
+                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              disabled={item.stock !== undefined && item.quantity >= item.stock}
+                              aria-label="Aumentar cantidad"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <button 
+                            className="btn-remove" 
+                            onClick={() => removeItem(item.id)}
+                            aria-label="Eliminar producto"
                           >
-                            -
-                          </button>
-                          <span className="quantity-value">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            disabled={item.stock !== undefined && item.quantity >= item.stock}
-                            aria-label="Aumentar cantidad"
-                          >
-                            +
+                            Eliminar
                           </button>
                         </div>
-                        <button 
-                          className="btn-remove" 
-                          onClick={() => removeItem(item.id)}
-                          aria-label="Eliminar producto"
-                        >
-                          Eliminar
-                        </button>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
 
