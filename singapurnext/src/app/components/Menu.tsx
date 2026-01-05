@@ -1,11 +1,11 @@
 'use client';
 
-import { MENU_PRODUCTS } from '../utils/Api'; // Ajusta la ruta si está en otra carpeta
-import React, { useState, useEffect } from 'react';
+import { MENU_PRODUCTS } from '../utils/Api';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';
-import styles from '../menu/menu.module.css'; // Usamos la nueva ubicación del archivo de CSS
+import styles from '../menu/menu.module.css';
 
 interface Img {
   id: number;
@@ -46,17 +46,22 @@ interface Product {
 const Menu: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  
+  // Cambio: usar un Map para las referencias
+  const productRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const [products, setProducts] = useState<Product[]>([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState<boolean>(true);
   const [sortOption, setSortOption] = useState<string>('');
+  const [visibleCards, setVisibleCards] = useState<boolean[]>([]);
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const response = await axios.get<Product[]>(MENU_PRODUCTS);
         setProducts(response.data);
+        setVisibleCards(new Array(response.data.length).fill(false));
         setLoading(false);
       } catch (error) {
         console.error('Error al cargar los productos:', error);
@@ -66,6 +71,40 @@ const Menu: React.FC = () => {
 
     fetchProducts();
   }, []);
+
+  // Intersection Observer para animaciones al hacer scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = parseInt(entry.target.getAttribute('data-index') || '0', 10);
+            setVisibleCards(prev => {
+              const newVisible = [...prev];
+              newVisible[index] = true;
+              return newVisible;
+            });
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: '0px',
+        threshold: 0.1
+      }
+    );
+
+    // Observar todos los productos visibles
+    productRefs.current.forEach((ref) => {
+      if (ref) {
+        observer.observe(ref);
+      }
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [visibleCount, products.length]);
 
   const searchQuery = searchParams.get('search') || '';
   const genderQuery = searchParams.get('gender') || '';
@@ -112,7 +151,20 @@ const Menu: React.FC = () => {
     setSortOption(e.target.value);
   };
 
-  if (loading) return <p>Cargando productos...</p>;
+  // Función para manejar la referencia
+  const setProductRef = (element: HTMLDivElement | null, index: number) => {
+    if (element) {
+      productRefs.current.set(index, element);
+    } else {
+      productRefs.current.delete(index);
+    }
+  };
+
+  if (loading) return (
+    <div className={styles.menuContainer}>
+      <p>Cargando productos...</p>
+    </div>
+  );
 
   return (
     <div className={styles.menuContainer}>
@@ -133,7 +185,7 @@ const Menu: React.FC = () => {
         {sortedProducts.slice(0, visibleCount).length === 0 ? (
           <p>No se encontraron productos que coincidan con los criterios seleccionados.</p>
         ) : (
-          sortedProducts.slice(0, visibleCount).map((product) => {
+          sortedProducts.slice(0, visibleCount).map((product, index) => {
             const primaryImage = product.variants[0]?.images?.[0]?.imageUrl || '/placeholder.png';
             const price = product.variants.length > 0
               ? Math.min(...product.variants.map(v => Number(v.price || 0)))
@@ -141,8 +193,10 @@ const Menu: React.FC = () => {
 
             return (
               <div
-                key={product.id}
-                className={styles.productCard}
+                key={`${product.id}-${index}`}
+                ref={(el) => setProductRef(el, index)}
+                data-index={index}
+                className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''}`}
                 onClick={() => handleProductClick(product.id)}
               >
                 <Image
