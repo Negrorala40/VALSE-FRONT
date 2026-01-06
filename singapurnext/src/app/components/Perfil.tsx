@@ -631,7 +631,7 @@ const Perfil = () => {
             <div className="perfil-logo-icon">
               {/* Tu imagen SVG del cohete */}
               <Image
-                src=" /images/logos/logCohete.svg"
+                src="/images/logos/logCohete.svg"
                 alt="Cohete A Marte"
                 width={70}
                 height={70}
