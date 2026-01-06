@@ -16,6 +16,9 @@
   --gradient-accent: linear-gradient(90deg, var(--secondary-green) 0%, var(--accent-purple) 50%, var(--accent-red) 100%);
 }
 
+.main.page {
+  margin-top: 4rem;
+}
 /* === Animaciones === */
 @keyframes fadeIn {
   from {

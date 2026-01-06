@@ -4,6 +4,31 @@ import { PERFIL_ME, ADDRESS } from '../utils/Api';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './Perfil.css';
 import { signOut } from "next-auth/react";
+import Image from 'next/image';
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Edit3,
+  Trash2,
+  Save,
+  X,
+  LogOut,
+  Plus,
+  Rocket,
+  Star,
+  Moon,
+  Sparkles,
+  ChevronDown,
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  Lock,
+  Home,
+  Building,
+  Globe,
+} from 'lucide-react';
 
 interface Address {
   id: number;
@@ -13,7 +38,7 @@ interface Address {
   country: string;
 }
 
-interface User {
+interface UserData {
   id: number;
   firstName: string;
   lastName: string;
@@ -21,71 +46,210 @@ interface User {
   phone: string;
 }
 
-interface CustomModalProps {
+interface ModalConfig {
   isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
   title: string;
   message: string;
-  type?: 'warning' | 'danger' | 'info';
-  confirmText?: string;
-  cancelText?: string;
+  type: "warning" | "danger" | "info";
+  onConfirm: () => void;
 }
 
-const CustomModal: React.FC<CustomModalProps> = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  title,
-  message,
-  type = 'warning',
-  confirmText = 'Confirmar',
-  cancelText = 'Cancelar'
-}) => {
-  if (!isOpen) return null;
+// Componente de estrellas flotantes para el fondo
+const FloatingStars = () => (
+  <div className="perfil-floating-stars">
+    {[...Array(20)].map((_, i) => (
+      <div
+        key={i}
+        className="perfil-star-item"
+        style={{
+          left: `${Math.random() * 100}%`,
+          top: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 3}s`,
+          animationDuration: `${2 + Math.random() * 2}s`,
+        }}
+      >
+        <Star className="perfil-star-icon" style={{ width: 8 + Math.random() * 12, height: 8 + Math.random() * 12 }} />
+      </div>
+    ))}
+  </div>
+);
 
-  const getIcon = () => {
-    switch (type) {
-      case 'danger': return '🗑️';
-      case 'warning': return '⚠️';
-      case 'info': return 'ℹ️';
-      default: return '⚠️';
-    }
-  };
+// Componente de modal personalizado
+const CustomModal: React.FC<{
+  config: ModalConfig | null;
+  onClose: () => void;
+}> = ({ config, onClose }) => {
+  if (!config || !config.isOpen) return null;
 
-  const getButtonClass = () => {
-    switch (type) {
-      case 'danger': return 'danger';
-      case 'warning': return 'confirm';
-      case 'info': return 'confirm';
-      default: return 'confirm';
-    }
+  const iconMap = {
+    warning: <AlertTriangle className="perfil-modal-icon perfil-modal-icon--warning" />,
+    danger: <Trash2 className="perfil-modal-icon perfil-modal-icon--danger" />,
+    info: <Info className="perfil-modal-icon perfil-modal-icon--info" />,
   };
 
   return (
-    <div className="custom-modal-overlay" onClick={onClose}>
-      <div className="custom-modal" onClick={e => e.stopPropagation()}>
-        <div className="custom-modal-header">
-          <div className={`custom-modal-icon ${type}`}>
-            {getIcon()}
-          </div>
-          <h3 className="custom-modal-title">{title}</h3>
+    <div className="perfil-modal-overlay" onClick={onClose}>
+      <div className="perfil-modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="perfil-modal-header">
+          <div className="perfil-modal-icon-wrapper">{iconMap[config.type]}</div>
+          <h2 className="perfil-modal-title">{config.title}</h2>
+          <p className="perfil-modal-message">{config.message}</p>
         </div>
-        <div className="custom-modal-body">
-          <p>{message}</p>
-        </div>
-        <div className="custom-modal-footer">
-          <button
-            className={`custom-modal-button ${getButtonClass()}`}
-            onClick={onConfirm}
-          >
-            {confirmText}
+        <div className="perfil-modal-footer">
+          <button className="perfil-btn perfil-btn--outline" onClick={onClose}>
+            Cancelar
           </button>
           <button
-            className="custom-modal-button cancel"
-            onClick={onClose}
+            className={`perfil-btn perfil-btn--${config.type}`}
+            onClick={() => {
+              config.onConfirm();
+              onClose();
+            }}
           >
-            {cancelText}
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Toast de éxito
+const SuccessToast: React.FC<{ message: string; show: boolean }> = ({ message, show }) => {
+  if (!show) return null;
+
+  return (
+    <div className="perfil-toast perfil-toast--success">
+      <CheckCircle className="perfil-toast-icon" />
+      <span className="perfil-toast-message">{message}</span>
+    </div>
+  );
+};
+
+// Componente de tarjeta de dirección
+const AddressCard: React.FC<{
+  address: Address;
+  isEditing: boolean;
+  editedAddress: Address | null;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onEditChange: (address: Address) => void;
+}> = ({ address, isEditing, editedAddress, onEdit, onDelete, onSave, onCancel, onEditChange }) => {
+  if (isEditing && editedAddress) {
+    return (
+      <div className="perfil-address-card perfil-address-card--editing">
+        <div className="perfil-address-form-grid">
+          <div className="perfil-form-group">
+            <label className="perfil-form-label">
+              <Home className="perfil-label-icon" /> Dirección
+            </label>
+            <input
+              type="text"
+              className="perfil-form-input perfil-form-input--purple"
+              value={editedAddress.address}
+              onChange={(e) => onEditChange({ ...editedAddress, address: e.target.value })}
+              placeholder="Calle y número"
+            />
+          </div>
+          <div className="perfil-form-group">
+            <label className="perfil-form-label">
+              <Building className="perfil-label-icon" /> Ciudad
+            </label>
+            <input
+              type="text"
+              className="perfil-form-input perfil-form-input--purple"
+              value={editedAddress.city}
+              onChange={(e) => onEditChange({ ...editedAddress, city: e.target.value })}
+              placeholder="Ciudad"
+            />
+          </div>
+          <div className="perfil-form-group">
+            <label className="perfil-form-label">
+              <MapPin className="perfil-label-icon" /> Estado/Departamento
+            </label>
+            <input
+              type="text"
+              className="perfil-form-input perfil-form-input--purple"
+              value={editedAddress.state}
+              onChange={(e) => onEditChange({ ...editedAddress, state: e.target.value })}
+              placeholder="Estado o Departamento"
+            />
+          </div>
+          <div className="perfil-form-group">
+            <label className="perfil-form-label">
+              <Globe className="perfil-label-icon" /> País
+            </label>
+            <input
+              type="text"
+              className="perfil-form-input perfil-form-input--purple"
+              value={editedAddress.country}
+              onChange={(e) => onEditChange({ ...editedAddress, country: e.target.value })}
+              placeholder="País"
+            />
+          </div>
+        </div>
+        <div className="perfil-address-card-actions">
+          <button className="perfil-btn perfil-btn--success" onClick={onSave}>
+            <Save className="perfil-btn-icon" /> Guardar
+          </button>
+          <button className="perfil-btn perfil-btn--outline-danger" onClick={onCancel}>
+            <X className="perfil-btn-icon" /> Cancelar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="perfil-address-card">
+      <div className="perfil-address-card-accent" />
+      <div className="perfil-address-card-content">
+        <div className="perfil-address-info-grid">
+          <div className="perfil-address-info-item">
+            <div className="perfil-address-info-icon perfil-address-info-icon--green">
+              <Home />
+            </div>
+            <div className="perfil-address-info-text">
+              <span className="perfil-address-info-label">Dirección</span>
+              <p className="perfil-address-info-value">{address.address}</p>
+            </div>
+          </div>
+          <div className="perfil-address-info-item">
+            <div className="perfil-address-info-icon perfil-address-info-icon--yellow">
+              <Building />
+            </div>
+            <div className="perfil-address-info-text">
+              <span className="perfil-address-info-label">Ciudad</span>
+              <p className="perfil-address-info-value">{address.city}</p>
+            </div>
+          </div>
+          <div className="perfil-address-info-item">
+            <div className="perfil-address-info-icon perfil-address-info-icon--purple">
+              <MapPin />
+            </div>
+            <div className="perfil-address-info-text">
+              <span className="perfil-address-info-label">Estado</span>
+              <p className="perfil-address-info-value">{address.state}</p>
+            </div>
+          </div>
+          <div className="perfil-address-info-item">
+            <div className="perfil-address-info-icon perfil-address-info-icon--pink">
+              <Globe />
+            </div>
+            <div className="perfil-address-info-text">
+              <span className="perfil-address-info-label">País</span>
+              <p className="perfil-address-info-value">{address.country}</p>
+            </div>
+          </div>
+        </div>
+        <div className="perfil-address-card-footer">
+          <button className="perfil-btn perfil-btn--outline-yellow" onClick={onEdit}>
+            <Edit3 className="perfil-btn-icon" /> Editar
+          </button>
+          <button className="perfil-btn perfil-btn--outline-danger" onClick={onDelete}>
+            <Trash2 className="perfil-btn-icon" /> Eliminar
           </button>
         </div>
       </div>
@@ -94,7 +258,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
 };
 
 const Perfil = () => {
-  const [formData, setFormData] = useState<User>({
+  const [formData, setFormData] = useState<UserData>({
     id: 0,
     firstName: '',
     lastName: '',
@@ -118,13 +282,7 @@ const Perfil = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [showCheckmark, setShowCheckmark] = useState<boolean>(false);
   
-  const [modal, setModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    type: 'warning' | 'danger' | 'info';
-    onConfirm: () => void;
-  } | null>(null);
+  const [modal, setModal] = useState<ModalConfig | null>(null);
 
   const [isClient, setIsClient] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -165,7 +323,7 @@ const Perfil = () => {
         throw new Error(`Error ${response.status}: ${errorText || 'Error al cargar los datos del usuario'}`);
       }
 
-      const userData: User = await response.json();
+      const userData: UserData = await response.json();
       console.log('✅ Datos del usuario cargados:', userData);
       
       setFormData(userData);
@@ -220,7 +378,7 @@ const Perfil = () => {
   const showModal = (
     title: string, 
     message: string, 
-    type: 'warning' | 'danger' | 'info',
+    type: "warning" | "danger" | "info",
     onConfirm: () => void
   ) => {
     setModal({
@@ -230,10 +388,6 @@ const Perfil = () => {
       type,
       onConfirm
     });
-  };
-
-  const closeModal = () => {
-    setModal(null);
   };
 
   const handleAddAddress = async () => {
@@ -256,7 +410,7 @@ const Perfil = () => {
       setNewAddress({ address: '', city: '', state: '', country: '' });
       setShowAddressForm(false);
       await loadAddresses();
-      showSuccessCheckmark('📍 Dirección agregada correctamente');
+      showSuccessCheckmark('¡Dirección agregada correctamente!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al agregar la dirección');
       console.error(err);
@@ -267,7 +421,7 @@ const Perfil = () => {
     if (!token) return;
     
     showModal(
-      '🗑️ Eliminar Dirección',
+      'Eliminar Dirección',
       '¿Estás seguro de que deseas eliminar esta dirección? Esta acción no se puede deshacer.',
       'danger',
       async () => {
@@ -283,7 +437,7 @@ const Perfil = () => {
           }
 
           await loadAddresses();
-          showSuccessCheckmark('🗑️ Dirección eliminada correctamente');
+          showSuccessCheckmark('Dirección eliminada correctamente');
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Error al eliminar la dirección');
           console.error(err);
@@ -301,7 +455,7 @@ const Perfil = () => {
     if (!editedAddress || !token) return;
 
     showModal(
-      '💾 Guardar Cambios',
+      'Guardar Cambios',
       '¿Guardar los cambios en esta dirección?',
       'info',
       async () => {
@@ -320,7 +474,7 @@ const Perfil = () => {
           setEditIndex(null);
           setEditedAddress(null);
           await loadAddresses();
-          showSuccessCheckmark('💾 Dirección actualizada correctamente');
+          showSuccessCheckmark('Dirección actualizada correctamente');
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Error al actualizar la dirección');
           console.error(err);
@@ -334,7 +488,7 @@ const Perfil = () => {
     if (!token) return;
     
     showModal(
-      '👤 Actualizar Perfil',
+      'Actualizar Perfil',
       '¿Deseas guardar los cambios en tu información personal?',
       'info',
       async () => {
@@ -381,7 +535,7 @@ const Perfil = () => {
             phone: updatedUser.phone || formData.phone,
           });
           
-          showSuccessCheckmark('👤 Información personal actualizada correctamente');
+          showSuccessCheckmark('¡Información actualizada correctamente!');
           
           setTimeout(() => {
             loadUserData();
@@ -403,7 +557,7 @@ const Perfil = () => {
 
   const handleLogout = async () => {
     showModal(
-      '🚪 Cerrar Sesión',
+      'Cerrar Sesión',
       '¿Estás seguro de que deseas cerrar sesión? Se cerrará tu sesión en todos los dispositivos.',
       'warning',
       async () => {
@@ -420,10 +574,16 @@ const Perfil = () => {
 
   if (!isClient || isLoading) {
     return (
-      <div className="perfil-container">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Cargando tu perfil...</p>
+      <div className="perfil-page">
+        <div className="perfil-loading-screen">
+          <div className="perfil-loading-content">
+            <div className="perfil-loading-spinner">
+              <div className="perfil-spinner-track" />
+              <div className="perfil-spinner-gradient" />
+              <Rocket className="perfil-spinner-icon" />
+            </div>
+            <p className="perfil-loading-text">Cargando tu perfil espacial...</p>
+          </div>
         </div>
       </div>
     );
@@ -431,286 +591,306 @@ const Perfil = () => {
 
   if (!token) {
     return (
-      <div className="perfil-container">
-        <div className="perfil-title">
-          <h1>🔒 Acceso Restringido</h1>
-        </div>
-        <div className="info-section">
-          <p>Por favor inicia sesión para ver tu perfil.</p>
-          <button 
-            onClick={() => window.location.href = '/login'} 
-            className="login-button"
-            style={{ marginTop: '20px', maxWidth: '250px' }}
-          >
-            Ir a Iniciar Sesión
-          </button>
+      <div className="perfil-page">
+        <div className="perfil-content-container">
+          <div className="perfil-header">
+            <h1 className="perfil-header-title">
+              <span className="perfil-brand-name">Acceso Restringido</span>
+            </h1>
+            <p className="perfil-header-subtitle">Por favor inicia sesión para ver tu perfil.</p>
+            <button 
+              onClick={() => window.location.href = '/login'} 
+              className="perfil-btn perfil-btn--primary"
+              style={{ marginTop: '20px', maxWidth: '250px' }}
+            >
+              Ir a Iniciar Sesión
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="perfil-container">
-      {/* Modal personalizado */}
-      {modal && (
-        <CustomModal
-          isOpen={modal.isOpen}
-          onClose={closeModal}
-          onConfirm={() => {
-            modal.onConfirm();
-            closeModal();
-          }}
-          title={modal.title}
-          message={modal.message}
-          type={modal.type}
-        />
-      )}
+    <div className="perfil-page">
+      {/* Barra superior decorativa */}
+      <div className="perfil-top-bar" />
 
-      {showCheckmark && (
-        <div className="checkmark-popup">
-          ✅ {success}
-        </div>
-      )}
+      {/* Modal */}
+      <CustomModal config={modal} onClose={() => setModal(null)} />
 
-      {/* Header mejorado */}
-      <div className="perfil-title">
-        <h1>
-          <span className="rocket-icon">
-            {/* Reemplaza esto con tu SVG del cohete */}
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-              <path d="M20 2L22.5 10H17.5L20 2Z" fill="#3db28a"/>
-              <path d="M10 15L15 20L10 25V15Z" fill="#806ff7"/>
-              <path d="M30 15V25L25 20L30 15Z" fill="#e9566d"/>
-              <path d="M20 30L17.5 22H22.5L20 30Z" fill="#ffd449"/>
-              <circle cx="20" cy="20" r="8" fill="#f47b47"/>
-              <circle cx="20" cy="20" r="4" fill="#ffffff"/>
-            </svg>
-          </span>
-          Bienvenido a tu Perfil en <span className="highlight">A Marte</span> 🪐
-        </h1>
-        <p className="perfil-subtitle">
-          Gestiona tu información personal y direcciones de envío para recibir tus pijamas espaciales
-        </p>
-      </div>
+      {/* Toast de éxito */}
+      <SuccessToast message={success || ""} show={showCheckmark} />
 
-      {error && <div className="error-message">❌ {error}</div>}
-      {success && !showCheckmark && <div className="success-message">✅ {success}</div>}
+      <div className="perfil-content-container">
+        <FloatingStars />
 
-      {/* Información del Usuario */}
-      <section className="info-section">
-        <h2>Información Personal</h2>
-        <form onSubmit={handleUpdateUser}>
-          <div className="form-group">
-            <label>Nombre:</label>
-            <input
-              type="text"
-              value={formData.firstName}
-              onChange={(e) =>
-                setFormData({ ...formData, firstName: e.target.value })
-              }
-              required
-              minLength={2}
-              maxLength={50}
-              placeholder="Tu nombre"
-            />
-          </div>
-          <div className="form-group">
-            <label>Apellido:</label>
-            <input
-              type="text"
-              value={formData.lastName}
-              onChange={(e) =>
-                setFormData({ ...formData, lastName: e.target.value })
-              }
-              required
-              minLength={2}
-              maxLength={50}
-              placeholder="Tu apellido"
-            />
-          </div>
-          <div className="form-group">
-            <label>Email:</label>
-            <input 
-              type="email" 
-              value={formData.email} 
-              disabled 
-              readOnly
-              className="email-disabled"
-              title="El email no se puede modificar (es tu nombre de usuario)"
-            />
-            <small className="email-note">* El email es tu nombre de usuario y no se puede modificar</small>
-          </div>
-          <div className="form-group">
-            <label>Teléfono:</label>
-            <input
-              type="tel"
-              value={formData.phone}
-              onChange={(e) =>
-                setFormData({ ...formData, phone: e.target.value })
-              }
-              required
-              pattern="\d{10,15}"
-              title="Por favor ingresa un número de teléfono válido (10-15 dígitos)"
-              placeholder="Ej: 3001234567"
-            />
-          </div>
-          <button type="submit" className="update-button">
-            💾 Actualizar Información Personal
-          </button>
-        </form>
-      </section>
-
-      {/* Direcciones */}
-      <section className="address-section">
-        <h2>Direcciones de Envío</h2>
-        {addresses.length > 0 ? (
-          <ul className="address-list">
-            {addresses.map((addr, index) => (
-              <li key={addr.id} className="address-item">
-                {editIndex === index && editedAddress ? (
-                  <div className="edit-fields">
-                    <input
-                      value={editedAddress.address}
-                      onChange={(e) =>
-                        setEditedAddress({ ...editedAddress, address: e.target.value })
-                      }
-                      placeholder="Dirección completa"
-                      required
-                    />
-                    <input
-                      value={editedAddress.city}
-                      onChange={(e) =>
-                        setEditedAddress({ ...editedAddress, city: e.target.value })
-                      }
-                      placeholder="Ciudad"
-                      required
-                    />
-                    <input
-                      value={editedAddress.state}
-                      onChange={(e) =>
-                        setEditedAddress({ ...editedAddress, state: e.target.value })
-                      }
-                      placeholder="Estado/Departamento"
-                      required
-                    />
-                    <input
-                      value={editedAddress.country}
-                      onChange={(e) =>
-                        setEditedAddress({ ...editedAddress, country: e.target.value })
-                      }
-                      placeholder="País"
-                      required
-                    />
-                    <div className="edit-actions">
-                      <button onClick={handleSaveAddress} className="save-button">
-                        💾 Guardar
-                      </button>
-                      <button
-                        onClick={() => setEditIndex(null)}
-                        className="cancel-button"
-                      >
-                        ❌ Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="address-text">
-                      <strong>📌 Dirección:</strong> <span>{addr.address}</span>
-                      <strong>🏙️ Ciudad:</strong> <span>{addr.city}</span>
-                      <strong>📍 Estado:</strong> <span>{addr.state}</span>
-                      <strong>🇨🇴 País:</strong> <span>{addr.country}</span>
-                    </p>
-                    <div className="address-actions">
-                      <button
-                        onClick={() => handleEditAddress(index)}
-                        className="edit-button"
-                      >
-                        ✏️ Editar
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAddress(addr.id)}
-                        className="delete-button"
-                      >
-                        🗑️ Eliminar
-                      </button>
-                    </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="no-addresses">No hay direcciones registradas. Agrega una para recibir tus pedidos.</p>
-        )}
-
-        {/* Botón para mostrar/ocultar formulario */}
-        <button 
-          onClick={() => setShowAddressForm(!showAddressForm)}
-          className="toggle-address-form"
-        >
-          {showAddressForm ? '− Ocultar formulario' : '+ Agregar nueva dirección'}
-        </button>
-
-        {/* Formulario desplegable para nueva dirección */}
-        <div className={showAddressForm ? 'address-form-expanded' : 'address-form-collapsed'}>
-          <div className="new-address-form">
-            <h3>Agregar nueva dirección</h3>
-            <div className="new-address-form-inputs">
-              <input
-                type="text"
-                placeholder="Dirección completa"
-                value={newAddress.address}
-                onChange={(e) =>
-                  setNewAddress({ ...newAddress, address: e.target.value })
-                }
-                required
+        {/* Header */}
+        <header className="perfil-header">
+          <div className="perfil-header-logo">
+            <div className="perfil-logo-icon">
+              {/* Tu imagen SVG del cohete */}
+              <Image
+                src=" /images/logos/logCohete.svg"
+                alt="Cohete A Marte"
+                width={70}
+                height={70}
+                className="perfil-logo-svg"
               />
-              <input
-                type="text"
-                placeholder="Ciudad"
-                value={newAddress.city}
-                onChange={(e) =>
-                  setNewAddress({ ...newAddress, city: e.target.value })
-                }
-                required
-              />
-              <input
-                type="text"
-                placeholder="Estado/Departamento"
-                value={newAddress.state}
-                onChange={(e) =>
-                  setNewAddress({ ...newAddress, state: e.target.value })
-                }
-                required
-              />
-              <input
-                type="text"
-                placeholder="País"
-                value={newAddress.country}
-                onChange={(e) =>
-                  setNewAddress({ ...newAddress, country: e.target.value })
-                }
-                required
-              />
+              <div className="perfil-logo-badge">
+                <Sparkles />
+              </div>
             </div>
-            <button 
-              onClick={handleAddAddress} 
-              className="add-button"
-              disabled={!newAddress.address || !newAddress.city || !newAddress.state || !newAddress.country}
-            >
-              📍 Agregar Dirección
+          </div>
+
+          <h1 className="perfil-header-title">
+            Bienvenido a tu Perfil en{" "}
+            <span className="perfil-brand-name">
+              A Marte
+              <span className="perfil-brand-underline" />
+            </span>{" "}
+            <Moon className="perfil-moon-icon" />
+          </h1>
+
+          <p className="perfil-header-subtitle">
+            Gestiona tu información personal y direcciones de envío para recibir tus pijamas espaciales
+          </p>
+        </header>
+
+        {/* Mensajes de error */}
+        {error && (
+          <div className="perfil-error-banner">
+            <AlertTriangle className="perfil-error-icon" />
+            <p className="perfil-error-text">{error}</p>
+            <button onClick={() => setError(null)} className="perfil-error-close">
+              <X />
             </button>
           </div>
-        </div>
-      </section>
+        )}
 
-      {/* Botón de cerrar sesión */}
-      <div className="logout-section">
-        <button onClick={handleLogout} className="logout-button">
-          🚪 Cerrar Sesión
-        </button>
-        <p className="logout-note">* Se cerrará tu sesión en todos los dispositivos</p>
+        {/* Información Personal */}
+        <div className="perfil-card">
+          <div className="perfil-card-accent perfil-card-accent--green" />
+          <div className="perfil-card-header">
+            <div className="perfil-card-header-icon perfil-card-header-icon--green">
+              <User />
+            </div>
+            <div className="perfil-card-header-text">
+              <h2 className="perfil-card-title">Información Personal</h2>
+              <p className="perfil-card-description">Actualiza tus datos de contacto</p>
+            </div>
+          </div>
+          <div className="perfil-card-body">
+            <form onSubmit={handleUpdateUser} className="perfil-profile-form">
+              <div className="perfil-form-row">
+                <div className="perfil-form-group">
+                  <label className="perfil-form-label">
+                    <User className="perfil-label-icon" /> Nombre
+                  </label>
+                  <input
+                    type="text"
+                    className="perfil-form-input"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    placeholder="Tu nombre"
+                    required
+                  />
+                </div>
+                <div className="perfil-form-group">
+                  <label className="perfil-form-label">
+                    <User className="perfil-label-icon" /> Apellido
+                  </label>
+                  <input
+                    type="text"
+                    className="perfil-form-input"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    placeholder="Tu apellido"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="perfil-form-group">
+                <label className="perfil-form-label">
+                  <Mail className="perfil-label-icon" /> Email
+                  <span className="perfil-form-badge">
+                    <Lock className="perfil-badge-icon" />
+                    No editable
+                  </span>
+                </label>
+                <input type="email" className="perfil-form-input perfil-form-input--disabled" value={formData.email} disabled />
+                <p className="perfil-form-hint">El email es tu nombre de usuario y no se puede modificar</p>
+              </div>
+
+              <div className="perfil-form-group">
+                <label className="perfil-form-label">
+                  <Phone className="perfil-label-icon" /> Teléfono
+                </label>
+                <input
+                  type="tel"
+                  className="perfil-form-input"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="Ej: 3001234567"
+                  required
+                />
+              </div>
+
+              <button type="submit" className="perfil-btn perfil-btn--primary">
+                <Save className="perfil-btn-icon" />
+                Guardar Cambios
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Direcciones de Envío */}
+        <div className="perfil-card">
+          <div className="perfil-card-accent perfil-card-accent--orange" />
+          <div className="perfil-card-header">
+            <div className="perfil-card-header-icon perfil-card-header-icon--orange">
+              <MapPin />
+            </div>
+            <div className="perfil-card-header-text">
+              <h2 className="perfil-card-title">Direcciones de Envío</h2>
+              <p className="perfil-card-description">Gestiona tus direcciones para recibir tus pedidos</p>
+            </div>
+          </div>
+          <div className="perfil-card-body">
+            {addresses.length > 0 ? (
+              <div className="perfil-addresses-list">
+                {addresses.map((addr, index) => (
+                  <AddressCard
+                    key={addr.id}
+                    address={addr}
+                    isEditing={editIndex === index}
+                    editedAddress={editedAddress}
+                    onEdit={() => handleEditAddress(index)}
+                    onDelete={() => handleDeleteAddress(addr.id)}
+                    onSave={handleSaveAddress}
+                    onCancel={() => {
+                      setEditIndex(null);
+                      setEditedAddress(null);
+                    }}
+                    onEditChange={setEditedAddress}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="perfil-empty-state">
+                <div className="perfil-empty-state-icon">
+                  <MapPin />
+                </div>
+                <p className="perfil-empty-state-title">No hay direcciones registradas</p>
+                <p className="perfil-empty-state-text">Agrega una para recibir tus pedidos espaciales</p>
+              </div>
+            )}
+
+            {/* Botón para agregar dirección */}
+            <button className="perfil-btn perfil-btn--dashed" onClick={() => setShowAddressForm(!showAddressForm)}>
+              {showAddressForm ? (
+                <>
+                  <ChevronDown className="perfil-btn-icon perfil-btn-icon--rotate" />
+                  Ocultar formulario
+                </>
+              ) : (
+                <>
+                  <Plus className="perfil-btn-icon" />
+                  Agregar nueva dirección
+                </>
+              )}
+            </button>
+
+            {/* Formulario para agregar nueva dirección */}
+            {showAddressForm && (
+              <div className="perfil-new-address-form">
+                <div className="perfil-new-address-header">
+                  <div className="perfil-new-address-badge">+</div>
+                  Nueva Dirección
+                </div>
+                <div className="perfil-address-form-grid">
+                  <div className="perfil-form-group">
+                    <label className="perfil-form-label perfil-form-label--small">
+                      <Home className="perfil-label-icon" /> Dirección
+                    </label>
+                    <input
+                      type="text"
+                      className="perfil-form-input perfil-form-input--green"
+                      value={newAddress.address}
+                      onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                      placeholder="Calle y número"
+                    />
+                  </div>
+                  <div className="perfil-form-group">
+                    <label className="perfil-form-label perfil-form-label--small">
+                      <Building className="perfil-label-icon" /> Ciudad
+                    </label>
+                    <input
+                      type="text"
+                      className="perfil-form-input perfil-form-input--green"
+                      value={newAddress.city}
+                      onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                      placeholder="Ciudad"
+                    />
+                  </div>
+                  <div className="perfil-form-group">
+                    <label className="perfil-form-label perfil-form-label--small">
+                      <MapPin className="perfil-label-icon" /> Estado/Departamento
+                    </label>
+                    <input
+                      type="text"
+                      className="perfil-form-input perfil-form-input--green"
+                      value={newAddress.state}
+                      onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                      placeholder="Estado o Departamento"
+                    />
+                  </div>
+                  <div className="perfil-form-group">
+                    <label className="perfil-form-label perfil-form-label--small">
+                      <Globe className="perfil-label-icon" /> País
+                    </label>
+                    <input
+                      type="text"
+                      className="perfil-form-input perfil-form-input--green"
+                      value={newAddress.country}
+                      onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                      placeholder="País"
+                    />
+                  </div>
+                </div>
+                <button 
+                  className="perfil-btn perfil-btn--primary perfil-btn--full" 
+                  onClick={handleAddAddress}
+                  disabled={!newAddress.address || !newAddress.city || !newAddress.state || !newAddress.country}
+                >
+                  <Plus className="perfil-btn-icon" />
+                  Agregar Dirección
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Cerrar Sesión */}
+        <div className="perfil-card perfil-card--logout">
+          <div className="perfil-card-body perfil-card-body--center">
+            <button className="perfil-btn perfil-btn--logout" onClick={handleLogout}>
+              <LogOut className="perfil-btn-icon" />
+              Cerrar Sesión
+            </button>
+            <p className="perfil-logout-hint">Se cerrará tu sesión en todos los dispositivos</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer className="perfil-footer">
+          <div className="perfil-footer-content">
+            <Rocket className="perfil-footer-icon" />
+            <span>A Marte · Pijamas Espaciales para Pequeños Astronautas</span>
+            <Star className="perfil-footer-star" />
+          </div>
+        </footer>
       </div>
     </div>
   );

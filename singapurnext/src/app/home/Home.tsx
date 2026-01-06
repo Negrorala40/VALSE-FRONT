@@ -323,10 +323,10 @@ const Home = () => {
           <div className={styles.ctaContainer}>
             <h2 className={styles.ctaTitle}>¿Listo para vestir con conciencia?</h2>
             <p className={styles.ctaText}>
-              Únete a nuestra comunidad y recibe un 15% de descuento en tu primera compra
+              Únete a nuestra comunidad y recibe grandes beneficios al crear tu cuenta
             </p>
             <div className={styles.ctaButtons}>
-              <Link href="/register" className={styles.ctaPrimaryButton}>
+              <Link href="/login" className={styles.ctaPrimaryButton}>
                 Crear Cuenta
               </Link>
               <Link href="/menu" className={styles.ctaSecondaryButton}>
