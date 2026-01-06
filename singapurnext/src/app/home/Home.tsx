@@ -4,6 +4,36 @@ import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import styles from './page.module.css';
+import axios from 'axios';
+import { MENU_PRODUCTS } from '../utils/Api';
+
+interface Img {
+  id: number;
+  fileName: string;
+  imageUrl: string;
+}
+
+interface ProductVariant {
+  id: number;
+  color: string;
+  size: string;
+  stock: number;
+  price?: number;
+  images: Img[];
+}
+
+enum ProductGender {
+  MUJER = 'MUJER',
+  HOMBRE = 'HOMBRE',
+  UNISEX = 'UNISEX'
+}
+
+interface Product {
+  id: number;
+  name: string;
+  gender: ProductGender;
+  variants: ProductVariant[];
+}
 
 const Home = () => {
   const categoriesRef = useRef<HTMLDivElement>(null);
@@ -15,6 +45,70 @@ const Home = () => {
     cta: false
   });
 
+  // Estado para productos aleatorios
+  const [categoryImages, setCategoryImages] = useState<{
+    hombre: string;
+    mujer: string;
+    unisex: string;
+    oferta: string;
+  }>({
+    hombre: '/images/placeholder.jpg',
+    mujer: '/images/placeholder.jpg',
+    unisex: '/images/placeholder.jpg',
+    oferta: '/images/placeholder.jpg'
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Función para obtener imágenes aleatorias de productos
+  useEffect(() => {
+    const fetchCategoryImages = async () => {
+      try {
+        const response = await axios.get<Product[]>(MENU_PRODUCTS);
+        const products = response.data;
+
+        // Filtrar productos por categoría
+        const hombreProducts = products.filter(p => p.gender === ProductGender.HOMBRE);
+        const mujerProducts = products.filter(p => p.gender === ProductGender.MUJER);
+        const unisexProducts = products.filter(p => p.gender === ProductGender.UNISEX);
+        
+        // Productos para ofertas (los más económicos)
+        const ofertaProducts = [...products]
+          .filter(p => p.variants[0]?.price)
+          .sort((a, b) => {
+            const aPrice = a.variants[0]?.price || Infinity;
+            const bPrice = b.variants[0]?.price || Infinity;
+            return aPrice - bPrice;
+          })
+          .slice(0, 10);
+
+        // Función para obtener imagen aleatoria de un array de productos
+        const getRandomImage = (productArray: Product[]) => {
+          if (productArray.length === 0) return '/images/placeholder.jpg';
+          
+          const randomProduct = productArray[Math.floor(Math.random() * productArray.length)];
+          const imageUrl = randomProduct.variants[0]?.images?.[0]?.imageUrl;
+          
+          return imageUrl || '/images/placeholder.jpg';
+        };
+
+        setCategoryImages({
+          hombre: getRandomImage(hombreProducts),
+          mujer: getRandomImage(mujerProducts),
+          unisex: getRandomImage(unisexProducts),
+          oferta: getRandomImage(ofertaProducts)
+        });
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Error al cargar imágenes:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchCategoryImages();
+  }, []);
+
+  // Intersection Observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -77,69 +171,97 @@ const Home = () => {
           </p>
           
           <div className={styles.categoriesGrid}>
+            {/* Hombre */}
             <Link href="/menu?gender=hombre" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
-                <Image
-                  src="/images/categories/hombre.jpg"
-                  alt="Moda para Hombre"
-                  fill
-                  className={styles.categoryImage}
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority
-                />
-                <div className={styles.categoryOverlay}></div>
+                {loading ? (
+                  <div className={styles.loadingSkeleton}></div>
+                ) : (
+                  <>
+                    <Image
+                      src={categoryImages.hombre}
+                      alt="Moda para Hombre"
+                      fill
+                      className={styles.categoryImage}
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      priority
+                    />
+                    <div className={styles.categoryOverlay}></div>
+                  </>
+                )}
               </div>
               <div className={styles.categoryContent}>
                 <h3 className={styles.categoryTitle}>HOMBRE</h3>
               </div>
             </Link>
 
+            {/* Mujer */}
             <Link href="/menu?gender=mujer" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
-                <Image
-                  src="/images/categories/mujer.jpg"
-                  alt="Moda para Mujer"
-                  fill
-                  className={styles.categoryImage}
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority
-                />
-                <div className={styles.categoryOverlay}></div>
+                {loading ? (
+                  <div className={styles.loadingSkeleton}></div>
+                ) : (
+                  <>
+                    <Image
+                      src={categoryImages.mujer}
+                      alt="Moda para Mujer"
+                      fill
+                      className={styles.categoryImage}
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      priority
+                    />
+                    <div className={styles.categoryOverlay}></div>
+                  </>
+                )}
               </div>
               <div className={styles.categoryContent}>
                 <h3 className={styles.categoryTitle}>MUJER</h3>
               </div>
             </Link>
 
+            {/* Unisex */}
             <Link href="/menu?gender=unisex" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
-                <Image
-                  src="/images/categories/unisex.jpg"
-                  alt="Moda Unisex"
-                  fill
-                  className={styles.categoryImage}
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority
-                />
-                <div className={styles.categoryOverlay}></div>
+                {loading ? (
+                  <div className={styles.loadingSkeleton}></div>
+                ) : (
+                  <>
+                    <Image
+                      src={categoryImages.unisex}
+                      alt="Moda Unisex"
+                      fill
+                      className={styles.categoryImage}
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      priority
+                    />
+                    <div className={styles.categoryOverlay}></div>
+                  </>
+                )}
               </div>
               <div className={styles.categoryContent}>
                 <h3 className={styles.categoryTitle}>UNISEX</h3>
               </div>
             </Link>
 
+            {/* Ofertas */}
             <Link href="/menu?filter=descuento" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
-                <div className={styles.discountBadge}>Hasta -50%</div>
-                <Image
-                  src="/images/categories/ofertas.jpg"
-                  alt="Ofertas especiales"
-                  fill
-                  className={styles.categoryImage}
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority
-                />
-                <div className={styles.categoryOverlay}></div>
+                {loading ? (
+                  <div className={styles.loadingSkeleton}></div>
+                ) : (
+                  <>
+                    <div className={styles.discountBadge}>Hasta -50%</div>
+                    <Image
+                      src={categoryImages.oferta}
+                      alt="Ofertas especiales"
+                      fill
+                      className={styles.categoryImage}
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      priority
+                    />
+                    <div className={styles.categoryOverlay}></div>
+                  </>
+                )}
               </div>
               <div className={styles.categoryContent}>
                 <h3 className={styles.categoryTitle}>OFERTAS</h3>

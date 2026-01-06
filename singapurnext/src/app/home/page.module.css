@@ -87,11 +87,11 @@
 /* === Hero Section === */
 .heroSection {
   position: relative;
-  height: 85vh;
-  min-height: 600px;
-  border-radius: 0 0 40px 40px;
+  height: 70vh;
+  min-height: 500px;
+  border-radius: 0 0 30px 30px;
   overflow: hidden;
-  margin-bottom: 4rem;
+  margin-bottom: 0.5rem;
   background: linear-gradient(135deg, rgba(16, 51, 89, 0.9) 0%, rgba(61, 178, 138, 0.7) 100%);
 }
 
@@ -112,7 +112,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 150px;
+  height: 100px; /* Reducido de 150px */
   background: linear-gradient(to top, var(--light-bg), transparent);
   z-index: 1;
 }
@@ -134,14 +134,14 @@
   text-align: center;
   color: var(--white);
   max-width: 800px;
-  padding: 2rem;
+  padding: 1.5rem; /* Reducido de 2rem */
   z-index: 3;
 }
 
 .heroTitle {
-  font-size: 4rem;
+  font-size: 3.5rem; /* Reducido de 4rem */
   font-weight: 800;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem; /* Reducido de 1.5rem */
   letter-spacing: -0.5px;
   line-height: 1.1;
   animation: fadeIn 1s ease-out;
@@ -160,18 +160,18 @@
 .titleHighlight::after {
   content: "";
   position: absolute;
-  bottom: -8px;
+  bottom: -5px; /* Reducido de -8px */
   left: 50%;
   transform: translateX(-50%);
   width: 60%;
-  height: 4px;
+  height: 3px; /* Reducido de 4px */
   background: var(--gradient-accent);
   border-radius: 2px;
 }
 
 .heroSubtitle {
-  font-size: 1.5rem;
-  margin-bottom: 3rem;
+  font-size: 1.3rem; /* Reducido de 1.5rem */
+  margin-bottom: 2rem; /* Reducido de 3rem */
   opacity: 0.9;
   line-height: 1.6;
   animation: fadeIn 1s ease-out 0.3s both;
@@ -179,18 +179,20 @@
 
 .heroButtons {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem; /* Reducido de 1.5rem */
   justify-content: center;
   flex-wrap: wrap;
   animation: fadeIn 1s ease-out 0.6s both;
+    width: 100%; /* Asegurar que ocupe todo el ancho */
+
 }
 
 .primaryButton,
 .secondaryButton {
-  padding: 1.25rem 2.5rem;
+  padding: 1rem 2rem;
   border-radius: 50px;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1rem;
   text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
@@ -198,19 +200,19 @@
   justify-content: center;
   position: relative;
   overflow: hidden;
-  min-width: 180px;
+  min-width: 160px;
 }
 
 .primaryButton {
   background: var(--gradient-accent);
   color: var(--white);
   border: none;
-  box-shadow: 0 8px 25px rgba(61, 178, 138, 0.3);
+  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3); /* Reducido de 8px 25px */
 }
 
 .primaryButton:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 35px rgba(61, 178, 138, 0.4);
+  transform: translateY(-4px); /* Reducido de -5px */
+  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4); /* Reducido de 15px 35px */
 }
 
 .primaryButton::before {
@@ -238,12 +240,12 @@
 .secondaryButton:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--white);
-  transform: translateY(-5px);
+  transform: translateY(-4px); /* Reducido de -5px */
 }
 
 /* === Categories Section === */
 .categoriesContainer {
-  padding: 4rem 0;
+  padding: 2rem 0; /* Reducido de 4rem 0 */
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s ease, transform 0.8s ease;
@@ -255,39 +257,39 @@
 }
 
 .sectionTitle {
-  font-size: 2.5rem;
+  font-size: 2.2rem; /* Reducido de 2.5rem */
   font-weight: 800;
   color: var(--primary-blue);
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem; /* Reducido de 1rem */
   position: relative;
 }
 
 .sectionTitle::after {
   content: "";
   position: absolute;
-  bottom: -10px;
+  bottom: -8px; /* Reducido de -10px */
   left: 50%;
   transform: translateX(-50%);
-  width: 80px;
-  height: 4px;
+  width: 60px; /* Reducido de 80px */
+  height: 3px; /* Reducido de 4px */
   background: var(--gradient-accent);
   border-radius: 2px;
 }
 
 .sectionSubtitle {
-  font-size: 1.1rem;
+  font-size: 1rem; /* Reducido de 1.1rem */
   color: var(--gray-dark);
   text-align: center;
   max-width: 600px;
-  margin: 0 auto 3rem;
-  line-height: 1.6;
+  margin: 0 auto 2rem; /* Reducido de 3rem */
+  line-height: 1.5;
 }
 
 .categoriesGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 2rem;
+  gap: 1.5rem; /* Reducido de 2rem */
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -296,11 +298,11 @@
 .categoryCard {
   text-decoration: none;
   color: inherit;
-  border-radius: 20px;
+  border-radius: 15px; /* Reducido de 20px */
   overflow: hidden;
   position: relative;
   aspect-ratio: 4 / 3;
-  box-shadow: 0 10px 30px var(--shadow-light);
+  box-shadow: 0 8px 25px var(--shadow-light); /* Reducido de 10px 30px */
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
   transform: translateY(30px);
@@ -323,8 +325,8 @@
 }
 
 .categoryCard:hover {
-  transform: translateY(-10px) scale(1.02);
-  box-shadow: 0 20px 40px var(--shadow-medium);
+  transform: translateY(-8px) scale(1.02); /* Reducido de -10px */
+  box-shadow: 0 15px 35px var(--shadow-medium); /* Reducido de 20px 40px */
 }
 
 .categoryImageContainer {
@@ -371,55 +373,48 @@
 
 .discountBadge {
   position: absolute;
-  top: 20px;
-  right: 20px;
+  top: 15px; /* Reducido de 20px */
+  right: 15px; /* Reducido de 20px */
   background: var(--gradient-accent);
   color: var(--white);
-  padding: 0.5rem 1.25rem;
-  border-radius: 25px;
+  padding: 0.4rem 1rem; /* Reducido de 0.5rem 1.25rem */
+  border-radius: 20px;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.85rem; /* Reducido de 0.9rem */
   z-index: 2;
-  box-shadow: 0 4px 15px rgba(233, 86, 109, 0.3);
+  box-shadow: 0 3px 12px rgba(233, 86, 109, 0.3); /* Reducido de 4px 15px */
 }
 
 /* Título en esquina inferior izquierda */
 .categoryContent {
   position: absolute;
-  bottom: 20px;
-  left: 20px;
+  bottom: 15px; /* Reducido de 20px */
+  left: 15px; /* Reducido de 20px */
   z-index: 2;
   padding: 0;
 }
 
 .categoryTitle {
-  font-size: 2.2rem;
+  font-size: 1.8rem; /* Reducido de 2.2rem */
   font-weight: 800;
   color: var(--white);
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px; /* Reducido de 2px */
   margin: 0;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* Reducido de 10px */
 }
 
 .categoryCard:hover .categoryTitle {
-  transform: translateY(-5px);
-  letter-spacing: 3px;
-}
-
-/* Ocultar descripción y link */
-.categoryDescription,
-.categoryLink {
-  display: none;
+  transform: translateY(-4px); /* Reducido de -5px */
+  letter-spacing: 2px; /* Reducido de 3px */
 }
 
 /* === Values Section === */
 .valuesSection {
   background: var(--gradient-primary);
-  padding: 5rem 0;
-  border-radius: 40px;
-  margin: 4rem 0;
+  padding: 3rem 0; /* Reducido de 5rem 0 */
+  border-radius: 30px; /* Reducido de 40px */
+  margin: 2rem 0; /* Reducido de 4rem 0 */
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s ease, transform 0.8s ease;
@@ -433,26 +428,26 @@
 .valuesContainer {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 1.5rem; /* Reducido de 2rem */
 }
 
 .valuesTitle {
-  font-size: 2.5rem;
+  font-size: 2.2rem; /* Reducido de 2.5rem */
   font-weight: 800;
   color: var(--white);
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem; /* Reducido de 3rem */
   position: relative;
 }
 
 .valuesTitle::after {
   content: "";
   position: absolute;
-  bottom: -10px;
+  bottom: -8px; /* Reducido de -10px */
   left: 50%;
   transform: translateX(-50%);
-  width: 80px;
-  height: 4px;
+  width: 60px; /* Reducido de 80px */
+  height: 3px; /* Reducido de 4px */
   background: var(--gradient-accent);
   border-radius: 2px;
 }
@@ -460,15 +455,15 @@
 .valuesGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 2rem;
+  gap: 1.5rem; /* Reducido de 2rem */
 }
 
 .valueCard {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
-  padding: 2rem;
+  border-radius: 15px; /* Reducido de 20px */
+  padding: 1.5rem; /* Reducido de 2rem */
   text-align: center;
   transition: all 0.3s ease;
   opacity: 0;
@@ -493,31 +488,31 @@
 
 .valueCard:hover {
   background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-8px);
+  transform: translateY(-6px); /* Reducido de -8px */
   border-color: var(--secondary-green);
 }
 
 .valueIcon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: 2.5rem; /* Reducido de 3rem */
+  margin-bottom: 0.75rem; /* Reducido de 1rem */
 }
 
 .valueTitle {
-  font-size: 1.3rem;
+  font-size: 1.2rem; /* Reducido de 1.3rem */
   font-weight: 700;
   color: var(--white);
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem; /* Reducido de 1rem */
 }
 
 .valueDescription {
-  font-size: 0.95rem;
+  font-size: 0.9rem; /* Reducido de 0.95rem */
   color: rgba(255, 255, 255, 0.9);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* === CTA Section === */
 .ctaSection {
-  padding: 6rem 0;
+  padding: 4rem 0; /* Reducido de 6rem 0 */
   text-align: center;
   opacity: 0;
   transform: translateY(30px);
@@ -532,55 +527,55 @@
 .ctaContainer {
   max-width: 800px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 1.5rem; /* Reducido de 2rem */
 }
 
 .ctaTitle {
-  font-size: 2.5rem;
+  font-size: 2.2rem; /* Reducido de 2.5rem */
   font-weight: 800;
   color: var(--primary-blue);
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem; /* Reducido de 1.5rem */
   line-height: 1.2;
 }
 
 .ctaText {
-  font-size: 1.2rem;
+  font-size: 1.1rem; /* Reducido de 1.2rem */
   color: var(--gray-dark);
-  margin-bottom: 3rem;
-  line-height: 1.6;
+  margin-bottom: 2rem; /* Reducido de 3rem */
+  line-height: 1.5;
 }
 
 .ctaButtons {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem; /* Reducido de 1.5rem */
   justify-content: center;
   flex-wrap: wrap;
 }
 
 .ctaPrimaryButton,
 .ctaSecondaryButton {
-  padding: 1.25rem 2.5rem;
+  padding: 1rem 2rem; /* Reducido de 1.25rem 2.5rem */
   border-radius: 50px;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1rem; /* Reducido de 1.1rem */
   text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 180px;
+  min-width: 160px; /* Reducido de 180px */
 }
 
 .ctaPrimaryButton {
   background: var(--gradient-accent);
   color: var(--white);
   border: none;
-  box-shadow: 0 8px 25px rgba(61, 178, 138, 0.3);
+  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3); /* Reducido de 8px 25px */
 }
 
 .ctaPrimaryButton:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 35px rgba(61, 178, 138, 0.4);
+  transform: translateY(-4px); /* Reducido de -5px */
+  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4); /* Reducido de 15px 35px */
 }
 
 .ctaSecondaryButton {
@@ -592,55 +587,75 @@
 .ctaSecondaryButton:hover {
   background: var(--primary-blue);
   color: var(--white);
-  transform: translateY(-5px);
+  transform: translateY(-4px); /* Reducido de -5px */
+}
+
+/* Estilos para el Home simplificado */
+
+.loadingSkeleton {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* === Responsive Design === */
 @media (max-width: 1024px) {
   .heroTitle {
-    font-size: 3.5rem;
+    font-size: 3rem; /* Reducido de 3.5rem */
   }
 
   .categoriesGrid {
-    gap: 1.5rem;
+    gap: 1.25rem; /* Reducido de 1.5rem */
   }
 
   .categoryTitle {
-    font-size: 1.8rem;
+    font-size: 1.6rem; /* Reducido de 1.8rem */
   }
 }
 
 @media (max-width: 768px) {
   .heroSection {
-    height: 70vh;
-    min-height: 500px;
-    border-radius: 0 0 30px 30px;
-    margin-bottom: 3rem;
+    height: 60vh; /* Reducido de 70vh */
+    min-height: 450px; /* Reducido de 500px */
+    border-radius: 0 0 20px 20px; /* Reducido de 30px */
+    margin-bottom: 1.5rem; /* Reducido de 3rem */
   }
 
   .heroTitle {
-    font-size: 2.8rem;
+    font-size: 2.5rem; /* Reducido de 2.8rem */
   }
 
   .heroSubtitle {
-    font-size: 1.2rem;
+    font-size: 1.1rem; /* Reducido de 1.2rem */
   }
 
   .primaryButton,
   .secondaryButton {
-    padding: 1rem 2rem;
-    min-width: 160px;
+    padding: 0.9rem 1.8rem; /* Reducido de 1rem 2rem */
+    min-width: 140px; /* Reducido de 160px */
   }
 
   .sectionTitle,
   .valuesTitle,
   .ctaTitle {
-    font-size: 2rem;
+    font-size: 1.8rem; /* Reducido de 2rem */
   }
 
   .categoriesGrid {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: 1.25rem; /* Reducido de 1.5rem */
   }
 
   .categoryCard {
@@ -648,7 +663,7 @@
   }
 
   .categoryTitle {
-    font-size: 1.6rem;
+    font-size: 1.4rem; /* Reducido de 1.6rem */
   }
 
   .valuesGrid {
@@ -663,18 +678,18 @@
   .ctaPrimaryButton,
   .ctaSecondaryButton {
     width: 100%;
-    max-width: 300px;
+    max-width: 280px; /* Reducido de 300px */
   }
 }
 
 @media (max-width: 480px) {
   .heroSection {
-    height: 60vh;
-    min-height: 450px;
+    height: 55vh; /* Reducido de 60vh */
+    min-height: 400px; /* Reducido de 450px */
   }
 
   .heroTitle {
-    font-size: 2.2rem;
+    font-size: 2rem; /* Reducido de 2.2rem */
   }
 
   .heroSubtitle {
@@ -683,19 +698,19 @@
 
   .heroButtons {
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem; /* Reducido de 1rem */
   }
 
   .primaryButton,
   .secondaryButton {
     width: 100%;
-    max-width: 250px;
+    max-width: 220px; /* Reducido de 250px */
   }
 
   .sectionTitle,
   .valuesTitle,
   .ctaTitle {
-    font-size: 1.8rem;
+    font-size: 1.6rem; /* Reducido de 1.8rem */
   }
 
   .categoryCard {
@@ -703,7 +718,7 @@
   }
 
   .categoryTitle {
-    font-size: 1.4rem;
+    font-size: 1.2rem; /* Reducido de 1.4rem */
   }
 
   .valuesGrid {
@@ -711,7 +726,7 @@
   }
 
   .valueCard {
-    padding: 1.5rem;
+    padding: 1.25rem; /* Reducido de 1.5rem */
   }
 
   .ctaText {
