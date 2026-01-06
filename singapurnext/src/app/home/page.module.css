@@ -112,7 +112,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 100px; /* Reducido de 150px */
+  height: 100px;
   background: linear-gradient(to top, var(--light-bg), transparent);
   z-index: 1;
 }
@@ -134,14 +134,15 @@
   text-align: center;
   color: var(--white);
   max-width: 800px;
-  padding: 1.5rem; /* Reducido de 2rem */
+  padding: 1.5rem;
   z-index: 3;
+  width: 100%;
 }
 
 .heroTitle {
-  font-size: 3.5rem; /* Reducido de 4rem */
+  font-size: 3.5rem;
   font-weight: 800;
-  margin-bottom: 1rem; /* Reducido de 1.5rem */
+  margin-bottom: 1rem;
   letter-spacing: -0.5px;
   line-height: 1.1;
   animation: fadeIn 1s ease-out;
@@ -160,18 +161,18 @@
 .titleHighlight::after {
   content: "";
   position: absolute;
-  bottom: -5px; /* Reducido de -8px */
+  bottom: -5px;
   left: 50%;
   transform: translateX(-50%);
   width: 60%;
-  height: 3px; /* Reducido de 4px */
+  height: 3px;
   background: var(--gradient-accent);
   border-radius: 2px;
 }
 
 .heroSubtitle {
-  font-size: 1.3rem; /* Reducido de 1.5rem */
-  margin-bottom: 2rem; /* Reducido de 3rem */
+  font-size: 1.3rem;
+  margin-bottom: 2rem;
   opacity: 0.9;
   line-height: 1.6;
   animation: fadeIn 1s ease-out 0.3s both;
@@ -179,12 +180,11 @@
 
 .heroButtons {
   display: flex;
-  gap: 1rem; /* Reducido de 1.5rem */
+  gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
   animation: fadeIn 1s ease-out 0.6s both;
-    width: 100%; /* Asegurar que ocupe todo el ancho */
-
+  width: 100%;
 }
 
 .primaryButton,
@@ -207,12 +207,12 @@
   background: var(--gradient-accent);
   color: var(--white);
   border: none;
-  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3); /* Reducido de 8px 25px */
+  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3);
 }
 
 .primaryButton:hover {
-  transform: translateY(-4px); /* Reducido de -5px */
-  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4); /* Reducido de 15px 35px */
+  transform: translateY(-4px);
+  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4);
 }
 
 .primaryButton::before {
@@ -240,12 +240,12 @@
 .secondaryButton:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--white);
-  transform: translateY(-4px); /* Reducido de -5px */
+  transform: translateY(-4px);
 }
 
 /* === Categories Section === */
 .categoriesContainer {
-  padding: 2rem 0; /* Reducido de 4rem 0 */
+  padding: 2rem 0;
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s ease, transform 0.8s ease;
@@ -257,39 +257,39 @@
 }
 
 .sectionTitle {
-  font-size: 2.2rem; /* Reducido de 2.5rem */
+  font-size: 2.2rem;
   font-weight: 800;
   color: var(--primary-blue);
   text-align: center;
-  margin-bottom: 0.75rem; /* Reducido de 1rem */
+  margin-bottom: 0.75rem;
   position: relative;
 }
 
 .sectionTitle::after {
   content: "";
   position: absolute;
-  bottom: -8px; /* Reducido de -10px */
+  bottom: -8px;
   left: 50%;
   transform: translateX(-50%);
-  width: 60px; /* Reducido de 80px */
-  height: 3px; /* Reducido de 4px */
+  width: 60px;
+  height: 3px;
   background: var(--gradient-accent);
   border-radius: 2px;
 }
 
 .sectionSubtitle {
-  font-size: 1rem; /* Reducido de 1.1rem */
+  font-size: 1rem;
   color: var(--gray-dark);
   text-align: center;
   max-width: 600px;
-  margin: 0 auto 2rem; /* Reducido de 3rem */
+  margin: 0 auto 2rem;
   line-height: 1.5;
 }
 
 .categoriesGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem; /* Reducido de 2rem */
+  gap: 1.5rem;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -298,11 +298,11 @@
 .categoryCard {
   text-decoration: none;
   color: inherit;
-  border-radius: 15px; /* Reducido de 20px */
+  border-radius: 15px;
   overflow: hidden;
   position: relative;
   aspect-ratio: 4 / 3;
-  box-shadow: 0 8px 25px var(--shadow-light); /* Reducido de 10px 30px */
+  box-shadow: 0 8px 25px var(--shadow-light);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
   transform: translateY(30px);
@@ -325,8 +325,8 @@
 }
 
 .categoryCard:hover {
-  transform: translateY(-8px) scale(1.02); /* Reducido de -10px */
-  box-shadow: 0 15px 35px var(--shadow-medium); /* Reducido de 20px 40px */
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 15px 35px var(--shadow-medium);
 }
 
 .categoryImageContainer {
@@ -373,48 +373,48 @@
 
 .discountBadge {
   position: absolute;
-  top: 15px; /* Reducido de 20px */
-  right: 15px; /* Reducido de 20px */
+  top: 15px;
+  right: 15px;
   background: var(--gradient-accent);
   color: var(--white);
-  padding: 0.4rem 1rem; /* Reducido de 0.5rem 1.25rem */
+  padding: 0.4rem 1rem;
   border-radius: 20px;
   font-weight: 700;
-  font-size: 0.85rem; /* Reducido de 0.9rem */
+  font-size: 0.85rem;
   z-index: 2;
-  box-shadow: 0 3px 12px rgba(233, 86, 109, 0.3); /* Reducido de 4px 15px */
+  box-shadow: 0 3px 12px rgba(233, 86, 109, 0.3);
 }
 
 /* Título en esquina inferior izquierda */
 .categoryContent {
   position: absolute;
-  bottom: 15px; /* Reducido de 20px */
-  left: 15px; /* Reducido de 20px */
+  bottom: 15px;
+  left: 15px;
   z-index: 2;
   padding: 0;
 }
 
 .categoryTitle {
-  font-size: 1.8rem; /* Reducido de 2.2rem */
+  font-size: 1.8rem;
   font-weight: 800;
   color: var(--white);
   text-transform: uppercase;
-  letter-spacing: 1.5px; /* Reducido de 2px */
+  letter-spacing: 1.5px;
   margin: 0;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* Reducido de 10px */
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .categoryCard:hover .categoryTitle {
-  transform: translateY(-4px); /* Reducido de -5px */
-  letter-spacing: 2px; /* Reducido de 3px */
+  transform: translateY(-4px);
+  letter-spacing: 2px;
 }
 
 /* === Values Section === */
 .valuesSection {
   background: var(--gradient-primary);
-  padding: 3rem 0; /* Reducido de 5rem 0 */
-  border-radius: 30px; /* Reducido de 40px */
-  margin: 2rem 0; /* Reducido de 4rem 0 */
+  padding: 3rem 0;
+  border-radius: 30px;
+  margin: 2rem 0;
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s ease, transform 0.8s ease;
@@ -428,26 +428,26 @@
 .valuesContainer {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.5rem; /* Reducido de 2rem */
+  padding: 0 1.5rem;
 }
 
 .valuesTitle {
-  font-size: 2.2rem; /* Reducido de 2.5rem */
+  font-size: 2.2rem;
   font-weight: 800;
   color: var(--white);
   text-align: center;
-  margin-bottom: 2rem; /* Reducido de 3rem */
+  margin-bottom: 2rem;
   position: relative;
 }
 
 .valuesTitle::after {
   content: "";
   position: absolute;
-  bottom: -8px; /* Reducido de -10px */
+  bottom: -8px;
   left: 50%;
   transform: translateX(-50%);
-  width: 60px; /* Reducido de 80px */
-  height: 3px; /* Reducido de 4px */
+  width: 60px;
+  height: 3px;
   background: var(--gradient-accent);
   border-radius: 2px;
 }
@@ -455,15 +455,15 @@
 .valuesGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem; /* Reducido de 2rem */
+  gap: 1.5rem;
 }
 
 .valueCard {
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px; /* Reducido de 20px */
-  padding: 1.5rem; /* Reducido de 2rem */
+  border-radius: 15px;
+  padding: 1.5rem;
   text-align: center;
   transition: all 0.3s ease;
   opacity: 0;
@@ -488,31 +488,31 @@
 
 .valueCard:hover {
   background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-6px); /* Reducido de -8px */
+  transform: translateY(-6px);
   border-color: var(--secondary-green);
 }
 
 .valueIcon {
-  font-size: 2.5rem; /* Reducido de 3rem */
-  margin-bottom: 0.75rem; /* Reducido de 1rem */
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .valueTitle {
-  font-size: 1.2rem; /* Reducido de 1.3rem */
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--white);
-  margin-bottom: 0.75rem; /* Reducido de 1rem */
+  margin-bottom: 0.75rem;
 }
 
 .valueDescription {
-  font-size: 0.9rem; /* Reducido de 0.95rem */
+  font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.9);
   line-height: 1.5;
 }
 
 /* === CTA Section === */
 .ctaSection {
-  padding: 4rem 0; /* Reducido de 6rem 0 */
+  padding: 4rem 0;
   text-align: center;
   opacity: 0;
   transform: translateY(30px);
@@ -527,55 +527,55 @@
 .ctaContainer {
   max-width: 800px;
   margin: 0 auto;
-  padding: 0 1.5rem; /* Reducido de 2rem */
+  padding: 0 1.5rem;
 }
 
 .ctaTitle {
-  font-size: 2.2rem; /* Reducido de 2.5rem */
+  font-size: 2.2rem;
   font-weight: 800;
   color: var(--primary-blue);
-  margin-bottom: 1rem; /* Reducido de 1.5rem */
+  margin-bottom: 1rem;
   line-height: 1.2;
 }
 
 .ctaText {
-  font-size: 1.1rem; /* Reducido de 1.2rem */
+  font-size: 1.1rem;
   color: var(--gray-dark);
-  margin-bottom: 2rem; /* Reducido de 3rem */
+  margin-bottom: 2rem;
   line-height: 1.5;
 }
 
 .ctaButtons {
   display: flex;
-  gap: 1rem; /* Reducido de 1.5rem */
+  gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
 }
 
 .ctaPrimaryButton,
 .ctaSecondaryButton {
-  padding: 1rem 2rem; /* Reducido de 1.25rem 2.5rem */
+  padding: 1rem 2rem;
   border-radius: 50px;
   font-weight: 700;
-  font-size: 1rem; /* Reducido de 1.1rem */
+  font-size: 1rem;
   text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 160px; /* Reducido de 180px */
+  min-width: 160px;
 }
 
 .ctaPrimaryButton {
   background: var(--gradient-accent);
   color: var(--white);
   border: none;
-  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3); /* Reducido de 8px 25px */
+  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3);
 }
 
 .ctaPrimaryButton:hover {
-  transform: translateY(-4px); /* Reducido de -5px */
-  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4); /* Reducido de 15px 35px */
+  transform: translateY(-4px);
+  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4);
 }
 
 .ctaSecondaryButton {
@@ -587,11 +587,10 @@
 .ctaSecondaryButton:hover {
   background: var(--primary-blue);
   color: var(--white);
-  transform: translateY(-4px); /* Reducido de -5px */
+  transform: translateY(-4px);
 }
 
 /* Estilos para el Home simplificado */
-
 .loadingSkeleton {
   width: 100%;
   height: 100%;
@@ -613,49 +612,59 @@
 /* === Responsive Design === */
 @media (max-width: 1024px) {
   .heroTitle {
-    font-size: 3rem; /* Reducido de 3.5rem */
+    font-size: 3rem;
   }
 
   .categoriesGrid {
-    gap: 1.25rem; /* Reducido de 1.5rem */
+    gap: 1.25rem;
   }
 
   .categoryTitle {
-    font-size: 1.6rem; /* Reducido de 1.8rem */
+    font-size: 1.6rem;
   }
 }
 
 @media (max-width: 768px) {
   .heroSection {
-    height: 60vh; /* Reducido de 70vh */
-    min-height: 450px; /* Reducido de 500px */
-    border-radius: 0 0 20px 20px; /* Reducido de 30px */
-    margin-bottom: 1.5rem; /* Reducido de 3rem */
+    height: 60vh;
+    min-height: 450px;
+    border-radius: 0 0 20px 20px;
+    margin-bottom: 1.5rem;
   }
 
   .heroTitle {
-    font-size: 2.5rem; /* Reducido de 2.8rem */
+    font-size: 2.5rem;
   }
 
   .heroSubtitle {
-    font-size: 1.1rem; /* Reducido de 1.2rem */
+    font-size: 1.1rem;
+  }
+
+  .heroButtons {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
   }
 
   .primaryButton,
   .secondaryButton {
-    padding: 0.9rem 1.8rem; /* Reducido de 1rem 2rem */
-    min-width: 140px; /* Reducido de 160px */
+    padding: 0.9rem 1.8rem;
+    min-width: 140px;
+    width: 100%;
   }
 
   .sectionTitle,
   .valuesTitle,
   .ctaTitle {
-    font-size: 1.8rem; /* Reducido de 2rem */
+    font-size: 1.8rem;
   }
 
   .categoriesGrid {
     grid-template-columns: 1fr;
-    gap: 1.25rem; /* Reducido de 1.5rem */
+    gap: 1.25rem;
   }
 
   .categoryCard {
@@ -663,7 +672,7 @@
   }
 
   .categoryTitle {
-    font-size: 1.4rem; /* Reducido de 1.6rem */
+    font-size: 1.4rem;
   }
 
   .valuesGrid {
@@ -678,39 +687,46 @@
   .ctaPrimaryButton,
   .ctaSecondaryButton {
     width: 100%;
-    max-width: 280px; /* Reducido de 300px */
+    max-width: 280px;
   }
 }
 
 @media (max-width: 480px) {
   .heroSection {
-    height: 55vh; /* Reducido de 60vh */
-    min-height: 400px; /* Reducido de 450px */
+    height: 55vh;
+    min-height: 400px;
   }
 
   .heroTitle {
-    font-size: 2rem; /* Reducido de 2.2rem */
+    font-size: 2rem;
   }
 
   .heroSubtitle {
     font-size: 1rem;
   }
 
+  .heroContent {
+    padding: 1rem;
+  }
+
   .heroButtons {
     flex-direction: column;
-    gap: 0.75rem; /* Reducido de 1rem */
+    align-items: center;
+    gap: 0.75rem;
+    width: 90%;
+    max-width: 280px;
+    margin: 0 auto;
   }
 
   .primaryButton,
   .secondaryButton {
     width: 100%;
-    max-width: 220px; /* Reducido de 250px */
   }
 
   .sectionTitle,
   .valuesTitle,
   .ctaTitle {
-    font-size: 1.6rem; /* Reducido de 1.8rem */
+    font-size: 1.6rem;
   }
 
   .categoryCard {
@@ -718,7 +734,7 @@
   }
 
   .categoryTitle {
-    font-size: 1.2rem; /* Reducido de 1.4rem */
+    font-size: 1.2rem;
   }
 
   .valuesGrid {
@@ -726,7 +742,7 @@
   }
 
   .valueCard {
-    padding: 1.25rem; /* Reducido de 1.5rem */
+    padding: 1.25rem;
   }
 
   .ctaText {
