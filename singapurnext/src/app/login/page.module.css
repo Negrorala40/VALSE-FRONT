@@ -1,89 +1,746 @@
-.loginContainer {
+/* ========================================
+   A MARTE - Login Component
+   ======================================== */
+
+/* Variables CSS locales */
+.loginPage {
+  --amarte-primary: #103359;
+  --amarte-primary-light: #1a4a7a;
+  --amarte-primary-dark: #0a2340;
+  --amarte-secondary: #3db28a;
+  --amarte-secondary-light: #4fc99d;
+  --amarte-secondary-dark: #2d9270;
+  --amarte-purple: #806ff7;
+  --amarte-coral: #e9566d;
+  --amarte-orange: #f47b47;
+  --amarte-yellow: #ffd449;
+  --amarte-white: #ffffff;
+  --amarte-gray-50: #f8fafc;
+  --amarte-gray-100: #f1f5f9;
+  --amarte-gray-200: #e2e8f0;
+  --amarte-gray-300: #cbd5e1;
+  --amarte-gray-400: #94a3b8;
+  --amarte-gray-500: #64748b;
+  --amarte-gray-600: #475569;
+  
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: #f2faff;
+  background: linear-gradient(
+    135deg,
+    var(--amarte-primary-dark) 0%,
+    var(--amarte-primary) 50%,
+    var(--amarte-primary-light) 100%
+  );
   padding: 1rem;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Fredoka', sans-serif;
 }
 
-.formContainer {
-  background-color: #10345c;
-  color: #ffffff;
-  padding: 2rem;
-  border-radius: 12px;
+/* ========================================
+   Decorative Stars
+   ======================================== */
+
+.loginStars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.star {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--amarte-white);
+  border-radius: 50%;
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+.star1 {
+  top: 10%;
+  left: 15%;
+  animation-delay: 0s;
+}
+.star2 {
+  top: 20%;
+  left: 80%;
+  animation-delay: 0.5s;
+  width: 3px;
+  height: 3px;
+}
+.star3 {
+  top: 40%;
+  left: 5%;
+  animation-delay: 1s;
+}
+.star4 {
+  top: 60%;
+  left: 90%;
+  animation-delay: 1.5s;
+  width: 5px;
+  height: 5px;
+}
+.star5 {
+  top: 80%;
+  left: 25%;
+  animation-delay: 2s;
+  width: 3px;
+  height: 3px;
+}
+.star6 {
+  top: 15%;
+  left: 60%;
+  animation-delay: 2.5s;
+}
+
+@keyframes twinkle {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+/* ========================================
+   Decorative Planets
+   ======================================== */
+
+.loginPlanet {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.planet1 {
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle at 30% 30%, var(--amarte-purple), transparent 70%);
+  opacity: 0.2;
+  top: -50px;
+  right: -50px;
+  animation: float 8s ease-in-out infinite;
+}
+
+.planet2 {
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle at 30% 30%, var(--amarte-secondary), transparent 70%);
+  opacity: 0.15;
+  bottom: 10%;
+  left: -30px;
+  animation: float 10s ease-in-out infinite reverse;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+/* ========================================
+   Login Card
+   ======================================== */
+
+.loginCard {
+  background: var(--amarte-white);
+  border-radius: 24px;
   width: 100%;
-  max-width: 400px;
-  box-shadow: 0 4px 12px rgba(0, 245, 255, 0.25);
+  max-width: 440px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  animation: slideUp 0.5s ease-out;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Top decorative bar */
+.loginCardTopBar {
+  height: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--amarte-secondary) 0%,
+    var(--amarte-purple) 25%,
+    var(--amarte-coral) 50%,
+    var(--amarte-orange) 75%,
+    var(--amarte-yellow) 100%
+  );
+}
+
+/* ========================================
+   Brand Section
+   ======================================== */
+
+.loginCardBrand {
   text-align: center;
+  padding: 2rem 2rem 1.5rem;
 }
 
-.formContainer h2 {
-  font-size: 1.8rem;
-  margin-bottom: 1.5rem;
-  color: #ffd43b;
+.loginCardLogo {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 1rem;
+  background: linear-gradient(135deg, var(--amarte-primary) 0%, var(--amarte-primary-light) 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--amarte-secondary);
+  box-shadow: 0 4px 12px rgba(16, 51, 89, 0.3);
 }
 
-.formGroup {
-  margin-bottom: 1.5rem;
-  text-align: left;
+.loginCardLogoSvg {
+  width: 32px;
+  height: 32px;
 }
 
-.formGroup label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-  color: #ffd43b;
+.loginCardBrandName {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--amarte-primary);
+  margin: 0 0 0.25rem;
+  letter-spacing: -0.5px;
+  font-family: var(--font-fredoka), 'Fredoka', sans-serif;
 }
 
-.formGroup input {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #02f9a6;
-  border-radius: 6px;
-  font-size: 1rem;
-  background-color: #fff;
-  color: #10345c;
+.loginCardTagline {
+  font-size: 0.875rem;
+  color: var(--amarte-gray-500);
+  margin: 0;
 }
 
-.btnPrimary {
-  background-color: #00f5ff;
-  color: #10345c;
-  padding: 0.75rem 1.5rem;
+/* ========================================
+   Tabs
+   ======================================== */
+
+.loginCardTabs {
+  display: flex;
+  margin: 0 1.5rem;
+  background: var(--amarte-gray-100);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.loginCardTab {
+  flex: 1;
+  padding: 0.75rem 1rem;
   border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s ease, transform 0.2s ease;
-  width: 100%;
-  font-weight: bold;
-}
-
-.btnPrimary:hover {
-  background-color: #02f9a6;
-  transform: translateY(-2px);
-}
-
-.toggleText {
-  margin-top: 1rem;
+  background: transparent;
   font-size: 0.9rem;
-  color: #d0f0ff;
-}
-
-.toggleLink {
-  color: #ffd43b;
+  font-weight: 600;
+  color: var(--amarte-gray-500);
   cursor: pointer;
-  font-weight: bold;
-  margin-left: 0.3rem;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  font-family: var(--font-fredoka), 'Fredoka', sans-serif;
+}
+
+.loginCardTab:hover:not(.loginCardTabActive) {
+  color: var(--amarte-primary);
+}
+
+.loginCardTabActive {
+  background: var(--amarte-white);
+  color: var(--amarte-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ========================================
+   Error Message
+   ======================================== */
+
+.loginCardError {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 1.5rem 0;
+  padding: 0.75rem 1rem;
+  background: rgba(233, 86, 109, 0.1);
+  border: 1px solid rgba(233, 86, 109, 0.2);
+  border-radius: 10px;
+  color: var(--amarte-coral);
+  font-size: 0.875rem;
+  animation: shake 0.4s ease-in-out;
+}
+
+.loginCardErrorSvg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* ========================================
+   Form
+   ======================================== */
+
+.loginCardForm {
+  padding: 1.5rem;
+}
+
+.loginCardRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.loginCardField {
+  margin-bottom: 1.25rem;
+}
+
+.loginCardLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--amarte-primary);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-family: var(--font-fredoka), 'Fredoka', sans-serif;
+}
+
+.loginCardInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.loginCardInputIcon {
+  position: absolute;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  color: var(--amarte-gray-400);
+  pointer-events: none;
+  transition: color 0.2s ease;
+}
+
+.loginCardInput {
+  width: 100%;
+  padding: 0.875rem 1rem 0.875rem 2.75rem;
+  border: 2px solid var(--amarte-gray-200);
+  border-radius: 12px;
+  font-size: 1rem;
+  color: var(--amarte-primary);
+  background: var(--amarte-white);
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.loginCardInput::placeholder {
+  color: var(--amarte-gray-400);
+}
+
+.loginCardInput:hover {
+  border-color: var(--amarte-gray-300);
+}
+
+.loginCardInput:focus {
+  outline: none;
+  border-color: var(--amarte-secondary);
+  box-shadow: 0 0 0 4px rgba(61, 178, 138, 0.15);
+}
+
+/* Password toggle */
+.loginCardTogglePassword {
+  position: absolute;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--amarte-gray-400);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.loginCardTogglePassword:hover {
+  color: var(--amarte-primary);
+  background: var(--amarte-gray-100);
+}
+
+.loginCardTogglePasswordSvg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Forgot password */
+.loginCardForgot {
+  text-align: right;
+  margin-top: -0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.loginCardForgot a {
+  font-size: 0.85rem;
+  color: var(--amarte-purple);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.loginCardForgot a:hover {
+  color: var(--amarte-primary);
   text-decoration: underline;
-  transition: color 0.3s ease;
 }
 
-.toggleLink:hover {
-  color: #02f9a6;
+/* ========================================
+   Submit Button
+   ======================================== */
+
+.loginCardSubmit {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, var(--amarte-secondary) 0%, var(--amarte-secondary-dark) 100%);
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--amarte-white);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(61, 178, 138, 0.35);
+  font-family: var(--font-fredoka), 'Fredoka', sans-serif;
 }
 
-.errorText {
-  color: #ff4d4d;
-  margin-bottom: 1rem;
+.loginCardSubmit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.45);
+}
+
+.loginCardSubmit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.loginCardSubmit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.loginCardSubmit svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.2s ease;
+}
+
+.loginCardSubmit:hover:not(:disabled) svg {
+  transform: translateX(4px);
+}
+
+/* Spinner */
+.loginCardSpinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--amarte-white);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loginCardSpinnerDark {
+  border-color: rgba(16, 51, 89, 0.2);
+  border-top-color: var(--amarte-primary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   Divider
+   ======================================== */
+
+.loginCardDivider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.loginCardDivider::before,
+.loginCardDivider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--amarte-gray-200);
+}
+
+.loginCardDivider span {
+  font-size: 0.8rem;
+  color: var(--amarte-gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ========================================
+   Google Button
+   ======================================== */
+
+.loginCardGoogle {
+  width: calc(100% - 3rem);
+  margin: 0 1.5rem;
+  padding: 0.875rem 1.5rem;
+  background: var(--amarte-white);
+  border: 2px solid var(--amarte-gray-200);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--amarte-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  transition: all 0.2s ease;
+  font-family: var(--font-fredoka), 'Fredoka', sans-serif;
+}
+
+.loginCardGoogle:hover:not(:disabled) {
+  border-color: var(--amarte-gray-300);
+  background: var(--amarte-gray-50);
+}
+
+.loginCardGoogle:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.loginCardGoogle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ========================================
+   Footer
+   ======================================== */
+
+.loginCardFooter {
+  text-align: center;
+  padding: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--amarte-gray-500);
+  line-height: 1.6;
+}
+
+.loginCardFooter a {
+  color: var(--amarte-purple);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.loginCardFooter a:hover {
+  text-decoration: underline;
+}
+
+/* ========================================
+   Responsive - Tablet & Mobile
+   ======================================== */
+
+@media (max-width: 480px) {
+  .loginPage {
+    padding: 0.75rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .loginCard {
+    border-radius: 20px;
+  }
+
+  .loginCardBrand {
+    padding: 1.5rem 1.5rem 1rem;
+  }
+
+  .loginCardLogo {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+  }
+
+  .loginCardLogoSvg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .loginCardBrandName {
+    font-size: 1.5rem;
+  }
+
+  .loginCardTagline {
+    font-size: 0.8rem;
+  }
+
+  .loginCardTabs {
+    margin: 0 1rem;
+  }
+
+  .loginCardTab {
+    padding: 0.625rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .loginCardError {
+    margin: 1rem 1rem 0;
+  }
+
+  .loginCardForm {
+    padding: 1.25rem 1rem;
+  }
+
+  .loginCardRow {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .loginCardInput {
+    padding: 0.75rem 1rem 0.75rem 2.5rem;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  .loginCardSubmit {
+    padding: 0.875rem 1.25rem;
+  }
+
+  .loginCardDivider {
+    padding: 0 1rem;
+  }
+
+  .loginCardGoogle {
+    width: calc(100% - 2rem);
+    margin: 0 1rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .loginCardFooter {
+    padding: 1.25rem 1rem;
+  }
+
+  /* Hide larger decorative planets on mobile */
+  .planet1 {
+    width: 80px;
+    height: 80px;
+    top: -30px;
+    right: -30px;
+  }
+
+  .planet2 {
+    width: 60px;
+    height: 60px;
+    bottom: 5%;
+    left: -20px;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 360px) {
+  .loginPage {
+    padding: 0.5rem;
+    padding-top: 1rem;
+  }
+
+  .loginCardBrand {
+    padding: 1.25rem 1rem 0.75rem;
+  }
+
+  .loginCardTabs {
+    margin: 0 0.75rem;
+  }
+
+  .loginCardForm {
+    padding: 1rem 0.75rem;
+  }
+
+  .loginCardLabel {
+    font-size: 0.75rem;
+  }
+
+  .loginCardGoogle {
+    width: calc(100% - 1.5rem);
+    margin: 0 0.75rem;
+  }
+
+  .loginCardFooter {
+    padding: 1rem 0.75rem;
+  }
+}
+
+/* Landscape mode on mobile */
+@media (max-height: 600px) and (orientation: landscape) {
+  .loginPage {
+    align-items: flex-start;
+    padding-top: 1rem;
+  }
+
+  .loginCardBrand {
+    padding: 1rem 1.5rem 0.5rem;
+  }
+
+  .loginCardLogo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .loginCardBrandName {
+    font-size: 1.25rem;
+  }
+
+  .loginCardTagline {
+    display: none;
+  }
+}
+
+/* Focus states for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .star,
+  .loginPlanet,
+  .loginCard,
+  .loginCardError {
+    animation: none;
+  }
+
+  .loginCardSubmit:hover:not(:disabled) {
+    transform: none;
+  }
 }
