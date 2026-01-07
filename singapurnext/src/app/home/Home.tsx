@@ -37,12 +37,8 @@ interface Product {
 
 const Home = () => {
   const categoriesRef = useRef<HTMLDivElement>(null);
-  const valuesRef = useRef<HTMLElement>(null);
-  const ctaRef = useRef<HTMLElement>(null);
   const [isVisible, setIsVisible] = useState({
-    categories: false,
-    values: false,
-    cta: false
+    categories: false
   });
 
   // Estado para productos aleatorios
@@ -116,8 +112,6 @@ const Home = () => {
           if (entry.isIntersecting) {
             const section = entry.target.getAttribute('data-section');
             if (section === 'categories') setIsVisible(prev => ({...prev, categories: true}));
-            if (section === 'values') setIsVisible(prev => ({...prev, values: true}));
-            if (section === 'cta') setIsVisible(prev => ({...prev, cta: true}));
           }
         });
       },
@@ -128,8 +122,6 @@ const Home = () => {
     );
 
     if (categoriesRef.current) observer.observe(categoriesRef.current);
-    if (valuesRef.current) observer.observe(valuesRef.current);
-    if (ctaRef.current) observer.observe(ctaRef.current);
 
     return () => observer.disconnect();
   }, []);
@@ -137,15 +129,98 @@ const Home = () => {
   return (
     <div className={styles.homeContainer}>
       <main className={styles.mainContent}>
-        {/* Hero Section */}
+        {/* Hero Section con imagen grande */}
         <section className={styles.heroSection}>
-          <div className={styles.heroOverlay}>
+          <div className={styles.heroImageContainer}>
+            {/* Contenedor para la imagen con SVG overlay */}
+            <div className={styles.heroImageWrapper}>
+              <div className={styles.heroSvgContainer}>
+                {/* SVG de pijama en el centro */}
+                <svg 
+                  width="180" 
+                  height="180" 
+                  viewBox="0 0 100 100" 
+                  className={styles.pajamaSvg}
+                  aria-label="Ilustración de pijama"
+                >
+                  {/* Cuerpo del pijama */}
+                  <rect 
+                    x="25" 
+                    y="20" 
+                    width="50" 
+                    height="55" 
+                    rx="8" 
+                    fill="#3DB28A" 
+                    stroke="#103359" 
+                    strokeWidth="2"
+                  />
+                  
+                  {/* Manga izquierda */}
+                  <rect 
+                    x="15" 
+                    y="30" 
+                    width="15" 
+                    height="20" 
+                    rx="5" 
+                    fill="#806FF7" 
+                    stroke="#103359" 
+                    strokeWidth="2"
+                  />
+                  
+                  {/* Manga derecha */}
+                  <rect 
+                    x="70" 
+                    y="30" 
+                    width="15" 
+                    height="20" 
+                    rx="5" 
+                    fill="#806FF7" 
+                    stroke="#103359" 
+                    strokeWidth="2"
+                  />
+                  
+                  {/* Cuello */}
+                  <path 
+                    d="M35,20 Q50,10 65,20" 
+                    fill="none" 
+                    stroke="#E9566D" 
+                    strokeWidth="3" 
+                    strokeLinecap="round"
+                  />
+                  
+                  {/* Patrones decorativos */}
+                  <circle cx="40" cy="40" r="3" fill="#FFD449" />
+                  <circle cx="60" cy="40" r="3" fill="#FFD449" />
+                  <circle cx="50" cy="55" r="3" fill="#F47B47" />
+                  <circle cx="35" cy="60" r="3" fill="#F47B47" />
+                  <circle cx="65" cy="60" r="3" fill="#F47B47" />
+                  
+                  {/* Botones */}
+                  <circle cx="50" cy="30" r="2" fill="#103359" />
+                  <circle cx="50" cy="45" r="2" fill="#103359" />
+                </svg>
+              </div>
+              
+              {/* Imagen de fondo con niños en los extremos */}
+              <div className={styles.heroBackground}>
+                {/* Niño izquierdo */}
+                <div className={`${styles.childImage} ${styles.childLeft}`}>
+                  <div className={styles.childSilhouette}></div>
+                </div>
+                
+                {/* Niño derecho */}
+                <div className={`${styles.childImage} ${styles.childRight}`}>
+                  <div className={styles.childSilhouette}></div>
+                </div>
+              </div>
+            </div>
+            
             <div className={styles.heroContent}>
               <h1 className={styles.heroTitle}>
                 <span className={styles.titleHighlight}>AMARTE</span> COLOMBIA
               </h1>
               <p className={styles.heroSubtitle}>
-                Moda sostenible que expresa tu esencia
+                Pijamas que llevan a los pequeños a Marte
               </p>
               <div className={styles.heroButtons}>
                 <Link href="/menu" className={styles.primaryButton}>
@@ -159,17 +234,12 @@ const Home = () => {
           </div>
         </section>
 
-        {/* Categorías principales */}
+        {/* Categorías principales - 4 columnas en PC, 1 en móvil */}
         <div 
           ref={categoriesRef} 
           data-section="categories"
           className={`${styles.categoriesContainer} ${isVisible.categories ? styles.visible : ''}`}
         >
-          <h2 className={styles.sectionTitle}>Explora por Categoría</h2>
-          <p className={styles.sectionSubtitle}>
-            Descubre prendas diseñadas con pasión y compromiso ambiental
-          </p>
-          
           <div className={styles.categoriesGrid}>
             {/* Hombre */}
             <Link href="/menu?gender=hombre" className={styles.categoryCard}>
@@ -183,7 +253,7 @@ const Home = () => {
                       alt="Moda para Hombre"
                       fill
                       className={styles.categoryImage}
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      sizes="(max-width: 768px) 100vw, 25vw"
                       priority
                     />
                     <div className={styles.categoryOverlay}></div>
@@ -207,7 +277,7 @@ const Home = () => {
                       alt="Moda para Mujer"
                       fill
                       className={styles.categoryImage}
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      sizes="(max-width: 768px) 100vw, 25vw"
                       priority
                     />
                     <div className={styles.categoryOverlay}></div>
@@ -231,7 +301,7 @@ const Home = () => {
                       alt="Moda Unisex"
                       fill
                       className={styles.categoryImage}
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      sizes="(max-width: 768px) 100vw, 25vw"
                       priority
                     />
                     <div className={styles.categoryOverlay}></div>
@@ -250,13 +320,13 @@ const Home = () => {
                   <div className={styles.loadingSkeleton}></div>
                 ) : (
                   <>
-                    <div className={styles.discountBadge}>Hasta -50%</div>
+                    <div className={styles.discountBadge}>OFERTA</div>
                     <Image
                       src={categoryImages.oferta}
                       alt="Ofertas especiales"
                       fill
                       className={styles.categoryImage}
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      sizes="(max-width: 768px) 100vw, 25vw"
                       priority
                     />
                     <div className={styles.categoryOverlay}></div>
@@ -269,72 +339,6 @@ const Home = () => {
             </Link>
           </div>
         </div>
-
-        {/* Valores de la marca */}
-        <section 
-          ref={valuesRef}
-          data-section="values"
-          className={`${styles.valuesSection} ${isVisible.values ? styles.visible : ''}`}
-        >
-          <div className={styles.valuesContainer}>
-            <h2 className={styles.valuesTitle}>Nuestros Valores</h2>
-            <div className={styles.valuesGrid}>
-              <div className={styles.valueCard}>
-                <div className={styles.valueIcon}>🌱</div>
-                <h3 className={styles.valueTitle}>Sostenibilidad</h3>
-                <p className={styles.valueDescription}>
-                  Materiales ecológicos y procesos responsables con el medio ambiente
-                </p>
-              </div>
-              
-              <div className={styles.valueCard}>
-                <div className={styles.valueIcon}>👕</div>
-                <h3 className={styles.valueTitle}>Calidad</h3>
-                <p className={styles.valueDescription}>
-                  Prendas duraderas con acabados premium y atención al detalle
-                </p>
-              </div>
-              
-              <div className={styles.valueCard}>
-                <div className={styles.valueIcon}>🎨</div>
-                <h3 className={styles.valueTitle}>Diseño Único</h3>
-                <p className={styles.valueDescription}>
-                  Colecciones exclusivas que cuentan historias colombianas
-                </p>
-              </div>
-              
-              <div className={styles.valueCard}>
-                <div className={styles.valueIcon}>❤️</div>
-                <h3 className={styles.valueTitle}>Comercio Justo</h3>
-                <p className={styles.valueDescription}>
-                  Apoyo a artesanos locales y condiciones laborales dignas
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Call to Action */}
-        <section 
-          ref={ctaRef}
-          data-section="cta"
-          className={`${styles.ctaSection} ${isVisible.cta ? styles.visible : ''}`}
-        >
-          <div className={styles.ctaContainer}>
-            <h2 className={styles.ctaTitle}>¿Listo para vestir con conciencia?</h2>
-            <p className={styles.ctaText}>
-              Únete a nuestra comunidad y recibe grandes beneficios al crear tu cuenta
-            </p>
-            <div className={styles.ctaButtons}>
-              <Link href="/login" className={styles.ctaPrimaryButton}>
-                Crear Cuenta
-              </Link>
-              <Link href="/menu" className={styles.ctaSecondaryButton}>
-                Ver Catálogo
-              </Link>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );

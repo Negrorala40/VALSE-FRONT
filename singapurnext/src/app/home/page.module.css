@@ -15,9 +15,8 @@
   --gradient-primary: linear-gradient(135deg, var(--primary-blue) 0%, #1a4a7a 100%);
   --gradient-accent: linear-gradient(90deg, var(--secondary-green) 0%, var(--accent-purple) 50%, var(--accent-red) 100%);
 }
-
-.main.page {
-  margin-top: 4rem;
+.homeContainer {
+  margin-top: 5rem;
 }
 /* === Animaciones === */
 @keyframes fadeIn {
@@ -73,12 +72,22 @@
   }
 }
 
+@keyframes float {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-10px);
+  }
+}
+
 /* === Contenedor principal === */
 .homeContainer {
   min-height: 100vh;
   background: var(--light-bg);
   font-family: "Montserrat", "Segoe UI", sans-serif;
   overflow-x: hidden;
+  margin-top: 5rem;
 }
 
 .mainContent {
@@ -87,68 +96,149 @@
   padding: 0 1rem;
 }
 
-/* === Hero Section === */
+/* === Hero Section - Imagen grande rectangular === */
 .heroSection {
   position: relative;
-  height: 70vh;
-  min-height: 500px;
-  border-radius: 0 0 30px 30px;
+  height: 55vh;
+  min-height: 450px;
+  max-height: 600px;
   overflow: hidden;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, rgba(16, 51, 89, 0.9) 0%, rgba(61, 178, 138, 0.7) 100%);
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, #103359 0%, #1a4a7a 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(16, 51, 89, 0.15);
 }
 
+/* Bordes suaves solo en la parte superior */
 .heroSection::before {
   content: "";
   position: absolute;
-  inset: 0;
-  background-image: 
-    radial-gradient(circle at 20% 80%, rgba(255, 212, 73, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(128, 111, 247, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(233, 86, 109, 0.15) 0%, transparent 50%);
-  z-index: 1;
-}
-
-.heroSection::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
+  top: 0;
   left: 0;
   right: 0;
-  height: 100px;
-  background: linear-gradient(to top, var(--light-bg), transparent);
-  z-index: 1;
+  height: 12px;
+  background: linear-gradient(90deg, 
+    var(--secondary-green) 0%, 
+    var(--accent-purple) 33%, 
+    var(--accent-red) 66%, 
+    var(--accent-orange) 100%
+  );
+  border-radius: 12px 12px 0 0;
+  z-index: 5;
 }
 
-.heroOverlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, 
-    rgba(16, 51, 89, 0.85) 0%, 
-    rgba(16, 51, 89, 0.6) 50%, 
-    rgba(61, 178, 138, 0.4) 100%);
+.heroImageContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
 }
 
+.heroImageWrapper {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* SVG de pijama en el centro */
+.heroSvgContainer {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: float 3s ease-in-out infinite;
+}
+
+.pajamaSvg {
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  width: 180px;
+  height: 180px;
+}
+
+/* Fondo con niños en los extremos */
+.heroBackground {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(61, 178, 138, 0.1) 0%, rgba(128, 111, 247, 0.1) 100%);
+}
+
+.childImage {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 30%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.childLeft {
+  left: 0;
+}
+
+.childRight {
+  right: 0;
+}
+
+.childSilhouette {
+  width: 80%;
+  height: 85%;
+  background: linear-gradient(135deg, rgba(255, 212, 73, 0.15) 0%, rgba(247, 123, 71, 0.15) 100%);
+  border-radius: 50% 50% 0 0;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.childSilhouette::before,
+.childSilhouette::after {
+  content: '';
+  position: absolute;
+  background: rgba(233, 86, 109, 0.15);
+  border-radius: 50%;
+}
+
+.childSilhouette::before {
+  width: 40px;
+  height: 40px;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.childSilhouette::after {
+  width: 60px;
+  height: 30px;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Contenido del hero */
 .heroContent {
+  position: relative;
+  z-index: 4;
   text-align: center;
   color: var(--white);
   max-width: 800px;
-  padding: 1.5rem;
-  z-index: 3;
+  padding: 0 1.5rem;
   width: 100%;
 }
 
 .heroTitle {
-  font-size: 3.5rem;
+  font-size: 3rem;
   font-weight: 800;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   letter-spacing: -0.5px;
   line-height: 1.1;
-  animation: fadeIn 1s ease-out;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .titleHighlight {
@@ -161,24 +251,14 @@
   display: inline-block;
 }
 
-.titleHighlight::after {
-  content: "";
-  position: absolute;
-  bottom: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 3px;
-  background: var(--gradient-accent);
-  border-radius: 2px;
-}
-
 .heroSubtitle {
-  font-size: 1.3rem;
-  margin-bottom: 2rem;
+  font-size: 1.2rem;
+  margin-bottom: 1.5rem;
   opacity: 0.9;
-  line-height: 1.6;
-  animation: fadeIn 1s ease-out 0.3s both;
+  line-height: 1.4;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .heroButtons {
@@ -186,16 +266,15 @@
   gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
-  animation: fadeIn 1s ease-out 0.6s both;
   width: 100%;
 }
 
 .primaryButton,
 .secondaryButton {
-  padding: 1rem 2rem;
+  padding: 0.9rem 1.8rem;
   border-radius: 50px;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.95rem;
   text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: inline-flex;
@@ -203,52 +282,36 @@
   justify-content: center;
   position: relative;
   overflow: hidden;
-  min-width: 160px;
+  min-width: 140px;
 }
 
 .primaryButton {
   background: var(--gradient-accent);
   color: var(--white);
   border: none;
-  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3);
+  box-shadow: 0 4px 15px rgba(61, 178, 138, 0.3);
 }
 
 .primaryButton:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4);
-}
-
-.primaryButton::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
-}
-
-.primaryButton:hover::before {
-  left: 100%;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(61, 178, 138, 0.4);
 }
 
 .secondaryButton {
   background: transparent;
   color: var(--white);
   border: 2px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
 }
 
 .secondaryButton:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: var(--white);
-  transform: translateY(-4px);
+  transform: translateY(-3px);
 }
 
-/* === Categories Section === */
+/* === Categories Section - 4 columnas en PC, 1 en móvil === */
 .categoriesContainer {
-  padding: 2rem 0;
+  padding: 1.5rem 0;
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s ease, transform 0.8s ease;
@@ -259,77 +322,47 @@
   transform: translateY(0);
 }
 
-.sectionTitle {
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: var(--primary-blue);
-  text-align: center;
-  margin-bottom: 0.75rem;
-  position: relative;
-}
-
-.sectionTitle::after {
-  content: "";
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 3px;
-  background: var(--gradient-accent);
-  border-radius: 2px;
-}
-
-.sectionSubtitle {
-  font-size: 1rem;
-  color: var(--gray-dark);
-  text-align: center;
-  max-width: 600px;
-  margin: 0 auto 2rem;
-  line-height: 1.5;
-}
-
 .categoriesGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
   max-width: 1200px;
   margin: 0 auto;
 }
 
-/* Tarjetas de categoría con título en esquina inferior izquierda */
+/* Tarjetas de categoría */
 .categoryCard {
   text-decoration: none;
   color: inherit;
-  border-radius: 15px;
+  border-radius: 12px;
   overflow: hidden;
   position: relative;
-  aspect-ratio: 4 / 3;
-  box-shadow: 0 8px 25px var(--shadow-light);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  aspect-ratio: 2 / 3; /* Optimizado para imágenes 854x1280 (ratio: 0.667) */
+  box-shadow: 0 4px 12px var(--shadow-light);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
-  transform: translateY(30px);
+  transform: translateY(20px);
 }
 
 .categoriesContainer.visible .categoryCard:nth-child(1) {
-  animation: slideInLeft 0.6s ease-out 0.1s forwards;
+  animation: slideInLeft 0.5s ease-out 0.1s forwards;
 }
 
 .categoriesContainer.visible .categoryCard:nth-child(2) {
-  animation: slideInRight 0.6s ease-out 0.2s forwards;
+  animation: slideInLeft 0.5s ease-out 0.2s forwards;
 }
 
 .categoriesContainer.visible .categoryCard:nth-child(3) {
-  animation: slideInLeft 0.6s ease-out 0.3s forwards;
+  animation: slideInRight 0.5s ease-out 0.3s forwards;
 }
 
 .categoriesContainer.visible .categoryCard:nth-child(4) {
-  animation: slideInRight 0.6s ease-out 0.4s forwards;
+  animation: slideInRight 0.5s ease-out 0.4s forwards;
 }
 
 .categoryCard:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 15px 35px var(--shadow-medium);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px var(--shadow-medium);
 }
 
 .categoryImageContainer {
@@ -342,255 +375,70 @@
 
 .categoryImage {
   object-fit: cover;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  object-position: center top; /* Enfoca la parte superior para imágenes verticales */
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   height: 100%;
 }
 
 .categoryCard:hover .categoryImage {
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
-/* Overlay oscuro en la parte inferior para mejor legibilidad */
+/* Overlay oscuro en la parte inferior */
 .categoryOverlay {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     to top,
-    rgba(16, 51, 89, 0.8) 0%,
-    rgba(16, 51, 89, 0.4) 40%,
+    rgba(16, 51, 89, 0.9) 0%,
+    rgba(16, 51, 89, 0.5) 40%,
     transparent 70%
   );
   z-index: 1;
-  transition: background 0.4s ease;
+  transition: background 0.3s ease;
 }
 
 .categoryCard:hover .categoryOverlay {
   background: linear-gradient(
     to top,
-    rgba(61, 178, 138, 0.8) 0%,
-    rgba(61, 178, 138, 0.4) 40%,
+    rgba(61, 178, 138, 0.9) 0%,
+    rgba(61, 178, 138, 0.5) 40%,
     transparent 70%
   );
 }
 
 .discountBadge {
   position: absolute;
-  top: 15px;
-  right: 15px;
+  top: 12px;
+  right: 12px;
   background: var(--gradient-accent);
   color: var(--white);
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
+  padding: 0.35rem 0.8rem;
+  border-radius: 16px;
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   z-index: 2;
-  box-shadow: 0 3px 12px rgba(233, 86, 109, 0.3);
+  box-shadow: 0 2px 8px rgba(233, 86, 109, 0.3);
 }
 
 /* Título en esquina inferior izquierda */
 .categoryContent {
   position: absolute;
-  bottom: 15px;
-  left: 15px;
+  bottom: 12px;
+  left: 12px;
   z-index: 2;
   padding: 0;
 }
 
 .categoryTitle {
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: var(--white);
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.2px;
   margin: 0;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.categoryCard:hover .categoryTitle {
-  transform: translateY(-4px);
-  letter-spacing: 2px;
-}
-
-/* === Values Section === */
-.valuesSection {
-  background: var(--gradient-primary);
-  padding: 3rem 0;
-  border-radius: 30px;
-  margin: 2rem 0;
-  opacity: 0;
-  transform: translateY(30px);
-  transition: opacity 0.8s ease, transform 0.8s ease;
-}
-
-.valuesSection.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.valuesContainer {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-.valuesTitle {
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: var(--white);
-  text-align: center;
-  margin-bottom: 2rem;
-  position: relative;
-}
-
-.valuesTitle::after {
-  content: "";
-  position: absolute;
-  bottom: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60px;
-  height: 3px;
-  background: var(--gradient-accent);
-  border-radius: 2px;
-}
-
-.valuesGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1.5rem;
-}
-
-.valueCard {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 15px;
-  padding: 1.5rem;
-  text-align: center;
-  transition: all 0.3s ease;
-  opacity: 0;
-  transform: translateY(30px);
-}
-
-.valuesSection.visible .valueCard:nth-child(1) {
-  animation: slideInUp 0.6s ease-out 0.1s forwards;
-}
-
-.valuesSection.visible .valueCard:nth-child(2) {
-  animation: slideInUp 0.6s ease-out 0.2s forwards;
-}
-
-.valuesSection.visible .valueCard:nth-child(3) {
-  animation: slideInUp 0.6s ease-out 0.3s forwards;
-}
-
-.valuesSection.visible .valueCard:nth-child(4) {
-  animation: slideInUp 0.6s ease-out 0.4s forwards;
-}
-
-.valueCard:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: translateY(-6px);
-  border-color: var(--secondary-green);
-}
-
-.valueIcon {
-  font-size: 2.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.valueTitle {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--white);
-  margin-bottom: 0.75rem;
-}
-
-.valueDescription {
-  font-size: 0.9rem;
-  color: rgba(255, 255, 255, 0.9);
-  line-height: 1.5;
-}
-
-/* === CTA Section === */
-.ctaSection {
-  padding: 4rem 0;
-  text-align: center;
-  opacity: 0;
-  transform: translateY(30px);
-  transition: opacity 0.8s ease, transform 0.8s ease;
-}
-
-.ctaSection.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.ctaContainer {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-}
-
-.ctaTitle {
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: var(--primary-blue);
-  margin-bottom: 1rem;
-  line-height: 1.2;
-}
-
-.ctaText {
-  font-size: 1.1rem;
-  color: var(--gray-dark);
-  margin-bottom: 2rem;
-  line-height: 1.5;
-}
-
-.ctaButtons {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.ctaPrimaryButton,
-.ctaSecondaryButton {
-  padding: 1rem 2rem;
-  border-radius: 50px;
-  font-weight: 700;
-  font-size: 1rem;
-  text-decoration: none;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 160px;
-}
-
-.ctaPrimaryButton {
-  background: var(--gradient-accent);
-  color: var(--white);
-  border: none;
-  box-shadow: 0 6px 20px rgba(61, 178, 138, 0.3);
-}
-
-.ctaPrimaryButton:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 25px rgba(61, 178, 138, 0.4);
-}
-
-.ctaSecondaryButton {
-  background: transparent;
-  color: var(--primary-blue);
-  border: 2px solid var(--primary-blue);
-}
-
-.ctaSecondaryButton:hover {
-  background: var(--primary-blue);
-  color: var(--white);
-  transform: translateY(-4px);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 /* Estilos para el Home simplificado */
@@ -615,140 +463,257 @@
 /* === Responsive Design === */
 @media (max-width: 1024px) {
   .heroTitle {
-    font-size: 3rem;
+    font-size: 2.5rem;
   }
-
+  
+  .heroSubtitle {
+    font-size: 1.1rem;
+  }
+  
   .categoriesGrid {
-    gap: 1.25rem;
+    gap: 0.8rem;
   }
-
+  
   .categoryTitle {
-    font-size: 1.6rem;
+    font-size: 1.2rem;
+  }
+  
+  .pajamaSvg {
+    width: 160px;
+    height: 160px;
+  }
+}
+
+@media (max-width: 900px) {
+  .categoriesGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    max-width: 600px;
+  }
+  
+  .categoryCard {
+    aspect-ratio: 2 / 3; /* Mantenemos el ratio para tablet */
   }
 }
 
 @media (max-width: 768px) {
+  .homeContainer {
+    margin-top: 5rem;
+  }
+  
   .heroSection {
-    height: 60vh;
-    min-height: 450px;
-    border-radius: 0 0 20px 20px;
+    height: 50vh;
+    min-height: 400px;
+    max-height: 500px;
     margin-bottom: 1.5rem;
+    border-radius: 8px;
   }
-
+  
+  .heroSection::before {
+    height: 8px;
+    border-radius: 8px 8px 0 0;
+  }
+  
   .heroTitle {
-    font-size: 2.5rem;
+    font-size: 2rem;
   }
-
+  
   .heroSubtitle {
-    font-size: 1.1rem;
+    font-size: 1rem;
+    margin-bottom: 1.25rem;
   }
-
+  
   .heroButtons {
     flex-direction: column;
     align-items: center;
     gap: 0.75rem;
     width: 100%;
-    max-width: 300px;
+    max-width: 280px;
     margin: 0 auto;
   }
-
+  
   .primaryButton,
   .secondaryButton {
-    padding: 0.9rem 1.8rem;
-    min-width: 140px;
+    padding: 0.8rem 1.6rem;
+    min-width: 120px;
     width: 100%;
+    font-size: 0.9rem;
   }
-
-  .sectionTitle,
-  .valuesTitle,
-  .ctaTitle {
-    font-size: 1.8rem;
-  }
-
+  
   .categoriesGrid {
     grid-template-columns: 1fr;
-    gap: 1.25rem;
+    gap: 0.75rem;
+    max-width: 400px;
   }
-
+  
   .categoryCard {
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 3 / 4; /* Mejor ratio para móvil */
   }
-
+  
   .categoryTitle {
-    font-size: 1.4rem;
+    font-size: 1.3rem;
   }
-
-  .valuesGrid {
-    grid-template-columns: repeat(2, 1fr);
+  
+  .pajamaSvg {
+    width: 140px;
+    height: 140px;
   }
-
-  .ctaButtons {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .ctaPrimaryButton,
-  .ctaSecondaryButton {
-    width: 100%;
-    max-width: 280px;
+  
+  .childImage {
+    width: 35%;
   }
 }
 
 @media (max-width: 480px) {
+  .homeContainer {
+    margin-top: 5rem;
+  }
+  
   .heroSection {
-    height: 55vh;
-    min-height: 400px;
+    height: 45vh;
+    min-height: 350px;
+    border-radius: 6px;
   }
-
+  
+  .heroSection::before {
+    height: 6px;
+    border-radius: 6px 6px 0 0;
+  }
+  
   .heroTitle {
-    font-size: 2rem;
+    font-size: 1.8rem;
   }
-
+  
   .heroSubtitle {
-    font-size: 1rem;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
   }
-
+  
   .heroContent {
-    padding: 1rem;
+    padding: 0 1rem;
   }
-
-  .heroButtons {
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-    width: 90%;
-    max-width: 280px;
-    margin: 0 auto;
-  }
-
+  
   .primaryButton,
   .secondaryButton {
-    width: 100%;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.85rem;
   }
+  
+  .categoryCard {
+    aspect-ratio: 3 / 4; /* Ratio optimizado para móvil */
+  }
+  
+  /* Para móvil, ajustamos el object-position para mostrar mejor las imágenes */
+  .categoryImage {
+    object-position: center 30%; /* Muestra más del centro de la imagen */
+  }
+  
+  .categoryTitle {
+    font-size: 1.1rem;
+  }
+  
+  .pajamaSvg {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .childImage {
+    width: 40%;
+  }
+  
+  .childSilhouette {
+    width: 90%;
+    height: 80%;
+  }
+}
 
-  .sectionTitle,
-  .valuesTitle,
-  .ctaTitle {
+/* Para pantallas muy pequeñas */
+@media (max-width: 360px) {
+  .heroTitle {
     font-size: 1.6rem;
   }
-
-  .categoryCard {
-    aspect-ratio: 4 / 3;
+  
+  .heroSubtitle {
+    font-size: 0.85rem;
   }
-
+  
   .categoryTitle {
-    font-size: 1.2rem;
-  }
-
-  .valuesGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .valueCard {
-    padding: 1.25rem;
-  }
-
-  .ctaText {
     font-size: 1rem;
+  }
+  
+  .pajamaSvg {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .categoryCard {
+    aspect-ratio: 4 / 5; /* Ratio más cuadrado para pantallas muy pequeñas */
+  }
+  
+  .categoryImage {
+    object-position: center 25%; /* Ajuste fino para imágenes */
+  }
+}
+
+/* Ajustes para pantallas grandes */
+@media (min-width: 1400px) {
+  .mainContent {
+    max-width: 1400px;
+  }
+  
+  .heroSection {
+    height: 60vh;
+    max-height: 650px;
+  }
+  
+  .heroTitle {
+    font-size: 3.5rem;
+  }
+  
+  .heroSubtitle {
+    font-size: 1.3rem;
+  }
+  
+  .pajamaSvg {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+/* Ajustes para pantallas extra grandes */
+@media (min-width: 1600px) {
+  .mainContent {
+    max-width: 1500px;
+  }
+  
+  .categoriesGrid {
+    max-width: 1300px;
+  }
+}
+
+/* Ajustes de altura para evitar cortes en imágenes */
+@media (min-height: 800px) and (max-width: 768px) {
+  .categoryCard {
+    aspect-ratio: 2 / 3; /* Restauramos ratio vertical en pantallas altas */
+  }
+  
+  .categoryImage {
+    object-position: center top; /* Volvemos a enfocar la parte superior */
+  }
+}
+
+/* Optimización para orientación landscape en móvil */
+@media (max-height: 500px) and (orientation: landscape) {
+  .heroSection {
+    height: 70vh;
+    min-height: 300px;
+  }
+  
+  .categoryCard {
+    aspect-ratio: 4 / 3; /* Ratio más horizontal para landscape */
+  }
+  
+  .categoryImage {
+    object-position: center center;
   }
 }
