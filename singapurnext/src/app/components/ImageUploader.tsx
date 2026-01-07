@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CldUploadWidget } from 'next-cloudinary';
+import type { CloudinaryUploadWidgetOptions } from 'next-cloudinary';
 import styles from './ImageUploader.module.css';
 
 interface ImageData {
@@ -28,11 +29,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
 
-  const cloudinaryConfig = {
-    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-    uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
+  // Configuración CORREGIDA con tipos específicos
+  const cloudinaryConfig: CloudinaryUploadWidgetOptions = {
+    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '',
+    uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ecommerce_uploads',
     folder: 'ecommerce/productos',
-    sources: ['local', 'url'],
+    sources: ['local', 'url'] as CloudinaryUploadWidgetOptions['sources'], // Cast necesario
     multiple: false,
     maxFiles: 1,
     clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
@@ -76,7 +78,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         largeUrl: largeUrl
       };
       
-      // Llamar a la función callback
+      // Llamar a la función callback con parámetros opcionales
       onUploadSuccess(imageData, variantIndex, imageIndex);
       
       setPreviewUrl(thumbnailUrl);
@@ -99,7 +101,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', cloudinaryConfig.uploadPreset!);
-    formData.append('folder', cloudinaryConfig.folder);
+    formData.append('folder', cloudinaryConfig.folder!);
     formData.append('cloud_name', cloudinaryConfig.cloudName!);
     
     try {
