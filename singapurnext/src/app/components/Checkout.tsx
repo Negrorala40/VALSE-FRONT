@@ -7,8 +7,8 @@ import {
   CART, 
   PERFIL_ME, 
   ADDRESS, 
-  ORDERS, 
-  BOLD_SIGNATURE 
+  ORDERS,
+  MERCADOPAGO_CREATE_PREFERENCE
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -55,10 +55,6 @@ interface UserData {
   addresses: Address[];
 }
 
-interface SignatureResponse {
-  signature: string;
-}
-
 interface OrderResponse {
   id: number;
   orderDate: string;
@@ -75,9 +71,14 @@ interface OrderResponse {
   }>;
 }
 
+interface MercadoPagoPreferenceResponse {
+  preferenceId: string;
+  initPoint: string;
+  orderId: string;
+}
+
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [signature, setSignature] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string>('');
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -97,11 +98,7 @@ const CheckoutPage = () => {
   });
 
   const [orderCreated, setOrderCreated] = useState(false);
-  
-  // Refs para Bold
-  const boldContainerRef = useRef<HTMLDivElement>(null);
-  const boldScriptRef = useRef<HTMLScriptElement | null>(null);
-  const boldScriptLoadedRef = useRef<boolean>(false);
+  const [mercadoPagoPreference, setMercadoPagoPreference] = useState<MercadoPagoPreferenceResponse | null>(null);
   
   // Ref para controlar múltiples fetchs
   const fetchControllerRef = useRef<AbortController | null>(null);
@@ -116,32 +113,6 @@ const CheckoutPage = () => {
       maximumFractionDigits: 0,
     }).format(price);
   };
-
-  // Cargar script de Bold
-  useEffect(() => {
-    if (boldScriptLoadedRef.current) return;
-    
-    const scriptId = 'bold-script';
-    const existingScript = document.getElementById(scriptId);
-    
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
-      script.async = true;
-      script.id = scriptId;
-      script.onload = () => {
-        console.log('Bold library script loaded successfully');
-        boldScriptLoadedRef.current = true;
-      };
-      script.onerror = () => {
-        console.error('Error loading Bold library script');
-        setError('Error cargando el sistema de pagos');
-      };
-      document.head.appendChild(script);
-    } else {
-      boldScriptLoadedRef.current = true;
-    }
-  }, []);
 
   const calculateTotal = useCallback((items: CartItem[]) => {
     const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -247,7 +218,7 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Cargar datos iniciales - SOLUCIÓN MEJORADA
+  // Cargar datos iniciales
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -288,7 +259,6 @@ const CheckoutPage = () => {
       }
     };
 
-    // Pequeño delay para asegurar que el DOM esté listo
     const timer = setTimeout(() => {
       fetchInitialData();
     }, 100);
@@ -495,38 +465,6 @@ const CheckoutPage = () => {
     setError('');
   };
 
-  const fetchSignature = useCallback(async (orderIdParam: string, amountParam: number, token: string) => {
-    try {
-      console.log('Obteniendo firma para orden:', orderIdParam, 'monto:', amountParam);
-      
-      const res = await fetch(BOLD_SIGNATURE, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          orderId: orderIdParam, 
-          amount: Math.round(amountParam)
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.message || `Error ${res.status}: ${res.statusText}`);
-      }
-
-      const signatureResponse: SignatureResponse = await res.json();
-      console.log('Firma obtenida exitosamente');
-      
-      setSignature(signatureResponse.signature);
-    } catch (e) {
-      console.error('Error obteniendo firma:', e);
-      const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
-      setError('No se pudo obtener la firma de pago: ' + errorMessage);
-    }
-  }, []);
-
   const createOrder = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -553,59 +491,113 @@ const CheckoutPage = () => {
       setLoading(true);
       setError('');
 
-      const body = {
+      // 1. Crear orden en nuestro sistema
+      const orderBody = {
         shippingAddressId: selectedAddress.id
       };
 
-      console.log('Creando orden con body:', JSON.stringify(body, null, 2));
+      console.log('Creando orden con body:', JSON.stringify(orderBody, null, 2));
 
-      const res = await fetch(ORDERS, {
+      const orderRes = await fetch(ORDERS, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(orderBody),
       });
 
-      console.log('Estado de respuesta:', res.status);
+      console.log('Estado de respuesta de orden:', orderRes.status);
 
-      if (!res.ok) {
-        let errorMessage = `Error ${res.status}: ${res.statusText}`;
+      if (!orderRes.ok) {
+        let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
         try {
-          const errorData = await res.text();
+          const errorData = await orderRes.text();
           console.log('Respuesta de error:', errorData);
-          errorMessage = errorData || errorMessage;
+          
+          try {
+            const jsonError = JSON.parse(errorData);
+            errorMessage = jsonError.message || jsonError.error || errorData;
+          } catch {
+            errorMessage = errorData || errorMessage;
+          }
         } catch (parseError) {
           console.error('Error parseando respuesta de error:', parseError);
         }
         throw new Error(errorMessage);
       }
 
-      const orderResponse: OrderResponse = await res.json();
+      const orderResponse: OrderResponse = await orderRes.json();
       console.log('Orden creada exitosamente:', orderResponse);
 
       if (!orderResponse.id || orderResponse.totalPrice === undefined) {
         throw new Error('Respuesta del servidor incompleta');
       }
 
-      setOrderId(orderResponse.id.toString());
+      const orderIdStr = orderResponse.id.toString();
+      
+      setOrderId(orderIdStr);
       setTotal(orderResponse.totalPrice);
       setOrderCreated(true);
 
-      await fetchSignature(orderResponse.id.toString(), orderResponse.totalPrice, token);
+      // 2. Crear preferencia en Mercado Pago
+      console.log('Creando preferencia de Mercado Pago...');
+      
+      const mpBody = {
+        orderId: orderIdStr,
+        customerName: userData.firstName + ' ' + userData.lastName,
+        customerEmail: userData.email || '',
+        items: cartItems.map(item => ({
+          productId: item.productVariantId || item.id,
+          productName: item.name,
+          variantDescription: `${item.color} - Talla ${item.size}`,
+          imageUrl: item.image,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      };
 
-      setCartItems([]);
+      console.log('Body para Mercado Pago:', JSON.stringify(mpBody, null, 2));
+
+      const mpRes = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mpBody),
+      });
+
+      if (!mpRes.ok) {
+        let mpError = `Error ${mpRes.status}: ${mpRes.statusText}`;
+        try {
+          const mpErrorData = await mpRes.text();
+          mpError = mpErrorData || mpError;
+        } catch (e) {
+          console.error('Error parseando error de MP:', e);
+        }
+        throw new Error(`Error creando pago: ${mpError}`);
+      }
+
+      const mpResponse: MercadoPagoPreferenceResponse = await mpRes.json();
+      console.log('Preferencia de Mercado Pago creada:', mpResponse);
+
+      if (!mpResponse.preferenceId || !mpResponse.initPoint) {
+        throw new Error('Respuesta de Mercado Pago incompleta');
+      }
+
+      setMercadoPagoPreference(mpResponse);
 
     } catch (e) {
-      console.error('Error creando orden:', e);
+      console.error('Error en el proceso de checkout:', e);
       const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
-      setError('No se pudo crear la orden: ' + errorMessage);
+      setError('Error en el proceso de checkout: ' + errorMessage);
       setOrderCreated(false);
+      setMercadoPagoPreference(null);
     } finally {
       setLoading(false);
     }
-  }, [selectedAddress, cartItems, userData, fetchSignature]);
+  }, [selectedAddress, cartItems, userData]);
 
   // Crear la orden cuando llegamos al paso 3
   useEffect(() => {
@@ -614,86 +606,19 @@ const CheckoutPage = () => {
     }
   }, [step, createOrder, loading, orderCreated]);
 
-  const cleanupBoldButton = useCallback(() => {
-    if (boldScriptRef.current && boldScriptRef.current.parentNode) {
-      try {
-        boldScriptRef.current.parentNode.removeChild(boldScriptRef.current);
-      } catch {
-        console.log('Script ya fue removido o no existe');
-      }
-    }
-    boldScriptRef.current = null;
-    
-    if (boldContainerRef.current) {
-      boldContainerRef.current.innerHTML = '';
-    }
-  }, []);
-
-  // Crear el botón de Bold
+  // Redirigir a Mercado Pago cuando la preferencia esté lista
   useEffect(() => {
-    if (step !== 3) return;
-    if (!signature || !orderId || total === 0) return;
-    if (!boldScriptLoadedRef.current) return;
-    if (!boldContainerRef.current) return;
+    if (mercadoPagoPreference && mercadoPagoPreference.initPoint) {
+      console.log('Redirigiendo a Mercado Pago:', mercadoPagoPreference.initPoint);
+      
+      // Pequeño delay para mejor UX
+      const timer = setTimeout(() => {
+        window.location.href = mercadoPagoPreference.initPoint;
+      }, 1500);
 
-    cleanupBoldButton();
-
-    console.log('Creando botón Bold con:', {
-      orderId,
-      amount: Math.round(total),
-      signature: signature.substring(0, 20) + '...'
-    });
-
-    try {
-      const script = document.createElement('script');
-      script.setAttribute('data-bold-button', '');
-      script.setAttribute('data-order-id', orderId);
-      script.setAttribute('data-currency', 'COP');
-      script.setAttribute('data-amount', Math.round(total).toString());
-      script.setAttribute('data-api-key', '-BI64vW_4AMd7AI_cCzzA1KDdVSTsq55Ikrm5Iym1EE');
-      script.setAttribute('data-integrity-signature', signature);
-      script.setAttribute('data-redirection-url', 'https://singapurnext-qopl.vercel.app/checkout/success');
-      script.setAttribute('data-description', 'Compra desde tienda Amarte');
-      script.src = 'https://checkout.bold.co/library/boldPaymentButton.js';
-
-      script.onload = () => {
-        console.log('Script del botón Bold cargado exitosamente');
-      };
-
-      script.onerror = () => {
-        console.error('Error cargando script del botón Bold');
-        setError('Error cargando el botón de pago');
-      };
-
-      boldScriptRef.current = script;
-      boldContainerRef.current.appendChild(script);
-
-    } catch (e) {
-      console.error('Error creando botón Bold:', e);
-      setError('Error creando el botón de pago');
+      return () => clearTimeout(timer);
     }
-  }, [step, signature, orderId, total, cleanupBoldButton]);
-
-  // Limpiar cuando cambiamos de paso
-  useEffect(() => {
-    if (step !== 3) {
-      setOrderCreated(false);
-      setSignature(null);
-      setOrderId('');
-      setError('');
-      cleanupBoldButton();
-    }
-  }, [step, cleanupBoldButton]);
-
-  // Cleanup al desmontar
-  useEffect(() => {
-    return () => {
-      cleanupBoldButton();
-      if (fetchControllerRef.current) {
-        fetchControllerRef.current.abort();
-      }
-    };
-  }, [cleanupBoldButton]);
+  }, [mercadoPagoPreference]);
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -712,7 +637,7 @@ const CheckoutPage = () => {
     );
   }
 
- return (
+  return (
     <div className="checkout-page">
       {/* Elementos decorativos */}
       <div className="checkout-decorative-elements">
@@ -1073,25 +998,28 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {orderCreated && !signature && !error && (
+                    {orderCreated && !mercadoPagoPreference && !error && (
                       <div className="checkout-loading-state">
                         <div className="checkout-spinner purple" />
-                        <p>Preparando el pago seguro...</p>
+                        <p>Preparando pago con Mercado Pago...</p>
                       </div>
                     )}
 
-                    {/* Payment Button */}
-                    {orderCreated && signature && (
+                    {/* Mercado Pago Redirection */}
+                    {mercadoPagoPreference && (
                       <div className="checkout-order-success">
                         <div className="checkout-success-card">
                           <Check className="checkout-icon" />
                           <p>¡Orden creada exitosamente!</p>
-                          {orderId && <p>Orden #{orderId}</p>}
+                          <p>Redirigiendo a Mercado Pago...</p>
                         </div>
-                        <div ref={boldContainerRef} className="checkout-payment-container">
-                          <div style={{ minHeight: '60px', display: 'flex', alignItems: 'center' }}>
-                            <p>Cargando botón de pago...</p>
-                          </div>
+                        <div className="checkout-mercadopago-info">
+                          <p className="checkout-mercadopago-warning">
+                            ⚠️ Si la redirección no funciona automáticamente,{' '}
+                            <a href={mercadoPagoPreference.initPoint} className="checkout-mercadopago-link">
+                              haz clic aquí para ir a Mercado Pago
+                            </a>
+                          </p>
                         </div>
                       </div>
                     )}

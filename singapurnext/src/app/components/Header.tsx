@@ -63,7 +63,12 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
 
   const toggleMenu = () => {
     setMenuOpen(!menuOpen);
-    setSearchOpen(false);
+    if (menuOpen) {
+      document.body.style.overflow = 'auto';
+    } else {
+      setSearchOpen(false);
+      document.body.style.overflow = 'hidden';
+    }
   };
 
   const toggleSubmenu = (menu: string) =>
@@ -71,7 +76,12 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
 
   const toggleSearch = () => {
     setSearchOpen(!searchOpen);
-    setMenuOpen(false);
+    if (searchOpen) {
+      document.body.style.overflow = 'auto';
+    } else {
+      setMenuOpen(false);
+      document.body.style.overflow = 'hidden';
+    }
   };
 
   const toggleCart = () => {
@@ -105,6 +115,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       router.push(`/menu?search=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
       setSearchOpen(false);
+      document.body.style.overflow = 'auto';
     }
   };
 
@@ -123,10 +134,12 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
         setSubmenuOpen(null);
+        document.body.style.overflow = 'auto';
       }
       
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setSearchOpen(false);
+        document.body.style.overflow = 'auto';
       }
     };
 
@@ -139,6 +152,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     setMenuOpen(false);
     setSubmenuOpen(null);
     setSearchOpen(false);
+    document.body.style.overflow = 'auto';
   }, [pathname]);
 
   // Determinar qué cartItems mostrar
@@ -192,6 +206,13 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       ],
     },
   ];
+
+  // Efecto para limpiar overflow cuando se desmonta
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, []);
 
   return (
     <>
@@ -301,7 +322,13 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             <FaSearch size={18} />
             Buscar productos
           </h3>
-          <button className={styles.searchPanelClose} onClick={() => setSearchOpen(false)}>
+          <button 
+            className={styles.searchPanelClose} 
+            onClick={() => {
+              setSearchOpen(false);
+              document.body.style.overflow = 'auto';
+            }}
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -326,16 +353,44 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         <div className={styles.searchPanelSuggestions}>
           <span className={styles.searchPanelSuggestionLabel}>Populares:</span>
           <div className={styles.searchPanelTags}>
-            <Link href="/menu?search=astronauta" className={styles.searchPanelTag}>
+            <Link 
+              href="/menu?search=astronauta" 
+              className={styles.searchPanelTag}
+              onClick={() => {
+                setSearchOpen(false);
+                document.body.style.overflow = 'auto';
+              }}
+            >
               Astronauta
             </Link>
-            <Link href="/menu?search=estrellas" className={styles.searchPanelTag}>
+            <Link 
+              href="/menu?search=estrellas" 
+              className={styles.searchPanelTag}
+              onClick={() => {
+                setSearchOpen(false);
+                document.body.style.overflow = 'auto';
+              }}
+            >
               Estrellas
             </Link>
-            <Link href="/menu?search=cohete" className={styles.searchPanelTag}>
+            <Link 
+              href="/menu?search=cohete" 
+              className={styles.searchPanelTag}
+              onClick={() => {
+                setSearchOpen(false);
+                document.body.style.overflow = 'auto';
+              }}
+            >
               Cohete
             </Link>
-            <Link href="/menu?search=planetas" className={styles.searchPanelTag}>
+            <Link 
+              href="/menu?search=planetas" 
+              className={styles.searchPanelTag}
+              onClick={() => {
+                setSearchOpen(false);
+                document.body.style.overflow = 'auto';
+              }}
+            >
               Planetas
             </Link>
           </div>
@@ -352,7 +407,13 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             </svg>
             <span>A Marte</span>
           </div>
-          <button className={styles.sideMenuClose} onClick={() => setMenuOpen(false)}>
+          <button 
+            className={styles.sideMenuClose} 
+            onClick={() => {
+              setMenuOpen(false);
+              document.body.style.overflow = 'auto';
+            }}
+          >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -384,7 +445,14 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               <ul className={`${styles.sideMenuSubmenu} ${submenuOpen === cat.id ? styles.sideMenuSubmenuOpen : ''}`}>
                 {cat.subcategories.map((sub) => (
                   <li key={sub.href}>
-                    <Link href={sub.href} className={styles.sideMenuLink} onClick={() => setMenuOpen(false)}>
+                    <Link 
+                      href={sub.href} 
+                      className={styles.sideMenuLink} 
+                      onClick={() => {
+                        setMenuOpen(false);
+                        document.body.style.overflow = 'auto';
+                      }}
+                    >
                       {sub.label}
                     </Link>
                   </li>
@@ -395,7 +463,14 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </nav>
 
         <div className={styles.sideMenuFooter}>
-          <Link href="/menu" className={styles.sideMenuCta} onClick={() => setMenuOpen(false)}>
+          <Link 
+            href="/menu" 
+            className={styles.sideMenuCta} 
+            onClick={() => {
+              setMenuOpen(false);
+              document.body.style.overflow = 'auto';
+            }}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="7" height="7" />
               <rect x="14" y="3" width="7" height="7" />
@@ -421,23 +496,25 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </div>
 
-      {/* Overlay */}
-      <div
-        className={`${styles.headerOverlay} ${menuOpen || searchOpen ? styles.headerOverlayActive : ''}`}
-        onClick={() => {
-          setMenuOpen(false);
-          setSearchOpen(false);
-        }}
-      />
+      {/* Overlay - SOLO cuando hay menú o búsqueda abiertos */}
+      {(menuOpen || searchOpen) && (
+        <div
+          className={styles.headerOverlay}
+          onClick={() => {
+            setMenuOpen(false);
+            setSearchOpen(false);
+            document.body.style.overflow = 'auto';
+          }}
+        />
+      )}
 
       {/* Spacer for fixed header */}
       <div className={styles.headerSpacer}></div>
 
-      {/* Cart Component - CORREGIDO: pasa la función correcta */}
+      {/* Cart Component */}
       <Cart
         cartItems={displayCartItems}
         setCartItems={(items) => {
-          // Usar la función actualizada
           handleSetCartItems.current(items);
         }}
         onClose={() => setCartOpen(false)}

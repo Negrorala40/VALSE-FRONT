@@ -1,6 +1,6 @@
 // src/utils/api.ts
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 // PRODUCTOS
 export const MENU_PRODUCTS = `${API_URL}/api/products`;
@@ -24,3 +24,8 @@ export const ORDERS = `${API_URL}/api/orders`;
 
 // Bold Payments
 export const BOLD_SIGNATURE = `${API_URL}/api/bold/signature`;
+
+// **NUEVO: Mercado Pago**
+export const MERCADOPAGO_CREATE_PREFERENCE = `${API_URL}/api/payments/create-preference`;
+export const MERCADOPAGO_VERIFY_PAYMENT = (paymentId: string) => 
+  `${API_URL}/api/payments/verify/${paymentId}`;
