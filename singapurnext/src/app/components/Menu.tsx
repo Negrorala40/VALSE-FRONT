@@ -11,6 +11,8 @@ interface Img {
   id: number;
   fileName: string;
   imageUrl: string;
+  width?: number;
+  height?: number;
 }
 
 interface ProductVariant {
@@ -41,7 +43,12 @@ interface Product {
   gender: ProductGender;
   type: ProductType;
   variants: ProductVariant[];
+  createdAt?: string;
 }
+
+// Dimensiones de imagen base
+const IMAGE_WIDTH = 854;
+const IMAGE_HEIGHT = 1280;
 
 // Helper para obtener colores hex aproximados
 const getColorHex = (colorName: string): string => {
@@ -193,11 +200,14 @@ const Menu: React.FC = () => {
     return variants.some((v) => v.stock > 0 && v.stock <= 3);
   };
 
-  // Verificar si es nuevo (ejemplo: productos creados en los últimos 30 días)
-  const isNew = (productId: number) => {
-    // Esta es una lógica de ejemplo. Deberías reemplazarla con tu propia lógica
-    // Por ejemplo, podrías tener una fecha de creación en el producto
-    return productId <= 5; // Ejemplo: primeros 5 productos son "nuevos"
+  // Verificar si es nuevo (últimos 30 días)
+  const isNew = (createdAt?: string) => {
+    if (!createdAt) return false;
+    const productDate = new Date(createdAt);
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    return productDate >= thirtyDaysAgo;
   };
 
   // Función para manejar el clic en el botón de agregar rápido
@@ -278,7 +288,9 @@ const Menu: React.FC = () => {
           </div>
         ) : (
           sortedProducts.slice(0, visibleCount).map((product, index) => {
-            const primaryImage = product.variants[0]?.images?.[0]?.imageUrl || '/images/placeholder.png';
+            // Obtener imagen principal
+            const firstVariant = product.variants[0];
+            const primaryImage = firstVariant?.images?.[0]?.imageUrl || '/images/placeholder.png';
             const price = product.variants.length > 0
               ? Math.min(...product.variants.map(v => Number(v.price || 0)))
               : 0;
@@ -294,7 +306,7 @@ const Menu: React.FC = () => {
               >
                 {/* Badges */}
                 <div className={styles.productBadges}>
-                  {isNew(product.id) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
+                  {isNew(product.createdAt) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
                   {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
                 </div>
 
@@ -303,9 +315,10 @@ const Menu: React.FC = () => {
                   <Image
                     src={primaryImage}
                     alt={product.name}
-                    width={400}
-                    height={400}
+                    width={854}
+                    height={1280}
                     className={styles.productImage}
+                    priority={index < 6} // Priorizar carga de primeras imágenes
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.src = '/images/placeholder.png';

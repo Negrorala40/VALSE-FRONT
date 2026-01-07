@@ -4,11 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import './Header.css';
+import styles from './Header.module.css';
 import Cart from './Cart';
 import { HiShoppingCart } from "react-icons/hi2";
 import { FaUserAstronaut } from "react-icons/fa6";
-import { FaBars } from "react-icons/fa6";
 import { FaSearch } from "react-icons/fa";
 
 interface CartItem {
@@ -21,15 +20,23 @@ interface CartItem {
   quantity: number;
 }
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  cartItems?: CartItem[];
+  setCartItems?: React.Dispatch<React.SetStateAction<CartItem[]>>;
+}
+
+const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Estado local para el carrito si no viene de props
+  const [localCartItems, setLocalCartItems] = useState<CartItem[]>(cartItems);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLDivElement | null>(null);
@@ -37,22 +44,59 @@ const Header: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
 
-  const toggleMenu = () => setMenuOpen(!menuOpen);
-  const toggleSubmenu = (menu: string) =>
-    setSubmenuOpen(submenuOpen === menu ? null : menu);
-  const toggleSearch = () => setSearchOpen(!searchOpen);
-  const toggleCart = () => setCartOpen(!cartOpen);
+  // Función para manejar el setCartItems que pasa al Cart
+  const handleSetCartItems = useRef<React.Dispatch<React.SetStateAction<CartItem[]>>>(
+    setCartItems || setLocalCartItems
+  );
 
-  // Logo configuration - Ruta SVG únicamente
-  const logoConfig = {
-    src: '/images/logos/logver.svg',
-    alt: 'Amarte Colombia - Moda sostenible',
+  // Actualizar la referencia cuando cambian las props
+  useEffect(() => {
+    handleSetCartItems.current = setCartItems || setLocalCartItems;
+  }, [setCartItems]);
+
+  // Actualizar localCartItems cuando cambian las props
+  useEffect(() => {
+    if (setCartItems && cartItems !== localCartItems) {
+      setLocalCartItems(cartItems);
+    }
+  }, [cartItems, setCartItems]);
+
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
+    setSearchOpen(false);
   };
 
-  // Revisar token sólo en cliente después de montar el componente
+  const toggleSubmenu = (menu: string) =>
+    setSubmenuOpen(submenuOpen === menu ? null : menu);
+
+  const toggleSearch = () => {
+    setSearchOpen(!searchOpen);
+    setMenuOpen(false);
+  };
+
+  const toggleCart = () => {
+    setCartOpen(!cartOpen);
+  };
+
+  // Logo configuration
+  const logoConfig = {
+    src: '/images/logos/logver.svg',
+    alt: 'A Marte - Pijamas para niños',
+  };
+
+  // Check login status
   useEffect(() => {
     const token = localStorage.getItem('token');
     setIsLoggedIn(!!token);
+  }, []);
+
+  // Scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const handleSearchSubmit = (event: React.FormEvent) => {
@@ -73,12 +117,14 @@ const Header: React.FC = () => {
     }
   };
 
+  // Handle click outside para menú y búsqueda
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
         setSubmenuOpen(null);
       }
+      
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setSearchOpen(false);
       }
@@ -88,119 +134,316 @@ const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const renderSubmenuLinks = (gender: string) => (
-    <ul className={`submenu ${submenuOpen === gender ? 'open' : ''}`}>
-      <li>
-        <Link href={`/menu?gender=${gender}&type=superior`}>Superior</Link>
-      </li>
-      <li>
-        <Link href={`/menu?gender=${gender}&type=inferior`}>Inferior</Link>
-      </li>
-      <li>
-        <Link href={`/menu?gender=${gender}&type=calzado`}>Calzado</Link>
-      </li>
-    </ul>
-  );
+  // Close menu on route change
+  useEffect(() => {
+    setMenuOpen(false);
+    setSubmenuOpen(null);
+    setSearchOpen(false);
+  }, [pathname]);
+
+  // Determinar qué cartItems mostrar
+  const displayCartItems = setCartItems ? cartItems : localCartItems;
+  const cartItemCount = displayCartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  const menuCategories = [
+    {
+      id: 'hombre',
+      label: 'Hombre',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+        </svg>
+      ),
+      subcategories: [
+        { label: 'Superior', href: '/menu?gender=hombre&type=superior' },
+        { label: 'Inferior', href: '/menu?gender=hombre&type=inferior' },
+        { label: 'Calzado', href: '/menu?gender=hombre&type=calzado' },
+      ],
+    },
+    {
+      id: 'mujer',
+      label: 'Mujer',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+        </svg>
+      ),
+      subcategories: [
+        { label: 'Superior', href: '/menu?gender=mujer&type=superior' },
+        { label: 'Inferior', href: '/menu?gender=mujer&type=inferior' },
+        { label: 'Calzado', href: '/menu?gender=mujer&type=calzado' },
+      ],
+    },
+    {
+      id: 'unisex',
+      label: 'Unisex',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+      ),
+      subcategories: [
+        { label: 'Superior', href: '/menu?gender=unisex&type=superior' },
+        { label: 'Inferior', href: '/menu?gender=unisex&type=inferior' },
+        { label: 'Calzado', href: '/menu?gender=unisex&type=calzado' },
+      ],
+    },
+  ];
 
   return (
-    <header className="header">
-      <div className="header-left">
-        <button className="btn btn-menu" onClick={toggleMenu}>
-          <FaBars size={20} />
-        </button>
-        <button
-          onClick={handleUserClick}
-          className={`btn btn-login ${isLoggedIn ? 'logged-in' : ''}`}
-          aria-label={isLoggedIn ? "Ir a perfil" : "Iniciar sesión"}
-          title={isLoggedIn ? "Ver perfil" : "Iniciar sesión"}
-        >
-          <FaUserAstronaut size={25} />
-        </button>
-      </div>
+    <>
+      <header className={`${styles.header} ${isScrolled ? styles.headerScrolled : ''}`}>
+        {/* Decorative top bar */}
+        <div className={styles.headerDecoration}></div>
 
-      {/* 🔥 LOGO - SIN estilos inline */}
-      <Link href="/" className="logo" aria-label="Inicio">
-        <div className="logo-container">
-          <Image
-            src={logoConfig.src}
-            alt={logoConfig.alt}
-              width={150}  // 🔥 Tamaño del logo - solo aquí
-            height={85}   // 🔥 Proporción mantenida
-            priority={true}
-            loading="eager"
-            onLoad={() => setLogoLoaded(true)}
-            onError={(e) => {
-              console.error('Error cargando logo SVG:', e);
-              const target = e.target as HTMLImageElement;
-              target.src = '/images/logos/logver.png';
-            }}
-            className={`logo-image ${logoLoaded ? 'loaded' : 'loading'}`}
-            sizes="(max-width: 768px) 80px, 110px"
-            quality={100}
-            unoptimized={false}
-          />
-          
-          {/* Placeholder con clase CSS */}
-          {!logoLoaded && <div className="logo-placeholder" />}
+        <div className={styles.headerContainer}>
+          {/* Logo - Left side */}
+          <Link href="/" className={styles.headerLogo} aria-label="Inicio - A Marte">
+            <div className={styles.headerLogoWrapper}>
+              <Image
+                src={logoConfig.src || "/images/logos/logver.svg"}
+                alt={logoConfig.alt}
+                width={140}
+                height={70}
+                priority={true}
+                loading="eager"
+                onLoad={() => setLogoLoaded(true)}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/images/logos/logver.png';
+                }}
+                className={`${styles.headerLogoImg} ${logoLoaded ? styles.headerLogoImgLoaded : ''}`}
+              />
+              {!logoLoaded && <div className={styles.headerLogoPlaceholder} />}
+            </div>
+          </Link>
+
+          {/* Navigation - Desktop */}
+          <nav className={styles.headerNav}>
+            {menuCategories.map((cat) => (
+              <div key={cat.id} className={styles.headerNavItem}>
+                <button className={styles.headerNavLink}>
+                  {cat.label}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div className={styles.headerDropdown}>
+                  {cat.subcategories.map((sub) => (
+                    <Link key={sub.href} href={sub.href} className={styles.headerDropdownLink}>
+                      {sub.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <Link href="/menu" className={`${styles.headerNavLink} ${styles.headerNavLinkAll}`}>
+              Ver Todo
+            </Link>
+          </nav>
+
+          {/* Actions - Right side */}
+          <div className={styles.headerActions}>
+            {/* Search */}
+            <button
+              className={`${styles.headerActionBtn} ${styles.headerActionBtnSearch}`}
+              onClick={toggleSearch}
+              aria-label="Buscar"
+            >
+              <FaSearch size={18} />
+            </button>
+
+            {/* User */}
+            <button
+              className={`${styles.headerActionBtn} ${styles.headerActionBtnUser} ${isLoggedIn ? styles.headerActionBtnLogged : ''}`}
+              onClick={handleUserClick}
+              aria-label={isLoggedIn ? "Ver perfil" : "Iniciar sesión"}
+            >
+              <FaUserAstronaut size={18} />
+              {isLoggedIn && <span className={styles.headerStatusDot}></span>}
+            </button>
+
+            {/* Cart */}
+            <button
+              className={`${styles.headerActionBtn} ${styles.headerActionBtnCart}`}
+              onClick={toggleCart}
+              aria-label="Carrito de compras"
+            >
+              <HiShoppingCart size={18} />
+              {cartItemCount > 0 && (
+                <span className={styles.headerCartBadge}>{cartItemCount > 9 ? "9+" : cartItemCount}</span>
+              )}
+            </button>
+
+            {/* Mobile menu toggle */}
+            <button
+              className={`${styles.headerActionBtn} ${styles.headerActionBtnMenu} ${menuOpen ? styles.headerActionBtnActive : ''}`}
+              onClick={toggleMenu}
+              aria-label="Menú"
+            >
+              <span className={styles.headerHamburger}>
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+            </button>
+          </div>
         </div>
-      </Link>
+      </header>
 
-      <div className="header-right">
-        {!searchOpen && (
-          <button className="btn btn-search" onClick={toggleSearch}>
-            <FaSearch size={30} />
+      {/* Search Panel */}
+      <div className={`${styles.searchPanel} ${searchOpen ? styles.searchPanelOpen : ''}`} ref={searchRef}>
+        <div className={styles.searchPanelHeader}>
+          <h3 className={styles.searchPanelTitle}>
+            <FaSearch size={18} />
+            Buscar productos
+          </h3>
+          <button className={styles.searchPanelClose} onClick={() => setSearchOpen(false)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
-        )}
-
-        <div className={`search-panel ${searchOpen ? 'open' : ''}`} ref={searchRef}>
-          <form onSubmit={handleSearchSubmit} className="search-panel-form">
+        </div>
+        <form onSubmit={handleSearchSubmit} className={styles.searchPanelForm}>
+          <div className={styles.searchPanelInputWrapper}>
             <input
               type="text"
-              className="search-input"
-              placeholder="Buscar productos..."
+              className={styles.searchPanelInput}
+              placeholder="Buscar pijamas, tallas, colores..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus={searchOpen}
             />
-            <button type="submit" className="search-submit-btn">Buscar</button>
-          </form>
+            <button type="submit" className={styles.searchPanelSubmit}>
+              Buscar
+            </button>
+          </div>
+        </form>
+        <div className={styles.searchPanelSuggestions}>
+          <span className={styles.searchPanelSuggestionLabel}>Populares:</span>
+          <div className={styles.searchPanelTags}>
+            <Link href="/menu?search=astronauta" className={styles.searchPanelTag}>
+              Astronauta
+            </Link>
+            <Link href="/menu?search=estrellas" className={styles.searchPanelTag}>
+              Estrellas
+            </Link>
+            <Link href="/menu?search=cohete" className={styles.searchPanelTag}>
+              Cohete
+            </Link>
+            <Link href="/menu?search=planetas" className={styles.searchPanelTag}>
+              Planetas
+            </Link>
+          </div>
         </div>
-
-        <button className="btn btn-cart" onClick={toggleCart} aria-label="Abrir carrito">
-          <HiShoppingCart size={30} />
-        </button>
       </div>
 
-      {cartOpen && (
-  <Cart
-    cartItems={cartItems}
-    setCartItems={setCartItems}
-    onClose={toggleCart}
-    isOpen={cartOpen}
-  />
-)}
-
-      {/* Slide-out Menu */}
-      <div ref={menuRef} className={`side-menu ${menuOpen ? 'open' : ''}`}>
-        <div className="menu-header">
-          <span>Menú</span>
-          <button onClick={() => setMenuOpen(false)} className="close-btn">✕</button>
+      {/* Mobile Side Menu */}
+      <div className={`${styles.sideMenu} ${menuOpen ? styles.sideMenuOpen : ''}`} ref={menuRef}>
+        <div className={styles.sideMenuHeader}>
+          <div className={styles.sideMenuBrand}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a7 7 0 0 0 0 14" />
+            </svg>
+            <span>A Marte</span>
+          </div>
+          <button className={styles.sideMenuClose} onClick={() => setMenuOpen(false)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
-        <ul>
-          <li>
-            <button className="submenu-toggle" onClick={() => toggleSubmenu('hombre')}>Hombre</button>
-            {renderSubmenuLinks('hombre')}
-          </li>
-          <li>
-            <button className="submenu-toggle" onClick={() => toggleSubmenu('mujer')}>Mujer</button>
-            {renderSubmenuLinks('mujer')}
-          </li>
-          <li>
-            <button className="submenu-toggle" onClick={() => toggleSubmenu('unisex')}>Unisex</button>
-            {renderSubmenuLinks('unisex')}
-          </li>
-        </ul>
+
+        <nav className={styles.sideMenuNav}>
+          {menuCategories.map((cat) => (
+            <div key={cat.id} className={styles.sideMenuCategory}>
+              <button
+                className={`${styles.sideMenuCategoryToggle} ${submenuOpen === cat.id ? styles.sideMenuCategoryToggleOpen : ''}`}
+                onClick={() => toggleSubmenu(cat.id)}
+              >
+                <span className={styles.sideMenuCategoryIcon}>{cat.icon}</span>
+                <span>{cat.label}</span>
+                <svg
+                  className={styles.sideMenuArrow}
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <ul className={`${styles.sideMenuSubmenu} ${submenuOpen === cat.id ? styles.sideMenuSubmenuOpen : ''}`}>
+                {cat.subcategories.map((sub) => (
+                  <li key={sub.href}>
+                    <Link href={sub.href} className={styles.sideMenuLink} onClick={() => setMenuOpen(false)}>
+                      {sub.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className={styles.sideMenuFooter}>
+          <Link href="/menu" className={styles.sideMenuCta} onClick={() => setMenuOpen(false)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+            Ver todo el catálogo
+          </Link>
+          <div className={styles.sideMenuSocial}>
+            <a href="#" className={styles.sideMenuSocialLink} aria-label="Instagram">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="2" width="20" height="20" rx="5" />
+                <circle cx="12" cy="12" r="4" />
+                <circle cx="18" cy="6" r="1" />
+              </svg>
+            </a>
+            <a href="#" className={styles.sideMenuSocialLink} aria-label="WhatsApp">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+            </a>
+          </div>
+        </div>
       </div>
-    </header>
+
+      {/* Overlay */}
+      <div
+        className={`${styles.headerOverlay} ${menuOpen || searchOpen ? styles.headerOverlayActive : ''}`}
+        onClick={() => {
+          setMenuOpen(false);
+          setSearchOpen(false);
+        }}
+      />
+
+      {/* Spacer for fixed header */}
+      <div className={styles.headerSpacer}></div>
+
+      {/* Cart Component - CORREGIDO: pasa la función correcta */}
+      <Cart
+        cartItems={displayCartItems}
+        setCartItems={(items) => {
+          // Usar la función actualizada
+          handleSetCartItems.current(items);
+        }}
+        onClose={() => setCartOpen(false)}
+        isOpen={cartOpen}
+      />
+    </>
   );
 };
 
