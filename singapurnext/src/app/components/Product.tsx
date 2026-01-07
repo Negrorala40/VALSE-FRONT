@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import axios from 'axios';
 import styles from './Product.module.css';
-import { PRODUCT_DETAIL, ADD_TO_CART } from '../utils/Api'; // Ajusta la ruta según tu estructura
+import { PRODUCT_DETAIL, ADD_TO_CART } from '../utils/Api';
 
 interface Imagen {
   imageUrl: string;
@@ -30,6 +30,32 @@ interface Producto {
   variants: Variante[];
 }
 
+const getColorHex = (colorName: string): string => {
+  const colors: Record<string, string> = {
+    'azul': '#103359',
+    'azul marino': '#0a1f33',
+    'rosa': '#E9566D',
+    'verde': '#3DB28A',
+    'morado': '#806FF7',
+    'negro': '#1a1a1a',
+    'blanco': '#ffffff',
+    'naranja': '#F47B47',
+    'amarillo': '#FFD449',
+    'rojo': '#E9566D',
+    'celeste': '#87CEEB',
+    'gris': '#808080',
+    'beige': '#F5F5DC',
+    'lila': '#C8A2C8',
+    'turquesa': '#40E0D0',
+    'coral': '#FF7F50',
+    'violeta': '#EE82EE',
+    'mostaza': '#FFDB58'
+  };
+  return colors[colorName.toLowerCase()] || '#103359';
+};
+
+let notificationId = 0;
+
 const ProductContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -38,13 +64,26 @@ const ProductContent = () => {
   const [producto, setProducto] = useState<Producto | null>(null);
   const [cargando, setCargando] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
-
   const [tallaSeleccionada, setTallaSeleccionada] = useState<string>('');
   const [colorSeleccionado, setColorSeleccionado] = useState<string>('');
   const [cantidad, setCantidad] = useState<number>(1);
   const [stockDisponible, setStockDisponible] = useState<number | null>(null);
   const [imagenUrl, setImagenUrl] = useState<string | null>(null);
   const [precioSeleccionado, setPrecioSeleccionado] = useState<number | null>(null);
+  const [notifications, setNotifications] = useState<Array<{id: number, message: string, type: 'success' | 'error' | 'info'}>>([]);
+
+  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = ++notificationId;
+    const newNotification = { id, message, type };
+    setNotifications(prev => [...prev, newNotification]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(notif => notif.id !== id));
+    }, 3000);
+  };
+
+  const removeNotification = (id: number) => {
+    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  };
 
   useEffect(() => {
     if (!productId) {
@@ -67,6 +106,7 @@ const ProductContent = () => {
         setPrecioSeleccionado(precioMinimo);
       } catch (err: unknown) {
         setError((err as Error).message || 'Error al cargar el producto');
+        showNotification('Error al cargar el producto', 'error');
       } finally {
         setCargando(false);
       }
@@ -80,11 +120,9 @@ const ProductContent = () => {
       const variante = producto.variants.find(
         (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
       );
-
       if (variante) {
         setStockDisponible(variante.stock);
         setPrecioSeleccionado(variante.price);
-
         if (variante.images && variante.images.length > 0) {
           setImagenUrl(variante.images[0].imageUrl);
         }
@@ -96,14 +134,18 @@ const ProductContent = () => {
     }
   }, [colorSeleccionado, tallaSeleccionada, producto]);
 
-  const manejarCambioColor = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const nuevoColor = e.target.value;
-    setColorSeleccionado(nuevoColor);
+  const getUniqueColors = () => {
+    if (!producto) return [];
+    const colors = [...new Set(producto.variants.filter((v) => v.stock > 0).map((v) => v.color))];
+    return colors.slice(0, 6);
+  };
+
+  const manejarCambioColor = (color: string) => {
+    setColorSeleccionado(color);
     setTallaSeleccionada('');
     setStockDisponible(null);
-
     if (producto) {
-      const variante = producto.variants.find((v) => v.color === nuevoColor);
+      const variante = producto.variants.find((v) => v.color === color);
       if (variante) {
         setPrecioSeleccionado(variante.price);
         if (variante.images?.[0]?.imageUrl) {
@@ -117,17 +159,33 @@ const ProductContent = () => {
     setTallaSeleccionada(talla);
   };
 
-  const manejarCambioCantidad = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setCantidad(Number(e.target.value));
+  const manejarCambioCantidad = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = Number(e.target.value);
+    if (value >= 1 && value <= (stockDisponible || 10)) {
+      setCantidad(value);
+    }
+  };
+
+  const incrementarCantidad = () => {
+    if (cantidad < (stockDisponible || 10)) {
+      setCantidad(prev => prev + 1);
+    }
+  };
+
+  const decrementarCantidad = () => {
+    if (cantidad > 1) {
+      setCantidad(prev => prev - 1);
+    }
+  };
 
   const agregarAlCarrito = async () => {
     if (!tallaSeleccionada || !colorSeleccionado) {
-      alert('Por favor selecciona talla y color');
+      showNotification('Selecciona talla y color', 'info');
       return;
     }
 
     if (cantidad > (stockDisponible || 0)) {
-      alert('Cantidad seleccionada excede el stock disponible');
+      showNotification('Stock insuficiente', 'error');
       return;
     }
 
@@ -139,7 +197,7 @@ const ProductContent = () => {
     );
 
     if (!variante || !producto) {
-      alert('Variante de producto no encontrada.');
+      showNotification('Variante no encontrada', 'error');
       return;
     }
 
@@ -156,7 +214,7 @@ const ProductContent = () => {
 
     if (!token || !userId) {
       localStorage.setItem('pendingCartItem', JSON.stringify(itemCarrito));
-      alert('Producto guardado. Inicia sesión para completar la compra.');
+      showNotification('Producto guardado. Inicia sesión.', 'info');
       router.push('/login');
       return;
     }
@@ -178,130 +236,192 @@ const ProductContent = () => {
       );
 
       if (response.status === 200 || response.status === 201) {
-        alert('Producto agregado al carrito con éxito.');
-        router.push('/menu');
+        showNotification('¡Agregado al carrito!', 'success');
+        setTimeout(() => router.push('/menu'), 1500);
       } else {
         throw new Error('Error al agregar al carrito');
       }
     } catch (err: unknown) {
-      if (axios.isAxiosError(err)) {
-        alert('Error al agregar al carrito: ' + (err.response?.data?.message || err.message));
-      } else {
-        alert('Error al agregar al carrito: ' + (err as Error).message);
-      }
+      showNotification('Error al agregar al carrito', 'error');
     }
   };
 
-  if (cargando) return <p>Cargando producto...</p>;
-  if (error) return <p style={{ color: 'red' }}>{error}</p>;
-  if (!producto) return <p>Producto no encontrado. Regresa al menú.</p>;
+  if (cargando) return (
+    <div className={styles.loadingContainer}>
+      <div className={styles.loadingSpinner}></div>
+      <p>Cargando...</p>
+    </div>
+  );
+  
+  if (error) return (
+    <div className={styles.errorContainer}>
+      <p className={styles.errorText}>{error}</p>
+      <button onClick={() => router.push('/menu')} className={styles.backButton}>
+        Volver al menú
+      </button>
+    </div>
+  );
+  
+  if (!producto) return (
+    <div className={styles.emptyContainer}>
+      <p>Producto no encontrado</p>
+      <button onClick={() => router.push('/menu')} className={styles.backButton}>
+        Volver al menú
+      </button>
+    </div>
+  );
 
-  const coloresDisponibles = [
-    ...new Set(producto.variants.filter((v) => v.stock > 0).map((v) => v.color)),
-  ];
-
+  const coloresDisponibles = getUniqueColors();
   const tallasDisponibles = colorSeleccionado
-    ? [
-        ...new Set(
-          producto.variants
-            .filter((v) => v.color === colorSeleccionado && v.stock > 0)
-            .map((v) => v.size)
-        ),
-      ]
+    ? [...new Set(producto.variants.filter((v) => v.color === colorSeleccionado && v.stock > 0).map((v) => v.size))]
     : [];
 
   return (
-    <div className={styles.producto}>
-      {imagenUrl ? (
-        <Image
-          src={imagenUrl}
-          alt={producto.name}
-          className={styles['imagen-producto']}
-          width={500}
-          height={500}
-          priority
-        />
-      ) : (
-        <p>Imagen no disponible</p>
-      )}
+    <>
+      <div className={styles.notifications}>
+        {notifications.map((notif) => (
+          <div key={notif.id} className={`${styles.notification} ${notif.type}`} onClick={() => removeNotification(notif.id)}>
+            <span className={styles.notifIcon}>
+              {notif.type === 'success' ? '✓' : notif.type === 'error' ? '✗' : 'ℹ'}
+            </span>
+            {notif.message}
+            <button className={styles.notifClose}>×</button>
+          </div>
+        ))}
+      </div>
 
-      <div className={styles['info-producto']}>
-        <h2>{producto.name}</h2>
-        <p>{producto.description}</p>
-        <p className={styles['precio-producto']}>
-          {precioSeleccionado !== null
-            ? `$${precioSeleccionado.toLocaleString('es-CO')}`
-            : 'Seleccione una variante'}
-        </p>
+      <div className={styles.productPage}>
+        <button onClick={() => router.push('/menu')} className={styles.backBtn}>
+          ← Volver
+        </button>
 
-        <div className={styles['opciones-producto']}>
-          <div className={styles['selector-color']}>
-            <label>Color:</label>
-            <select value={colorSeleccionado} onChange={manejarCambioColor}>
-              <option value="">Seleccione un color</option>
-              {coloresDisponibles.map((color) => (
-                <option key={color} value={color}>
-                  {color}
-                </option>
-              ))}
-            </select>
+        <div className={styles.productContainer}>
+          <div className={styles.imageSection}>
+            {imagenUrl ? (
+              <Image
+                src={imagenUrl}
+                alt={producto.name}
+                width={500}
+                height={667}
+                className={styles.productImage}
+                priority
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = '/images/placeholder.png';
+                }}
+              />
+            ) : (
+              <div className={styles.imagePlaceholder}>Imagen no disponible</div>
+            )}
           </div>
 
-          {colorSeleccionado && (
-            <div className={styles['selector-talla']}>
-              <label>Talla:</label>
-              <div className={styles['botones-talla']}>
-                {tallasDisponibles.map((talla) => (
+          <div className={styles.infoSection}>
+            <div className={styles.productHeader}>
+              <h1 className={styles.productTitle}>{producto.name}</h1>
+              <div className={styles.priceSection}>
+                <span className={styles.productPrice}>
+                  {precioSeleccionado !== null ? `$${precioSeleccionado.toLocaleString('es-CO')}` : 'Selecciona opciones'}
+                </span>
+              </div>
+            </div>
+
+            <p className={styles.productDescription}>{producto.description}</p>
+
+            <div className={styles.colorSection}>
+              <label className={styles.sectionLabel}>Color</label>
+              <div className={styles.colorOptions}>
+                {coloresDisponibles.map((color) => (
                   <button
-                    key={talla}
-                    type="button"
-                    className={`${styles['boton-talla']} ${
-                      tallaSeleccionada === talla ? styles['seleccionado'] : ''
-                    }`}
-                    onClick={() => manejarCambioTalla(talla)}
+                    key={color}
+                    className={`${styles.colorOption} ${colorSeleccionado === color ? styles.selected : ''}`}
+                    style={{ backgroundColor: getColorHex(color) }}
+                    onClick={() => manejarCambioColor(color)}
+                    title={color}
                   >
-                    {talla}
+                    {colorSeleccionado === color && <span className={styles.checkmark}>✓</span>}
                   </button>
                 ))}
               </div>
             </div>
-          )}
 
-          <div className={styles['selector-cantidad']}>
-            <label>Cantidad:</label>
-            <input
-              type="number"
-              value={cantidad}
-              onChange={manejarCambioCantidad}
-              min={1}
-              max={stockDisponible || 1}
-            />
-            <p>
-              {colorSeleccionado && tallaSeleccionada
-                ? stockDisponible !== null
-                  ? stockDisponible < 3
-                    ? 'Últimas unidades'
-                    : 'Disponible'
-                  : 'No disponible'
-                : 'Seleccione color y talla'}
-            </p>
+            {colorSeleccionado && (
+              <div className={styles.sizeSection}>
+                <label className={styles.sectionLabel}>Talla</label>
+                <div className={styles.sizeOptions}>
+                  {tallasDisponibles.map((talla) => (
+                    <button
+                      key={talla}
+                      className={`${styles.sizeOption} ${tallaSeleccionada === talla ? styles.selected : ''}`}
+                      onClick={() => manejarCambioTalla(talla)}
+                    >
+                      {talla}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className={styles.actionsSection}>
+              <div className={styles.quantityControl}>
+                <label className={styles.quantityLabel}>Cantidad</label>
+                <div className={styles.quantityInputGroup}>
+                  <button onClick={decrementarCantidad} disabled={cantidad <= 1} className={styles.qtyBtn}>−</button>
+                  <input
+                    type="number"
+                    value={cantidad}
+                    onChange={manejarCambioCantidad}
+                    min={1}
+                    max={stockDisponible || 10}
+                    className={styles.qtyInput}
+                  />
+                  <button onClick={incrementarCantidad} disabled={cantidad >= (stockDisponible || 10)} className={styles.qtyBtn}>+</button>
+                </div>
+              </div>
+
+              <div className={styles.stockInfo}>
+                {colorSeleccionado && tallaSeleccionada && stockDisponible !== null && (
+                  <div className={styles.stockStatus}>
+                    {stockDisponible > 0 ? (
+                      stockDisponible < 4 ? (
+                        <span className={styles.lowStock}>Últimas unidades</span>
+                      ) : (
+                        <span className={styles.inStock}>Disponible</span>
+                      )
+                    ) : (
+                      <span className={styles.outOfStock}>Agotado</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              className={`${styles.addToCartBtn} ${
+                !tallaSeleccionada || !colorSeleccionado || stockDisponible === 0 ? styles.disabled : ''
+              }`}
+              onClick={agregarAlCarrito}
+              disabled={!tallaSeleccionada || !colorSeleccionado || stockDisponible === 0}
+            >
+              {stockDisponible === 0 ? 'AGOTADO' : !tallaSeleccionada || !colorSeleccionado ? 'SELECCIONA OPCIONES' : 'AGREGAR AL CARRITO'}
+              {precioSeleccionado && cantidad > 0 && stockDisponible !== 0 && (
+                <span className={styles.totalPrice}>${((precioSeleccionado) * cantidad).toLocaleString('es-CO')}</span>
+              )}
+            </button>
           </div>
         </div>
-
-        <button
-          className={styles['btn-agregar-carrito']}
-          onClick={agregarAlCarrito}
-        >
-          Agregar al Carrito
-        </button>
       </div>
-    </div>
+    </>
   );
 };
 
 const Product = () => {
   return (
-    <Suspense fallback={<div>Cargando...</div>}>
+    <Suspense fallback={
+      <div className={styles.loadingContainer}>
+        <div className={styles.loadingSpinner}></div>
+        <p>Cargando...</p>
+      </div>
+    }>
       <ProductContent />
     </Suspense>
   );
