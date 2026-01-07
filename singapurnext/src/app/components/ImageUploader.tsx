@@ -1,0 +1,214 @@
+"use client";
+
+import { useState } from 'react';
+import { CldUploadWidget } from 'next-cloudinary';
+import styles from './ImageUploader.module.css';
+
+interface ImageData {
+  fileName: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+  mediumUrl: string;
+  largeUrl: string;
+}
+
+interface ImageUploaderProps {
+  onUploadSuccess: (imageData: ImageData, variantIndex?: number, imageIndex?: number) => void;
+  variantIndex?: number;
+  imageIndex?: number;
+  disabled?: boolean;
+}
+
+const ImageUploader: React.FC<ImageUploaderProps> = ({ 
+  onUploadSuccess, 
+  variantIndex, 
+  imageIndex,
+  disabled = false
+}) => {
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+
+  const cloudinaryConfig = {
+    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+    uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
+    folder: 'ecommerce/productos',
+    sources: ['local', 'url'],
+    multiple: false,
+    maxFiles: 1,
+    clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+    maxFileSize: 5000000, // 5MB
+    showPoweredBy: false,
+    styles: {
+      palette: {
+        window: "#F5F5F5",
+        windowBorder: "#90A0B3",
+        tabIcon: "#0078FF",
+        menuIcons: "#5A616A",
+        textDark: "#000000",
+        textLight: "#FFFFFF",
+        link: "#0078FF",
+        action: "#FF620C",
+        inactiveTabIcon: "#0E2F5A",
+        error: "#F44235",
+        inProgress: "#0078FF",
+        complete: "#20B832",
+        sourceBg: "#E4EBF1"
+      }
+    }
+  };
+
+  const handleUploadSuccess = (result: any) => {
+    if (result.event === 'success') {
+      const imageUrl = result.info.secure_url;
+      const publicId = result.info.public_id;
+      const fileName = result.info.original_filename || publicId.split('/').pop() || 'producto';
+      
+      // Generar diferentes tamaños automáticamente
+      const thumbnailUrl = imageUrl.replace('/upload/', '/upload/w_150,h_150,c_fill/q_auto,f_auto/');
+      const mediumUrl = imageUrl.replace('/upload/', '/upload/w_600,h_600,c_limit/q_auto,f_auto/');
+      const largeUrl = imageUrl.replace('/upload/', '/upload/w_1200,h_1200,c_limit/q_auto,f_auto/');
+      
+      const imageData: ImageData = {
+        fileName: fileName,
+        imageUrl: imageUrl,
+        thumbnailUrl: thumbnailUrl,
+        mediumUrl: mediumUrl,
+        largeUrl: largeUrl
+      };
+      
+      // Llamar a la función callback
+      onUploadSuccess(imageData, variantIndex, imageIndex);
+      
+      setPreviewUrl(thumbnailUrl);
+      setUploading(false);
+    }
+  };
+
+  const handleError = (error: any) => {
+    console.error('Error uploading:', error);
+    alert('Error al subir la imagen. Por favor, intenta de nuevo.');
+    setUploading(false);
+  };
+
+  const handleManualUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', cloudinaryConfig.uploadPreset!);
+    formData.append('folder', cloudinaryConfig.folder);
+    formData.append('cloud_name', cloudinaryConfig.cloudName!);
+    
+    try {
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/upload`,
+        {
+          method: 'POST',
+          body: formData
+        }
+      );
+      
+      const data = await response.json();
+      if (data.secure_url) {
+        handleUploadSuccess({ event: 'success', info: data });
+      } else {
+        throw new Error(data.error?.message || 'Error al subir');
+      }
+    } catch (error) {
+      handleError(error);
+    } finally {
+      event.target.value = ''; // Reset input
+    }
+  };
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.uploadSection}>
+        <CldUploadWidget
+          uploadPreset={cloudinaryConfig.uploadPreset}
+          options={cloudinaryConfig}
+          onSuccess={handleUploadSuccess}
+          onError={handleError}
+          onUpload={() => setUploading(true)}
+        >
+          {({ open }) => (
+            <button
+              type="button"
+              onClick={() => open()}
+              disabled={uploading || disabled}
+              className={`${styles.uploadButton} ${uploading ? styles.uploading : ''}`}
+            >
+              {uploading ? (
+                <>
+                  <span className={styles.spinner}></span>
+                  Subiendo...
+                </>
+              ) : (
+                '📤 Subir Imagen desde Dispositivo'
+              )}
+            </button>
+          )}
+        </CldUploadWidget>
+
+        <div className={styles.orDivider}>
+          <span>o</span>
+        </div>
+
+        <div className={styles.manualUpload}>
+          <input
+            type="file"
+            id={`file-input-${variantIndex}-${imageIndex}`}
+            accept="image/*"
+            onChange={handleManualUpload}
+            disabled={uploading || disabled}
+            style={{ display: 'none' }}
+          />
+          <label 
+            htmlFor={`file-input-${variantIndex}-${imageIndex}`}
+            className={`${styles.fileLabel} ${(uploading || disabled) ? styles.disabled : ''}`}
+          >
+            Seleccionar archivo
+          </label>
+        </div>
+      </div>
+
+      {previewUrl && (
+        <div className={styles.previewContainer}>
+          <p className={styles.previewTitle}>Vista previa:</p>
+          <img 
+            src={previewUrl} 
+            alt="Vista previa" 
+            className={styles.previewImage}
+            onError={() => setPreviewUrl('')}
+          />
+          <p className={styles.helpText}>
+            ✅ Imagen subida exitosamente a Cloudinary
+          </p>
+        </div>
+      )}
+
+      {!previewUrl && !uploading && (
+        <div className={styles.infoBox}>
+          <p className={styles.infoText}>
+            <strong>Requisitos:</strong><br/>
+            • Formatos: JPG, PNG, WebP, GIF<br/>
+            • Tamaño máximo: 5MB<br/>
+            • Se optimizará automáticamente
+          </p>
+        </div>
+      )}
+
+      {uploading && !previewUrl && (
+        <div className={styles.uploadingMessage}>
+          <span className={styles.smallSpinner}></span>
+          Procesando imagen...
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ImageUploader;

@@ -29,6 +29,12 @@ interface Product {
   variants: Variant[];
 }
 
+interface ApiResponse {
+  success: boolean;
+  message: string;
+  [key: string]: any;
+}
+
 const Admin = () => {
   const router = useRouter();
   const [role, setRole] = useState("");
@@ -51,6 +57,7 @@ const Admin = () => {
 
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
   useEffect(() => {
     const storedRole = localStorage.getItem("role");
@@ -71,14 +78,17 @@ const Admin = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      
       if (response.ok) {
         const data = await response.json();
         setProducts(data);
       } else {
         console.error("Error al obtener los productos:", response.statusText);
+        alert("Error al cargar los productos");
       }
     } catch (error) {
       console.error("Error en la solicitud:", error);
+      alert("Error de conexión al cargar productos");
     }
   };
 
@@ -188,7 +198,7 @@ const Admin = () => {
 
     setIsLoading(true);
 
-    // Preparar los datos, asegurándose de que no se envíen IDs para nuevos elementos
+    // Preparar los datos
     const productData: Product = {
       name: name.trim(),
       description: description.trim(),
@@ -208,7 +218,6 @@ const Admin = () => {
       }))
     };
 
-    // Solo incluir el ID del producto si estamos editando
     if (editingProductId) {
       productData.id = editingProductId;
     }
@@ -234,16 +243,16 @@ const Admin = () => {
             body: JSON.stringify(productData),
           });
 
+      const result: ApiResponse = await response.json();
+      
       if (response.ok) {
-        const data = await response.json();
-        console.log("Producto guardado/actualizado:", data);
-        alert(editingProductId ? "Producto actualizado exitosamente" : "Producto creado exitosamente");
+        console.log("Producto guardado/actualizado:", result);
+        alert(result.message || (editingProductId ? "Producto actualizado exitosamente" : "Producto creado exitosamente"));
         fetchProducts();
         resetForm();
       } else {
-        const errorData = await response.text();
-        console.error("Error al guardar el producto:", response.statusText, errorData);
-        alert(`Error al guardar el producto: ${response.statusText}`);
+        console.error("Error al guardar el producto:", result);
+        alert(`Error: ${result.message || "No se pudo guardar el producto"}`);
       }
     } catch (error) {
       console.error("Error en la solicitud:", error);
@@ -277,43 +286,168 @@ const Admin = () => {
     setType(product.type);
     setVariants(product.variants);
     setEditingProductId(product.id || null);
+    
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("¿Estás seguro de que quieres eliminar este producto?")) {
-      return;
-    }
-
-    const token = localStorage.getItem("token");
+  const checkIfCanDelete = async (id: number): Promise<boolean> => {
     try {
-      const response = await fetch(`${MENU_PRODUCTS}/${id}`, {
-        method: "DELETE",
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${MENU_PRODUCTS}/${id}/can-delete`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-
+      
       if (response.ok) {
-        console.log("Producto eliminado exitosamente");
-        alert("Producto eliminado exitosamente");
+        const result: ApiResponse = await response.json();
+        return result.canDelete === true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error al verificar eliminación:", error);
+      return false;
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+
+    const confirmDelete = window.confirm(
+      `¿Estás seguro de que quieres eliminar el producto "${product.name}"?\n\n` +
+      `Esta acción eliminará automáticamente cualquier referencia en carritos de compra.`
+    );
+
+    if (!confirmDelete) return;
+
+    setIsDeleting(id);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${MENU_PRODUCTS}/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+      });
+
+      const result: ApiResponse = await response.json();
+      
+      if (response.ok) {
+        console.log("Producto eliminado:", result);
+        alert(result.message || "Producto eliminado exitosamente");
         fetchProducts();
       } else {
-        console.error("Error al eliminar el producto:", response.statusText);
-        alert("Error al eliminar el producto");
+        console.error("Error al eliminar el producto:", result);
+        
+        if (response.status === 409) {
+          // CONFLICT - Producto en uso, ofrecer eliminación forzada
+          const forceDelete = window.confirm(
+            `${result.message || "El producto está en carritos de compra."}\n\n` +
+            `¿Deseas eliminar forzadamente el producto?\n` +
+            `(Esto eliminará las referencias de los carritos)`
+          );
+          
+          if (forceDelete) {
+            await handleDeleteForce(id);
+          }
+        } else {
+          alert(`Error: ${result.message || "No se pudo eliminar el producto"}`);
+        }
       }
     } catch (error) {
       console.error("Error en la solicitud:", error);
       alert("Error de conexión. Por favor, inténtalo de nuevo.");
+    } finally {
+      setIsDeleting(null);
     }
   };
 
-  if (role !== "ROLE_ADMIN") return null;
+  const handleDeleteForce = async (id: number) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+
+    const confirmForceDelete = window.confirm(
+      `⚠️ ADVERTENCIA: Eliminación Forzada\n\n` +
+      `¿Estás seguro de que quieres ELIMINAR FORZADAMENTE el producto "${product.name}"?\n\n` +
+      `Esta acción eliminará el producto y todas sus referencias en carritos de compra.\n` +
+      `Los usuarios perderán estos productos de sus carritos.\n\n` +
+      `¿Continuar?`
+    );
+
+    if (!confirmForceDelete) return;
+
+    setIsDeleting(id);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${MENU_PRODUCTS}/${id}/force`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+      });
+
+      const result: ApiResponse = await response.json();
+      
+      if (response.ok) {
+        console.log("Producto eliminado forzadamente:", result);
+        alert(result.message || "Producto eliminado forzadamente exitosamente");
+        fetchProducts();
+      } else {
+        console.error("Error al eliminar forzadamente:", result);
+        alert(`Error: ${result.message || "No se pudo eliminar el producto forzadamente"}`);
+      }
+    } catch (error) {
+      console.error("Error en la solicitud:", error);
+      alert("Error de conexión. Por favor, inténtalo de nuevo.");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  const handleQuickDelete = async (id: number) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+
+    const canDelete = await checkIfCanDelete(id);
+    
+    if (canDelete) {
+      // Eliminación normal si no está en carritos
+      handleDelete(id);
+    } else {
+      // Si está en carritos, preguntar qué hacer
+      const userChoice = window.confirm(
+        `El producto "${product.name}" está en carritos de compra.\n\n` +
+        `¿Deseas eliminar forzadamente (elimina de carritos) o cancelar?\n\n` +
+        `OK = Eliminar forzadamente\nCancelar = Cancelar`
+      );
+      
+      if (userChoice) {
+        handleDeleteForce(id);
+      }
+    }
+  };
+
+  if (role !== "ROLE_ADMIN") {
+    return (
+      <div className={styles.container}>
+        <h2 className={styles.title}>Acceso Denegado</h2>
+        <p>No tienes permisos para acceder a esta página.</p>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
       <h2 className={styles.title}>
         {editingProductId ? "Editar Producto" : "Agregar Producto"}
       </h2>
+      
       <form className={styles.form} onSubmit={handleSubmit}>
         <label className={styles.label}>Nombre:</label>
         <input
@@ -322,6 +456,7 @@ const Admin = () => {
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
+          disabled={isLoading}
         />
 
         <label className={styles.label}>Descripción:</label>
@@ -330,6 +465,8 @@ const Admin = () => {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           required
+          disabled={isLoading}
+          rows={4}
         />
 
         <label className={styles.label}>Género:</label>
@@ -338,6 +475,7 @@ const Admin = () => {
           value={gender}
           onChange={(e) => setGender(e.target.value)}
           required
+          disabled={isLoading}
         >
           <option value="">Seleccionar Género</option>
           <option value="MUJER">MUJER</option>
@@ -351,6 +489,7 @@ const Admin = () => {
           value={type}
           onChange={(e) => setType(e.target.value)}
           required
+          disabled={isLoading}
         >
           <option value="">Seleccionar Tipo</option>
           <option value="SUPERIOR">SUPERIOR</option>
@@ -358,65 +497,82 @@ const Admin = () => {
           <option value="CALZADO">CALZADO</option>
         </select>
 
-        <hr />
-        <h3>Variantes</h3>
+        <hr className={styles.divider} />
+        
+        <h3 className={styles.sectionTitle}>Variantes</h3>
+        
         {variants.map((variant, index) => (
           <div key={index} className={styles.variantBox}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className={styles.variantHeader}>
               <h4>Variante {index + 1}</h4>
               {variants.length > 1 && (
                 <button
                   type="button"
                   className={styles.removeButton}
                   onClick={() => handleRemoveVariant(index)}
+                  disabled={isLoading}
                 >
                   Eliminar Variante
                 </button>
               )}
             </div>
 
-            <label className={styles.label}>Color:</label>
-            <input
-              className={styles.input}
-              type="text"
-              value={variant.color}
-              onChange={(e) => handleVariantChange(index, "color", e.target.value)}
-              required
-            />
+            <div className={styles.variantFields}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Color:</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={variant.color}
+                  onChange={(e) => handleVariantChange(index, "color", e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-            <label className={styles.label}>Talla:</label>
-            <input
-              className={styles.input}
-              type="text"
-              value={variant.size}
-              onChange={(e) => handleVariantChange(index, "size", e.target.value)}
-              required
-            />
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Talla:</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={variant.size}
+                  onChange={(e) => handleVariantChange(index, "size", e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-            <label className={styles.label}>Stock:</label>
-            <input
-              className={styles.input}
-              type="number"
-              min="0"
-              value={variant.stock}
-              onChange={(e) => handleVariantChange(index, "stock", Number(e.target.value))}
-              required
-            />
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Stock:</label>
+                <input
+                  className={styles.input}
+                  type="number"
+                  min="0"
+                  value={variant.stock}
+                  onChange={(e) => handleVariantChange(index, "stock", Number(e.target.value))}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
 
-            <label className={styles.label}>Precio:</label>
-            <input
-              className={styles.input}
-              type="number"
-              min="0"
-              step="0.01"
-              value={variant.price}
-              onChange={(e) => handleVariantChange(index, "price", parseFloat(e.target.value))}
-              required
-            />
+              <div className={styles.formGroup}>
+                <label className={styles.label}>Precio:</label>
+                <input
+                  className={styles.input}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={variant.price}
+                  onChange={(e) => handleVariantChange(index, "price", parseFloat(e.target.value))}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
 
             <label className={styles.label}>Imágenes:</label>
             {variant.images.map((img, imgIndex) => (
-              <div key={imgIndex} style={{ marginBottom: '10px', border: '1px solid #ddd', padding: '10px' }}>
+              <div key={imgIndex} className={styles.imageBox}>
                 <input
                   className={styles.input}
                   type="text"
@@ -425,6 +581,7 @@ const Admin = () => {
                   onChange={(e) =>
                     handleImageChange(index, imgIndex, "fileName", e.target.value)
                   }
+                  disabled={isLoading}
                 />
                 <input
                   className={styles.input}
@@ -435,76 +592,139 @@ const Admin = () => {
                     handleImageChange(index, imgIndex, "imageUrl", e.target.value)
                   }
                   required
+                  disabled={isLoading}
                 />
                 {variant.images.length > 1 && (
                   <button
                     type="button"
-                    className={styles.removeButton}
+                    className={styles.removeSmallButton}
                     onClick={() => handleRemoveImage(index, imgIndex)}
+                    disabled={isLoading}
                   >
                     Eliminar Imagen
                   </button>
                 )}
               </div>
             ))}
+            
             <button
               type="button"
               className={styles.addButton}
               onClick={() => handleAddImage(index)}
+              disabled={isLoading}
             >
-              Agregar otra imagen
+              + Agregar otra imagen
             </button>
-            <hr />
+            
+            <hr className={styles.divider} />
           </div>
         ))}
+        
         <button
           type="button"
           className={styles.addButton}
           onClick={handleAddVariant}
-        >
-          Agregar otra variante
-        </button>
-
-        <button 
-          className={styles.button} 
-          type="submit"
           disabled={isLoading}
         >
-          {isLoading 
-            ? "Guardando..." 
-            : editingProductId 
-              ? "Actualizar Producto" 
-              : "Guardar Producto"
-          }
+          + Agregar otra variante
         </button>
 
-        {editingProductId && (
-          <button
-            type="button"
-            className={styles.cancelButton}
-            onClick={resetForm}
+        <div className={styles.formActions}>
+          <button 
+            className={`${styles.button} ${styles.primaryButton}`} 
+            type="submit"
+            disabled={isLoading}
           >
-            Cancelar Edición
+            {isLoading 
+              ? "Guardando..." 
+              : editingProductId 
+                ? "Actualizar Producto" 
+                : "Guardar Producto"
+            }
           </button>
-        )}
+
+          {editingProductId && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.secondaryButton}`}
+              onClick={resetForm}
+              disabled={isLoading}
+            >
+              Cancelar Edición
+            </button>
+          )}
+        </div>
       </form>
 
-      <h2 className={styles.title}>Lista de Productos</h2>
-      <div className={styles.productList}>
-        {products.map((product) => (
-          <div key={product.id} className={styles.productItem}>
-            <h3>{product.name}</h3>
-            <p>{product.description}</p>
-            <p><strong>Género:</strong> {product.gender}</p>
-            <p><strong>Tipo:</strong> {product.type}</p>
-            <p><strong>Variantes:</strong> {product.variants.length}</p>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button onClick={() => handleEdit(product)}>Editar</button>
-              <button onClick={() => handleDelete(product.id!)}>Eliminar</button>
+      <h2 className={styles.title}>Lista de Productos ({products.length})</h2>
+      
+      {products.length === 0 ? (
+        <p className={styles.emptyMessage}>No hay productos registrados.</p>
+      ) : (
+        <div className={styles.productGrid}>
+          {products.map((product) => (
+            <div key={product.id} className={styles.productCard}>
+              <div className={styles.productHeader}>
+                <h3 className={styles.productName}>{product.name}</h3>
+                <div className={styles.productBadges}>
+                  <span className={styles.badge}>{product.gender}</span>
+                  <span className={styles.badge}>{product.type}</span>
+                </div>
+              </div>
+              
+              <p className={styles.productDescription}>{product.description}</p>
+              
+              <div className={styles.productInfo}>
+                <p><strong>Variantes:</strong> {product.variants.length}</p>
+                <p><strong>Total Stock:</strong> {product.variants.reduce((sum, v) => sum + v.stock, 0)}</p>
+              </div>
+              
+              {product.variants.length > 0 && (
+                <div className={styles.variantsPreview}>
+                  <strong>Variantes disponibles:</strong>
+                  <ul className={styles.variantsList}>
+                    {product.variants.slice(0, 3).map((variant, idx) => (
+                      <li key={idx}>
+                        {variant.color} - {variant.size} (Stock: {variant.stock})
+                      </li>
+                    ))}
+                    {product.variants.length > 3 && (
+                      <li>... y {product.variants.length - 3} más</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              
+              <div className={styles.productActions}>
+                <button 
+                  className={styles.editButton}
+                  onClick={() => handleEdit(product)}
+                  disabled={isLoading || isDeleting === product.id}
+                >
+                  Editar
+                </button>
+                
+                <button 
+                  className={styles.deleteButton}
+                  onClick={() => handleDelete(product.id!)}
+                  disabled={isLoading || isDeleting === product.id}
+                >
+                  {isDeleting === product.id ? "Eliminando..." : "Eliminar"}
+                </button>
+                
+                <button 
+                  className={styles.forceDeleteButton}
+                  onClick={() => handleDeleteForce(product.id!)}
+                  disabled={isLoading || isDeleting === product.id}
+                  title="Eliminar forzadamente (incluye carritos)"
+                >
+                  {isDeleting === product.id ? "..." : "Forzar Eliminación"}
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

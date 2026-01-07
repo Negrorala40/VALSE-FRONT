@@ -1,0 +1,199 @@
+.container {
+  border: 2px dashed #e0e0e0;
+  border-radius: 10px;
+  padding: 20px;
+  background-color: #fafafa;
+  margin-bottom: 15px;
+  transition: border-color 0.3s ease;
+}
+
+.container:hover {
+  border-color: #0070f3;
+}
+
+.uploadSection {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.uploadButton {
+  background: linear-gradient(135deg, #0070f3, #0051cc);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 112, 243, 0.2);
+}
+
+.uploadButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0051cc, #003d99);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 112, 243, 0.3);
+}
+
+.uploadButton:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.uploadButton.uploading {
+  background: #666666;
+}
+
+.orDivider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+}
+
+.orDivider::before,
+.orDivider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #ddd;
+}
+
+.orDivider span {
+  padding: 0 10px;
+}
+
+.fileLabel {
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ddd;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-align: center;
+  display: block;
+}
+
+.fileLabel:hover:not(.disabled) {
+  background-color: #e0e0e0;
+  border-color: #ccc;
+}
+
+.fileLabel.disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+  border-color: #eee;
+}
+
+.previewContainer {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.previewTitle {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #333;
+  font-size: 14px;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  margin: 0 auto 12px;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.helpText {
+  color: #4CAF50;
+  font-size: 12px;
+  margin-top: 8px;
+  text-align: center;
+  font-weight: 500;
+}
+
+.infoBox {
+  background-color: #e8f4ff;
+  border: 1px solid #c2e0ff;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 15px;
+}
+
+.infoText {
+  color: #0066cc;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.uploadingMessage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #666;
+  font-size: 14px;
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+}
+
+.smallSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 112, 243, 0.3);
+  border-radius: 50%;
+  border-top-color: #0070f3;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .uploadSection {
+    flex-direction: column;
+  }
+  
+  .uploadButton,
+  .fileLabel {
+    width: 100%;
+    text-align: center;
+  }
+}
