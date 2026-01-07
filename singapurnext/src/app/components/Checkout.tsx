@@ -8,7 +8,7 @@ import {
   PERFIL_ME, 
   ADDRESS, 
   ORDERS,
-  MERCADOPAGO_CREATE_PREFERENCE
+  API_BASE_URL
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -23,7 +23,9 @@ import {
   Package, 
   Star, 
   Sparkles,
-  X
+  X,
+  Loader2,
+  ExternalLink
 } from 'lucide-react';
 
 interface CartItem {
@@ -71,11 +73,22 @@ interface OrderResponse {
   }>;
 }
 
-interface MercadoPagoPreferenceResponse {
-  preferenceId: string;
-  initPoint: string;
-  orderId: string;
+interface PaymentPreferenceResponse {
+  id: string;
+  init_point: string;
+  [key: string]: any; // Para otras propiedades que pueda devolver MercadoPago
 }
+
+interface PaymentStatus {
+  orderId: number;
+  status: string;
+  totalPrice: number;
+  orderDate: string;
+}
+
+const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
+const MERCADOPAGO_STATUS = `${API_BASE_URL}/api/payments/status`;
+const MERCADOPAGO_SIMULATE = `${API_BASE_URL}/api/payments/simulate-payment`;
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -83,6 +96,7 @@ const CheckoutPage = () => {
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string>('');
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -98,11 +112,15 @@ const CheckoutPage = () => {
   });
 
   const [orderCreated, setOrderCreated] = useState(false);
-  const [mercadoPagoPreference, setMercadoPagoPreference] = useState<MercadoPagoPreferenceResponse | null>(null);
+  const [paymentPreference, setPaymentPreference] = useState<PaymentPreferenceResponse | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [redirectingToMP, setRedirectingToMP] = useState(false);
   
-  // Ref para controlar múltiples fetchs
+  // Refs
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
+  const paymentPollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Formateador de precio
   const formatPrice = (price: number) => {
@@ -119,6 +137,46 @@ const CheckoutPage = () => {
     setTotal(newTotal);
   }, []);
 
+  // Limpiar polling
+  const clearPaymentPolling = () => {
+    if (paymentPollingRef.current) {
+      clearInterval(paymentPollingRef.current);
+      paymentPollingRef.current = null;
+    }
+  };
+
+  // Polling para verificar estado de pago
+  const startPaymentPolling = useCallback((orderId: number) => {
+    clearPaymentPolling();
+    
+    paymentPollingRef.current = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const status: PaymentStatus = await response.json();
+          setPaymentStatus(status);
+          
+          // Si el pago fue aprobado, detener polling
+          if (status.status === 'PAGO_APROBADO') {
+            clearPaymentPolling();
+            setSuccessMessage('¡Pago aprobado! Tu pedido está siendo procesado.');
+          }
+        }
+      } catch (error) {
+        console.error('Error polling payment status:', error);
+      }
+    }, 5000); // Poll cada 5 segundos
+  }, []);
+
+  // Fetch carrito
   const fetchCart = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       console.log('Fetching cart data...');
@@ -127,59 +185,33 @@ const CheckoutPage = () => {
         signal
       });
       
-      if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
       
       const data = await res.json();
       console.log('Datos del carrito recibidos:', data);
       
       const items: CartItem[] = data.map(
-        (item: {
-          id: string;
-          imageUrls: string[];
-          productName: string;
-          name: string;
-          price: number;
-          size: string;
-          color: string;
-          quantity: number;
-          stock: number;
-          productVariantId?: string | number;
-        }) => {
-          let variantId = item.productVariantId;
-          if (typeof variantId === 'number') {
-            variantId = variantId.toString();
-          }
-          if (!variantId || variantId === '') {
-            variantId = item.id;
-          }
-          
-          return {
-            id: item.id,
-            image: item.imageUrls?.[0] || '/placeholder.png',
-            name: item.productName || item.name,
-            price: item.price,
-            size: item.size,
-            color: item.color,
-            quantity: item.quantity,
-            stock: item.stock || 100,
-            productVariantId: variantId,
-          };
-        }
+        (item: any) => ({
+          id: item.id,
+          image: item.imageUrls?.[0] || '/placeholder.png',
+          name: item.productName || item.name,
+          price: item.price,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          stock: item.stock || 100,
+          productVariantId: item.productVariantId?.toString() || item.id,
+        })
       );
       
       setCartItems(items);
       calculateTotal(items);
-      console.log('Carrito actualizado:', items.length, 'productos');
     } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching cart:', error);
-        throw error;
-      }
+      if (error.name !== 'AbortError') throw error;
     }
   }, [calculateTotal]);
 
+  // Fetch usuario
   const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       console.log('Fetching user data...');
@@ -188,9 +220,7 @@ const CheckoutPage = () => {
         signal
       });
       
-      if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
       
       const user = await res.json();
       
@@ -203,7 +233,6 @@ const CheckoutPage = () => {
         });
         
         user.addresses = Array.from(uniqueAddresses.values());
-        console.log('Direcciones después de filtrar duplicados:', user.addresses);
       }
       
       setUserData(user);
@@ -211,10 +240,7 @@ const CheckoutPage = () => {
         setSelectedAddress(user.addresses[0]);
       }
     } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error fetching user:', error);
-        throw error;
-      }
+      if (error.name !== 'AbortError') throw error;
     }
   }, []);
 
@@ -226,10 +252,7 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (hasFetchedRef.current) {
-      console.log('Ya se cargaron los datos, evitando fetch duplicado');
-      return;
-    }
+    if (hasFetchedRef.current) return;
 
     const fetchInitialData = async () => {
       setLoading(true);
@@ -268,9 +291,11 @@ const CheckoutPage = () => {
       if (fetchControllerRef.current) {
         fetchControllerRef.current.abort();
       }
+      clearPaymentPolling();
     };
   }, [fetchCart, fetchUser]);
 
+  // Actualizar cantidad
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     
@@ -310,6 +335,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // Eliminar item
   const removeItem = async (itemId: string) => {
     const token = localStorage.getItem('token');
     if (!token) return;
@@ -339,6 +365,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // Agregar dirección
   const addAddress = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -406,6 +433,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // Eliminar dirección
   const deleteAddress = async (addressId: number) => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -447,6 +475,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // Navegación entre pasos
   const nextStep = () => {
     if (step === 1 && cartItems.length === 0) {
       setError('Tu carrito está vacío');
@@ -465,7 +494,8 @@ const CheckoutPage = () => {
     setError('');
   };
 
-  const createOrder = useCallback(async () => {
+  // Crear orden y preferencia de pago
+  const createOrderAndPayment = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
       setError('Usuario no autenticado');
@@ -482,143 +512,173 @@ const CheckoutPage = () => {
       return;
     }
 
-    if (!userData) {
-      setError('Datos de usuario no disponibles');
-      return;
-    }
-
     try {
-      setLoading(true);
+      setIsProcessingPayment(true);
       setError('');
 
       // 1. Crear orden en nuestro sistema
-      const orderBody = {
-        shippingAddressId: selectedAddress.id
-      };
-
-      console.log('Creando orden con body:', JSON.stringify(orderBody, null, 2));
-
+      console.log('Creando orden...');
       const orderRes = await fetch(ORDERS, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(orderBody),
+        body: JSON.stringify({
+          shippingAddressId: selectedAddress.id
+        }),
       });
-
-      console.log('Estado de respuesta de orden:', orderRes.status);
 
       if (!orderRes.ok) {
         let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
         try {
           const errorData = await orderRes.text();
-          console.log('Respuesta de error:', errorData);
-          
-          try {
-            const jsonError = JSON.parse(errorData);
-            errorMessage = jsonError.message || jsonError.error || errorData;
-          } catch {
-            errorMessage = errorData || errorMessage;
-          }
-        } catch (parseError) {
-          console.error('Error parseando respuesta de error:', parseError);
-        }
+          errorMessage = errorData || errorMessage;
+        } catch {}
         throw new Error(errorMessage);
       }
 
       const orderResponse: OrderResponse = await orderRes.json();
-      console.log('Orden creada exitosamente:', orderResponse);
+      console.log('Orden creada:', orderResponse);
 
-      if (!orderResponse.id || orderResponse.totalPrice === undefined) {
-        throw new Error('Respuesta del servidor incompleta');
+      if (!orderResponse.id) {
+        throw new Error('No se pudo obtener el ID de la orden');
       }
 
-      const orderIdStr = orderResponse.id.toString();
-      
-      setOrderId(orderIdStr);
-      setTotal(orderResponse.totalPrice);
+      const orderId = orderResponse.id.toString();
+      setOrderId(orderId);
       setOrderCreated(true);
 
-      // 2. Crear preferencia en Mercado Pago
-      console.log('Creando preferencia de Mercado Pago...');
-      
-      const mpBody = {
-        orderId: orderIdStr,
-        customerName: userData.firstName + ' ' + userData.lastName,
-        customerEmail: userData.email || '',
-        items: cartItems.map(item => ({
-          productId: item.productVariantId || item.id,
-          productName: item.name,
-          variantDescription: `${item.color} - Talla ${item.size}`,
-          imageUrl: item.image,
-          quantity: item.quantity,
-          price: item.price
-        }))
-      };
-
-      console.log('Body para Mercado Pago:', JSON.stringify(mpBody, null, 2));
-
-      const mpRes = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
+      // 2. Crear preferencia de pago en MercadoPago
+      console.log('Creando preferencia de pago...');
+      const paymentRes = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(mpBody),
+        body: JSON.stringify({
+          orderId: orderResponse.id
+        }),
       });
 
-      if (!mpRes.ok) {
-        let mpError = `Error ${mpRes.status}: ${mpRes.statusText}`;
+      if (!paymentRes.ok) {
+        let errorMessage = `Error creando preferencia: ${paymentRes.statusText}`;
         try {
-          const mpErrorData = await mpRes.text();
-          mpError = mpErrorData || mpError;
-        } catch (e) {
-          console.error('Error parseando error de MP:', e);
-        }
-        throw new Error(`Error creando pago: ${mpError}`);
+          const errorData = await paymentRes.text();
+          errorMessage = errorData || errorMessage;
+        } catch {}
+        throw new Error(errorMessage);
       }
 
-      const mpResponse: MercadoPagoPreferenceResponse = await mpRes.json();
-      console.log('Preferencia de Mercado Pago creada:', mpResponse);
+      const paymentPreference: PaymentPreferenceResponse = await paymentRes.json();
+      console.log('Preferencia creada:', paymentPreference);
 
-      if (!mpResponse.preferenceId || !mpResponse.initPoint) {
-        throw new Error('Respuesta de Mercado Pago incompleta');
+      if (!paymentPreference.id || !paymentPreference.init_point) {
+        throw new Error('Respuesta de MercadoPago incompleta');
       }
 
-      setMercadoPagoPreference(mpResponse);
+      setPaymentPreference(paymentPreference);
+      setSuccessMessage('Preferencia de pago creada exitosamente');
 
-    } catch (e) {
-      console.error('Error en el proceso de checkout:', e);
-      const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
-      setError('Error en el proceso de checkout: ' + errorMessage);
+      // 3. Iniciar polling para verificar estado de pago
+      startPaymentPolling(orderResponse.id);
+
+      // 4. Redirigir a MercadoPago automáticamente después de 2 segundos
+      setTimeout(() => {
+        setRedirectingToMP(true);
+        window.location.href = paymentPreference.init_point;
+      }, 2000);
+
+    } catch (err: any) {
+      console.error('Error en checkout:', err);
+      setError(`Error: ${err.message || 'Error desconocido'}`);
       setOrderCreated(false);
-      setMercadoPagoPreference(null);
+      setPaymentPreference(null);
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  }, [selectedAddress, cartItems, startPaymentPolling]);
+
+  // Simular pago (para desarrollo)
+  const simulatePayment = async (status: 'approved' | 'rejected') => {
+    if (!orderId) {
+      setError('No hay orden creada');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(MERCADOPAGO_SIMULATE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: parseInt(orderId),
+          status: status
+        }),
+      });
+
+      if (response.ok) {
+        if (status === 'approved') {
+          setSuccessMessage('¡Pago simulado exitosamente! La orden ha sido aprobada.');
+          // Actualizar estado local
+          setPaymentStatus(prev => prev ? { ...prev, status: 'PAGO_APROBADO' } : null);
+        } else {
+          setError('Pago simulado rechazado. Por favor intenta nuevamente.');
+        }
+      } else {
+        setError('Error simulando pago');
+      }
+    } catch (error) {
+      console.error('Error simulando pago:', error);
+      setError('Error simulando pago');
     } finally {
       setLoading(false);
     }
-  }, [selectedAddress, cartItems, userData]);
+  };
 
-  // Crear la orden cuando llegamos al paso 3
+  // Crear orden cuando llegamos al paso 3
   useEffect(() => {
-    if (step === 3 && !orderCreated && !loading) {
-      createOrder();
+    if (step === 3 && !orderCreated && !isProcessingPayment) {
+      createOrderAndPayment();
     }
-  }, [step, createOrder, loading, orderCreated]);
+  }, [step, createOrderAndPayment, isProcessingPayment, orderCreated]);
 
-  // Redirigir a Mercado Pago cuando la preferencia esté lista
-  useEffect(() => {
-    if (mercadoPagoPreference && mercadoPagoPreference.initPoint) {
-      console.log('Redirigiendo a Mercado Pago:', mercadoPagoPreference.initPoint);
-      
-      // Pequeño delay para mejor UX
-      const timer = setTimeout(() => {
-        window.location.href = mercadoPagoPreference.initPoint;
-      }, 1500);
+  // Componente para mostrar estado de pago
+  const renderPaymentStatus = () => {
+    if (paymentStatus) {
+      const statusMap: { [key: string]: { color: string, message: string } } = {
+        'PENDIENTE': { color: 'orange', message: 'Pendiente de pago' },
+        'PAGO_APROBADO': { color: 'green', message: '¡Pago aprobado!' },
+        'PAGO_RECHAZADO': { color: 'red', message: 'Pago rechazado' },
+        'CANCELADO': { color: 'gray', message: 'Orden cancelada' },
+        'ENVIADO': { color: 'blue', message: 'Orden enviada' },
+        'ENTREGADO': { color: 'purple', message: '¡Orden entregada!' },
+      };
 
-      return () => clearTimeout(timer);
+      const statusInfo = statusMap[paymentStatus.status] || { color: 'gray', message: paymentStatus.status };
+
+      return (
+        <div className={`payment-status payment-status-${statusInfo.color}`}>
+          <div className="payment-status-icon">
+            {statusInfo.color === 'green' && <Check className="icon" />}
+            {statusInfo.color === 'red' && <X className="icon" />}
+            {statusInfo.color === 'orange' && <Loader2 className="icon spinning" />}
+          </div>
+          <div className="payment-status-content">
+            <h4>Estado de la orden</h4>
+            <p className="payment-status-message">{statusInfo.message}</p>
+            <p className="payment-status-details">
+              Orden #{paymentStatus.orderId} • {formatPrice(paymentStatus.totalPrice)}
+            </p>
+          </div>
+        </div>
+      );
     }
-  }, [mercadoPagoPreference]);
+    return null;
+  };
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -687,13 +747,20 @@ const CheckoutPage = () => {
 
       {/* Main Content */}
       <main className="checkout-main">
-        {/* Error Message */}
+        {/* Messages */}
         {error && (
           <div className="checkout-error-message">
             <span>{error}</span>
             <button onClick={() => setError("")}>
               <X className="checkout-icon" />
             </button>
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="checkout-success-message">
+            <Check className="checkout-icon" />
+            <span>{successMessage}</span>
           </div>
         )}
 
@@ -990,43 +1057,86 @@ const CheckoutPage = () => {
                       ))}
                     </div>
 
-                    {/* Loading States */}
-                    {loading && !orderCreated && (
-                      <div className="checkout-loading-state">
-                        <div className="checkout-spinner" />
-                        <p>Creando tu orden...</p>
+                    {/* Processing States */}
+                    {isProcessingPayment && (
+                      <div className="checkout-processing-payment">
+                        <div className="checkout-spinner large"></div>
+                        <h4>Procesando tu pedido...</h4>
+                        <p>Estamos preparando todo para que puedas realizar el pago.</p>
                       </div>
                     )}
 
-                    {orderCreated && !mercadoPagoPreference && !error && (
-                      <div className="checkout-loading-state">
-                        <div className="checkout-spinner purple" />
-                        <p>Preparando pago con Mercado Pago...</p>
-                      </div>
-                    )}
+                    {/* Order Created - Show Payment Options */}
+                    {orderCreated && paymentPreference && (
+                      <div className="checkout-payment-options">
+                        <h4>¡Listo para pagar!</h4>
+                        <p className="checkout-payment-instruction">
+                          Tu orden ha sido creada exitosamente. Ahora puedes proceder con el pago seguro a través de MercadoPago.
+                        </p>
 
-                    {/* Mercado Pago Redirection */}
-                    {mercadoPagoPreference && (
-                      <div className="checkout-order-success">
-                        <div className="checkout-success-card">
-                          <Check className="checkout-icon" />
-                          <p>¡Orden creada exitosamente!</p>
-                          <p>Redirigiendo a Mercado Pago...</p>
+                        {/* MercadoPago Button */}
+                        <div className="checkout-mercadopago-container">
+                          <button
+                            className="checkout-mercadopago-btn"
+                            onClick={() => window.location.href = paymentPreference.init_point}
+                            disabled={redirectingToMP}
+                          >
+                            <img 
+                              src="https://http2.mlstatic.com/frontend-assets/ui-nav/5.10.1/mercadopago/logo__large_plus.png" 
+                              alt="MercadoPago" 
+                              className="mercadopago-logo"
+                            />
+                            <span>Pagar con MercadoPago</span>
+                            <ExternalLink className="icon" />
+                          </button>
+
+                          {redirectingToMP && (
+                            <div className="checkout-redirecting">
+                              <div className="checkout-spinner small"></div>
+                              <span>Redirigiendo a MercadoPago...</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="checkout-mercadopago-info">
-                          <p className="checkout-mercadopago-warning">
-                            ⚠️ Si la redirección no funciona automáticamente,{' '}
-                            <a href={mercadoPagoPreference.initPoint} className="checkout-mercadopago-link">
-                              haz clic aquí para ir a Mercado Pago
-                            </a>
-                          </p>
-                        </div>
+
+                        {/* Payment Status */}
+                        {renderPaymentStatus()}
+
+                        {/* Dev Mode: Simulate Payment */}
+                        {process.env.NODE_ENV === 'development' && (
+                          <div className="checkout-dev-options">
+                            <h5>Modo Desarrollo - Simular Pago:</h5>
+                            <div className="checkout-dev-buttons">
+                              <button 
+                                className="checkout-btn checkout-btn-success checkout-btn-sm"
+                                onClick={() => simulatePayment('approved')}
+                                disabled={loading}
+                              >
+                                Simular Pago Aprobado
+                              </button>
+                              <button 
+                                className="checkout-btn checkout-btn-danger checkout-btn-sm"
+                                onClick={() => simulatePayment('rejected')}
+                                disabled={loading}
+                              >
+                                Simular Pago Rechazado
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {!orderCreated && !loading && (
-                      <div className="checkout-loading-state">
-                        <p>Preparando orden...</p>
+                    {/* Order Created but No Payment Preference */}
+                    {orderCreated && !paymentPreference && !isProcessingPayment && !error && (
+                      <div className="checkout-payment-fallback">
+                        <h4>Orden creada exitosamente</h4>
+                        <p>Tu orden #{orderId} ha sido creada. Te contactaremos para completar el pago.</p>
+                        <button 
+                          className="checkout-btn checkout-btn-primary"
+                          onClick={() => window.location.href = `/orders`}
+                        >
+                          Ver mis órdenes
+                        </button>
                       </div>
                     )}
                   </div>
@@ -1127,7 +1237,7 @@ const CheckoutPage = () => {
         {/* Navigation Buttons */}
         <div className="checkout-navigation-buttons">
           {step > 1 && (
-            <button className="checkout-btn checkout-btn-outline checkout-btn-lg" onClick={prevStep} disabled={loading}>
+            <button className="checkout-btn checkout-btn-outline checkout-btn-lg" onClick={prevStep} disabled={loading || isProcessingPayment}>
               <ChevronLeft className="checkout-icon" />
               Anterior
             </button>
@@ -1144,7 +1254,7 @@ const CheckoutPage = () => {
             <button 
               className="checkout-btn checkout-btn-primary checkout-btn-lg" 
               onClick={nextStep} 
-              disabled={(step === 2 && !selectedAddress) || loading}
+              disabled={(step === 2 && !selectedAddress) || loading || isProcessingPayment}
             >
               Continuar
               <ChevronRight className="checkout-icon" />
@@ -1152,6 +1262,186 @@ const CheckoutPage = () => {
           )}
         </div>
       </main>
+
+      {/* CSS adicional para este componente */}
+      <style jsx>{`
+        .checkout-processing-payment {
+          text-align: center;
+          padding: 2rem;
+          background: linear-gradient(135deg, var(--checkout-bg-light) 0%, #f8f9ff 100%);
+          border-radius: 1rem;
+          margin: 1.5rem 0;
+        }
+        
+        .checkout-spinner.large {
+          width: 3rem;
+          height: 3rem;
+          border-width: 3px;
+        }
+        
+        .checkout-spinner.small {
+          width: 1rem;
+          height: 1rem;
+          border-width: 2px;
+          margin-right: 0.5rem;
+        }
+        
+        .checkout-mercadopago-container {
+          margin: 2rem 0;
+        }
+        
+        .checkout-mercadopago-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          width: 100%;
+          padding: 1rem 1.5rem;
+          background: linear-gradient(135deg, #009ee3 0%, #00a650 100%);
+          color: white;
+          border: none;
+          border-radius: 0.75rem;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+        
+        .checkout-mercadopago-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 158, 227, 0.3);
+        }
+        
+        .checkout-mercadopago-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+        
+        .mercadopago-logo {
+          height: 24px;
+          filter: brightness(0) invert(1);
+        }
+        
+        .checkout-redirecting {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          margin-top: 1rem;
+          color: var(--checkout-navy);
+          font-size: 0.875rem;
+        }
+        
+        .payment-status {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 1rem;
+          border-radius: 0.75rem;
+          margin: 1rem 0;
+        }
+        
+        .payment-status-green {
+          background-color: rgba(72, 187, 120, 0.1);
+          border-left: 4px solid #48bb78;
+        }
+        
+        .payment-status-red {
+          background-color: rgba(245, 101, 101, 0.1);
+          border-left: 4px solid #f56565;
+        }
+        
+        .payment-status-orange {
+          background-color: rgba(237, 137, 54, 0.1);
+          border-left: 4px solid #ed8936;
+        }
+        
+        .payment-status-icon .icon {
+          width: 1.5rem;
+          height: 1.5rem;
+        }
+        
+        .payment-status-icon .icon.spinning {
+          animation: spin 1s linear infinite;
+        }
+        
+        .payment-status-content h4 {
+          margin: 0 0 0.25rem 0;
+          font-size: 1rem;
+          color: var(--checkout-navy);
+        }
+        
+        .payment-status-message {
+          margin: 0 0 0.25rem 0;
+          font-weight: 600;
+        }
+        
+        .payment-status-details {
+          margin: 0;
+          font-size: 0.875rem;
+          color: var(--checkout-gray-dark);
+        }
+        
+        .checkout-payment-instruction {
+          color: var(--checkout-gray-dark);
+          line-height: 1.5;
+          margin-bottom: 1.5rem;
+        }
+        
+        .checkout-dev-options {
+          margin-top: 2rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid var(--checkout-border);
+        }
+        
+        .checkout-dev-options h5 {
+          margin-bottom: 1rem;
+          color: var(--checkout-navy);
+        }
+        
+        .checkout-dev-buttons {
+          display: flex;
+          gap: 1rem;
+        }
+        
+        .checkout-btn-success {
+          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+          color: white;
+          border: none;
+        }
+        
+        .checkout-btn-danger {
+          background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+          color: white;
+          border: none;
+        }
+        
+        .checkout-btn-sm {
+          padding: 0.5rem 1rem;
+          font-size: 0.875rem;
+        }
+        
+        .checkout-payment-fallback {
+          text-align: center;
+          padding: 2rem;
+        }
+        
+        .checkout-success-message {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+          color: white;
+          border-radius: 0.5rem;
+          margin-bottom: 1.5rem;
+        }
+        
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };
