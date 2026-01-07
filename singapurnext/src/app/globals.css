@@ -1,3 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 16, 51, 89; /* #103359 */
+  --background-start-rgb: 248, 250, 251; /* #f8fafb */
+  --background-end-rgb: 255, 255, 255; /* #ffffff */
+}
+
 body {
-    background-color: white;
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--background-start-rgb)),
+    rgb(var(--background-end-rgb))
+  );
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
+/* Clases de utilidad para fuentes */
+.font-fredoka {
+  font-family: var(--font-fredoka), 'Fredoka', sans-serif;
+}
+
+/* Estilos globales comunes */
+.app-container {
+  min-height: calc(100vh - 200px); /* Ajusta según tu header/footer */
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Estilos para imágenes responsivas */
+img {
+  max-width: 100%;
+  height: auto;
 }

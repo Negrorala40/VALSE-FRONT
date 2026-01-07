@@ -43,11 +43,35 @@ interface Product {
   variants: ProductVariant[];
 }
 
+// Helper para obtener colores hex aproximados
+const getColorHex = (colorName: string): string => {
+  const colors: Record<string, string> = {
+    'azul': '#103359',
+    'azul marino': '#0a1f33',
+    'rosa': '#E9566D',
+    'verde': '#3DB28A',
+    'morado': '#806FF7',
+    'negro': '#1a1a1a',
+    'blanco': '#ffffff',
+    'naranja': '#F47B47',
+    'amarillo': '#FFD449',
+    'rojo': '#E9566D',
+    'celeste': '#87CEEB',
+    'gris': '#808080',
+    'beige': '#F5F5DC',
+    'lila': '#C8A2C8',
+    'turquesa': '#40E0D0',
+    'coral': '#FF7F50',
+    'violeta': '#EE82EE',
+    'mostaza': '#FFDB58'
+  };
+  return colors[colorName.toLowerCase()] || '#103359';
+};
+
 const Menu: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Cambio: usar un Map para las referencias
   const productRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -94,7 +118,6 @@ const Menu: React.FC = () => {
       }
     );
 
-    // Observar todos los productos visibles
     productRefs.current.forEach((ref) => {
       if (ref) {
         observer.observe(ref);
@@ -151,7 +174,6 @@ const Menu: React.FC = () => {
     setSortOption(e.target.value);
   };
 
-  // Función para manejar la referencia
   const setProductRef = (element: HTMLDivElement | null, index: number) => {
     if (element) {
       productRefs.current.set(index, element);
@@ -160,36 +182,107 @@ const Menu: React.FC = () => {
     }
   };
 
+  // Obtener colores únicos de un producto
+  const getUniqueColors = (variants: ProductVariant[]) => {
+    const colors = [...new Set(variants.map((v) => v.color))];
+    return colors.slice(0, 4);
+  };
+
+  // Verificar si hay stock bajo
+  const hasLowStock = (variants: ProductVariant[]) => {
+    return variants.some((v) => v.stock > 0 && v.stock <= 3);
+  };
+
+  // Verificar si es nuevo (ejemplo: productos creados en los últimos 30 días)
+  const isNew = (productId: number) => {
+    // Esta es una lógica de ejemplo. Deberías reemplazarla con tu propia lógica
+    // Por ejemplo, podrías tener una fecha de creación en el producto
+    return productId <= 5; // Ejemplo: primeros 5 productos son "nuevos"
+  };
+
+  // Función para manejar el clic en el botón de agregar rápido
+  const handleQuickAddClick = (e: React.MouseEvent, productId: number) => {
+    e.stopPropagation(); // Previene que se active el clic en la tarjeta
+    // Aquí puedes implementar la lógica para agregar al carrito
+    console.log('Agregar producto al carrito:', productId);
+    // router.push(`/product?id=${productId}&quickAdd=true`);
+  };
+
   if (loading) return (
     <div className={styles.menuContainer}>
-      <p>Cargando productos...</p>
+      <div className={styles.loadingState}>
+        <div className={styles.loadingSpinner}></div>
+        <p className={styles.loadingText}>Cargando productos...</p>
+      </div>
     </div>
   );
 
   return (
     <div className={styles.menuContainer}>
-      <div className={styles.filterAndButtonContainer}>
-        <div className={styles.filterContainer}>
-          <label htmlFor="sort" className={styles.filterLabel}>Ordenar por:</label>
-          <select id="sort" className={styles.filterSelect} value={sortOption} onChange={handleSortChange}>
-            <option value="">-- Selecciona --</option>
-            <option value="price-asc">Precio: Menor a mayor</option>
-            <option value="price-desc">Precio: Mayor a menor</option>
-            <option value="name-asc">Nombre: A-Z</option>
-            <option value="name-desc">Nombre: Z-A</option>
-          </select>
+      {/* Header decorativo */}
+      <div className={styles.menuHeader}>
+        <div className={styles.headerDecoration}></div>
+        <div className={styles.headerContent}>
+          <div className={styles.headerTitleSection}>
+            <span className={styles.headerIcon}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <h1 className={styles.headerTitle}>Nuestra Colección</h1>
+          </div>
+          <p className={styles.headerSubtitle}>Pijamas que llevan a los pequeños a Marte</p>
         </div>
       </div>
 
+      {/* Barra de filtros mejorada */}
+      <div className={styles.filterBar}>
+        <div className={styles.filterBarInner}>
+          <div className={styles.resultsCount}>
+            <span className={styles.resultsNumber}>{sortedProducts.length}</span>
+            <span className={styles.resultsText}>productos</span>
+          </div>
+
+          <div className={styles.filterContainer}>
+            <div className={styles.filterIcon}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 6H21M6 12H18M9 18H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <select id="sort" className={styles.filterSelect} value={sortOption} onChange={handleSortChange}>
+              <option value="">Ordenar por</option>
+              <option value="price-asc">Precio: Menor a mayor</option>
+              <option value="price-desc">Precio: Mayor a menor</option>
+              <option value="name-asc">Nombre: A-Z</option>
+              <option value="name-desc">Nombre: Z-A</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid de productos */}
       <div className={styles.productGrid}>
         {sortedProducts.slice(0, visibleCount).length === 0 ? (
-          <p>No se encontraron productos que coincidan con los criterios seleccionados.</p>
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+                <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h3 className={styles.emptyTitle}>No encontramos productos</h3>
+            <p className={styles.emptyText}>Intenta con otros filtros de búsqueda</p>
+          </div>
         ) : (
           sortedProducts.slice(0, visibleCount).map((product, index) => {
-            const primaryImage = product.variants[0]?.images?.[0]?.imageUrl || '/placeholder.png';
+            const primaryImage = product.variants[0]?.images?.[0]?.imageUrl || '/images/placeholder.png';
             const price = product.variants.length > 0
               ? Math.min(...product.variants.map(v => Number(v.price || 0)))
               : 0;
+            const colors = getUniqueColors(product.variants);
 
             return (
               <div
@@ -199,29 +292,90 @@ const Menu: React.FC = () => {
                 className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''}`}
                 onClick={() => handleProductClick(product.id)}
               >
-                <Image
-                  src={primaryImage}
-                  alt={product.name}
-                  width={240}
-                  height={240}
-                  className={styles.productImage}
-                  style={{ width: '100%', height: 'auto', objectFit: 'cover', borderRadius: '10px' }}
-                />
+                {/* Badges */}
+                <div className={styles.productBadges}>
+                  {isNew(product.id) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
+                  {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
+                </div>
+
+                {/* Imagen con overlay */}
+                <div className={styles.productImageContainer}>
+                  <Image
+                    src={primaryImage}
+                    alt={product.name}
+                    width={400}
+                    height={400}
+                    className={styles.productImage}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = '/images/placeholder.png';
+                    }}
+                  />
+                  <div className={styles.productOverlay}>
+                    <span className={styles.overlayText}>Ver detalles</span>
+                  </div>
+                </div>
+
+                {/* Detalles del producto */}
                 <div className={styles.productDetails}>
                   <h3 className={styles.productName}>{product.name}</h3>
-                  <p className={styles.productPrice}>
-                    {price > 0 ? `$${price.toLocaleString('es-CO')}` : 'Precio no disponible'}
-                  </p>
+
+                  {/* Colores disponibles */}
+                  {colors.length > 0 && (
+                    <div className={styles.productColors}>
+                      {colors.map((color, i) => (
+                        <span
+                          key={i}
+                          className={styles.colorDot}
+                          title={color}
+                          style={{
+                            backgroundColor: getColorHex(color),
+                          }}
+                        ></span>
+                      ))}
+                      {product.variants.length > 4 && (
+                        <span className={styles.colorMore}>+{product.variants.length - 4}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Precio */}
+                  <div className={styles.productPriceContainer}>
+                    <span className={styles.productPrice}>
+                      {price > 0 ? `$${price.toLocaleString('es-CO')}` : 'Consultar'}
+                    </span>
+                  </div>
                 </div>
+
+                {/* Botón de acción rápida */}
+                <button 
+                  className={styles.quickAddBtn} 
+                  aria-label="Agregar al carrito"
+                  onClick={(e) => handleQuickAddClick(e, product.id)}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
               </div>
             );
           })
         )}
       </div>
 
+      {/* Botón mostrar más */}
       {visibleCount < sortedProducts.length && (
         <button className={styles.viewAllButton} onClick={handleShowMore}>
-          Mostrar más
+          <span>Mostrar más productos</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M6 9L12 15L18 9"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
       )}
     </div>
