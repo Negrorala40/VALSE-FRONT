@@ -8,7 +8,8 @@ import {
   PERFIL_ME, 
   ADDRESS, 
   ORDERS,
-  API_BASE_URL
+  API_BASE_URL,
+  MERCADOPAGO_SIMULATE
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -25,7 +26,8 @@ import {
   Sparkles,
   X,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Wallet
 } from 'lucide-react';
 
 interface CartItem {
@@ -73,22 +75,20 @@ interface OrderResponse {
   }>;
 }
 
+// ========================================================
+// 🚨 COMENTADO: CÓDIGO DE MERCADOPAGO REAL
+// Descomentar cuando tengas las claves de MercadoPago
+// ========================================================
+/*
 interface PaymentPreferenceResponse {
   id: string;
   init_point: string;
-  [key: string]: any; // Para otras propiedades que pueda devolver MercadoPago
-}
-
-interface PaymentStatus {
-  orderId: number;
-  status: string;
-  totalPrice: number;
-  orderDate: string;
+  [key: string]: any;
 }
 
 const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
 const MERCADOPAGO_STATUS = `${API_BASE_URL}/api/payments/status`;
-const MERCADOPAGO_SIMULATE = `${API_BASE_URL}/api/payments/simulate-payment`;
+*/
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -112,15 +112,21 @@ const CheckoutPage = () => {
   });
 
   const [orderCreated, setOrderCreated] = useState(false);
+  
+  // ========================================================
+  // 🚨 COMENTADO: ESTADOS DE MERCADOPAGO REAL
+  // ========================================================
+  /*
   const [paymentPreference, setPaymentPreference] = useState<PaymentPreferenceResponse | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [redirectingToMP, setRedirectingToMP] = useState(false);
+  */
+  
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [simulationInProgress, setSimulationInProgress] = useState(false);
   
   // Refs
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
-  const paymentPollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Formateador de precio
   const formatPrice = (price: number) => {
@@ -135,45 +141,6 @@ const CheckoutPage = () => {
   const calculateTotal = useCallback((items: CartItem[]) => {
     const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
     setTotal(newTotal);
-  }, []);
-
-  // Limpiar polling
-  const clearPaymentPolling = () => {
-    if (paymentPollingRef.current) {
-      clearInterval(paymentPollingRef.current);
-      paymentPollingRef.current = null;
-    }
-  };
-
-  // Polling para verificar estado de pago
-  const startPaymentPolling = useCallback((orderId: number) => {
-    clearPaymentPolling();
-    
-    paymentPollingRef.current = setInterval(async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const status: PaymentStatus = await response.json();
-          setPaymentStatus(status);
-          
-          // Si el pago fue aprobado, detener polling
-          if (status.status === 'PAGO_APROBADO') {
-            clearPaymentPolling();
-            setSuccessMessage('¡Pago aprobado! Tu pedido está siendo procesado.');
-          }
-        }
-      } catch (error) {
-        console.error('Error polling payment status:', error);
-      }
-    }, 5000); // Poll cada 5 segundos
   }, []);
 
   // Fetch carrito
@@ -291,7 +258,6 @@ const CheckoutPage = () => {
       if (fetchControllerRef.current) {
         fetchControllerRef.current.abort();
       }
-      clearPaymentPolling();
     };
   }, [fetchCart, fetchUser]);
 
@@ -494,7 +460,10 @@ const CheckoutPage = () => {
     setError('');
   };
 
-  // Crear orden y preferencia de pago
+  // ========================================================
+  // 🚨 MODIFICADO: Función simplificada para desarrollo local
+  // Solo crea la orden, sin MercadoPago
+  // ========================================================
   const createOrderAndPayment = useCallback(async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -515,6 +484,7 @@ const CheckoutPage = () => {
     try {
       setIsProcessingPayment(true);
       setError('');
+      setSuccessMessage('');
 
       // 1. Crear orden en nuestro sistema
       console.log('Creando orden...');
@@ -548,9 +518,15 @@ const CheckoutPage = () => {
       const orderId = orderResponse.id.toString();
       setOrderId(orderId);
       setOrderCreated(true);
+      setSuccessMessage(`✅ Orden #${orderId} creada exitosamente. Usa los botones de simulación.`);
 
-      // 2. Crear preferencia de pago en MercadoPago
-      console.log('Creando preferencia de pago...');
+      // ========================================================
+      // 🚨 COMENTADO: CÓDIGO DE MERCADOPAGO REAL
+      // Descomentar cuando tengas las claves de MercadoPago
+      // ========================================================
+      /*
+      // 2. Crear preferencia de pago en MercadoPago (PRODUCCIÓN)
+      console.log('Creando preferencia de pago en MercadoPago...');
       const paymentRes = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
         headers: {
@@ -581,26 +557,24 @@ const CheckoutPage = () => {
       setPaymentPreference(paymentPreference);
       setSuccessMessage('Preferencia de pago creada exitosamente');
 
-      // 3. Iniciar polling para verificar estado de pago
-      startPaymentPolling(orderResponse.id);
-
-      // 4. Redirigir a MercadoPago automáticamente después de 2 segundos
+      // 3. Redirigir a MercadoPago automáticamente después de 2 segundos
       setTimeout(() => {
         setRedirectingToMP(true);
         window.location.href = paymentPreference.init_point;
       }, 2000);
+      */
 
     } catch (err: any) {
       console.error('Error en checkout:', err);
       setError(`Error: ${err.message || 'Error desconocido'}`);
       setOrderCreated(false);
-      setPaymentPreference(null);
+      // setPaymentPreference(null); // 🚨 COMENTADO
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, startPaymentPolling]);
+  }, [selectedAddress, cartItems]);
 
-  // Simular pago (para desarrollo)
+  // Simular pago (PARA DESARROLLO LOCAL)
   const simulatePayment = async (status: 'approved' | 'rejected') => {
     if (!orderId) {
       setError('No hay orden creada');
@@ -608,7 +582,9 @@ const CheckoutPage = () => {
     }
 
     try {
-      setLoading(true);
+      setSimulationInProgress(true);
+      setError('');
+      
       const response = await fetch(MERCADOPAGO_SIMULATE, {
         method: 'POST',
         headers: {
@@ -622,20 +598,27 @@ const CheckoutPage = () => {
 
       if (response.ok) {
         if (status === 'approved') {
-          setSuccessMessage('¡Pago simulado exitosamente! La orden ha sido aprobada.');
-          // Actualizar estado local
-          setPaymentStatus(prev => prev ? { ...prev, status: 'PAGO_APROBADO' } : null);
+          setSuccessMessage('¡Pago simulado exitosamente! Redirigiendo a página de éxito...');
+          // Redirigir a página de éxito después de 1.5 segundos
+          setTimeout(() => {
+            window.location.href = `/checkout/success?orderId=${orderId}`;
+          }, 1500);
         } else {
-          setError('Pago simulado rechazado. Por favor intenta nuevamente.');
+          setError('Pago simulado rechazado. Redirigiendo a página de error...');
+          // Redirigir a página de error después de 1.5 segundos
+          setTimeout(() => {
+            window.location.href = `/checkout/failure?orderId=${orderId}`;
+          }, 1500);
         }
       } else {
-        setError('Error simulando pago');
+        const errorData = await response.text();
+        setError(`Error simulando pago: ${errorData}`);
       }
     } catch (error) {
       console.error('Error simulando pago:', error);
-      setError('Error simulando pago');
+      setError('Error de conexión al simular pago');
     } finally {
-      setLoading(false);
+      setSimulationInProgress(false);
     }
   };
 
@@ -645,40 +628,6 @@ const CheckoutPage = () => {
       createOrderAndPayment();
     }
   }, [step, createOrderAndPayment, isProcessingPayment, orderCreated]);
-
-  // Componente para mostrar estado de pago
-  const renderPaymentStatus = () => {
-    if (paymentStatus) {
-      const statusMap: { [key: string]: { color: string, message: string } } = {
-        'PENDIENTE': { color: 'orange', message: 'Pendiente de pago' },
-        'PAGO_APROBADO': { color: 'green', message: '¡Pago aprobado!' },
-        'PAGO_RECHAZADO': { color: 'red', message: 'Pago rechazado' },
-        'CANCELADO': { color: 'gray', message: 'Orden cancelada' },
-        'ENVIADO': { color: 'blue', message: 'Orden enviada' },
-        'ENTREGADO': { color: 'purple', message: '¡Orden entregada!' },
-      };
-
-      const statusInfo = statusMap[paymentStatus.status] || { color: 'gray', message: paymentStatus.status };
-
-      return (
-        <div className={`payment-status payment-status-${statusInfo.color}`}>
-          <div className="payment-status-icon">
-            {statusInfo.color === 'green' && <Check className="icon" />}
-            {statusInfo.color === 'red' && <X className="icon" />}
-            {statusInfo.color === 'orange' && <Loader2 className="icon spinning" />}
-          </div>
-          <div className="payment-status-content">
-            <h4>Estado de la orden</h4>
-            <p className="payment-status-message">{statusInfo.message}</p>
-            <p className="payment-status-details">
-              Orden #{paymentStatus.orderId} • {formatPrice(paymentStatus.totalPrice)}
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -1066,7 +1015,87 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {/* Order Created - Show Payment Options */}
+                    {/* ======================================================== */}
+                    {/* 🚨 MODIFICADO: Sección de simulación para desarrollo */}
+                    {/* ======================================================== */}
+                    
+                    {orderCreated && !isProcessingPayment && (
+                      <div className="checkout-simulation-section">
+                        {/* Info para desarrollo */}
+                        <div className="checkout-dev-info">
+                          <div className="checkout-dev-header">
+                            <Wallet className="checkout-icon" />
+                            <h4>Modo Desarrollo - Simulación de Pago</h4>
+                          </div>
+                          <p className="checkout-dev-description">
+                            <strong>Orden #{orderId}</strong> creada exitosamente. 
+                            Como estás en modo desarrollo, puedes simular el proceso de pago.
+                          </p>
+                          <div className="checkout-dev-note">
+                            <small>
+              ⚠️ <strong>Nota:</strong> En producción, esto redirigiría a MercadoPago real.
+              Para activar el modo producción, necesitas configurar las claves de MercadoPago en el backend.
+            </small>
+                          </div>
+                        </div>
+
+                        {/* Botones de simulación */}
+                        <div className="checkout-simulation-buttons">
+                          <button
+                            onClick={() => simulatePayment('approved')}
+                            className="checkout-btn checkout-btn-success checkout-btn-lg"
+                            disabled={simulationInProgress}
+                          >
+                            {simulationInProgress ? (
+                              <>
+                                <Loader2 className="checkout-icon spinning" />
+                                Procesando...
+                              </>
+                            ) : (
+                              <>
+                                <Check className="checkout-icon" />
+                                Simular Pago Aprobado
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => simulatePayment('rejected')}
+                            className="checkout-btn checkout-btn-danger checkout-btn-lg"
+                            disabled={simulationInProgress}
+                          >
+                            {simulationInProgress ? (
+                              <>
+                                <Loader2 className="checkout-icon spinning" />
+                                Procesando...
+                              </>
+                            ) : (
+                              <>
+                                <X className="checkout-icon" />
+                                Simular Pago Rechazado
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Instrucciones para producción */}
+                        <div className="checkout-production-info">
+                          <h5>Para activar MercadoPago real:</h5>
+                          <ol>
+                            <li>Crea una cuenta en MercadoPago Developers</li>
+                            <li>Obtén las claves ACCESS_TOKEN y PUBLIC_KEY</li>
+                            <li>Configúralas en el backend (application.properties)</li>
+                            <li>Descomenta el código marcado con 🚨 en este componente</li>
+                          </ol>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ======================================================== */}
+                    {/* 🚨 COMENTADO: Sección de MercadoPago real */}
+                    {/* Descomentar cuando tengas las claves */}
+                    {/* ======================================================== */}
+                    {/*
                     {orderCreated && paymentPreference && (
                       <div className="checkout-payment-options">
                         <h4>¡Listo para pagar!</h4>
@@ -1074,7 +1103,6 @@ const CheckoutPage = () => {
                           Tu orden ha sido creada exitosamente. Ahora puedes proceder con el pago seguro a través de MercadoPago.
                         </p>
 
-                        {/* MercadoPago Button */}
                         <div className="checkout-mercadopago-container">
                           <button
                             className="checkout-mercadopago-btn"
@@ -1097,37 +1125,12 @@ const CheckoutPage = () => {
                             </div>
                           )}
                         </div>
-
-                        {/* Payment Status */}
-                        {renderPaymentStatus()}
-
-                        {/* Dev Mode: Simulate Payment */}
-                        {process.env.NODE_ENV === 'development' && (
-                          <div className="checkout-dev-options">
-                            <h5>Modo Desarrollo - Simular Pago:</h5>
-                            <div className="checkout-dev-buttons">
-                              <button 
-                                className="checkout-btn checkout-btn-success checkout-btn-sm"
-                                onClick={() => simulatePayment('approved')}
-                                disabled={loading}
-                              >
-                                Simular Pago Aprobado
-                              </button>
-                              <button 
-                                className="checkout-btn checkout-btn-danger checkout-btn-sm"
-                                onClick={() => simulatePayment('rejected')}
-                                disabled={loading}
-                              >
-                                Simular Pago Rechazado
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
+                    */}
 
-                    {/* Order Created but No Payment Preference */}
-                    {orderCreated && !paymentPreference && !isProcessingPayment && !error && (
+                    {/* Order Created but processing error */}
+                    {orderCreated && !isProcessingPayment && error && (
                       <div className="checkout-payment-fallback">
                         <h4>Orden creada exitosamente</h4>
                         <p>Tu orden #{orderId} ha sido creada. Te contactaremos para completar el pago.</p>
@@ -1277,6 +1280,11 @@ const CheckoutPage = () => {
           width: 3rem;
           height: 3rem;
           border-width: 3px;
+          border: 4px solid rgba(61, 178, 138, 0.3);
+          border-top-color: var(--checkout-mint);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin: 0 auto 1rem;
         }
         
         .checkout-spinner.small {
@@ -1286,6 +1294,143 @@ const CheckoutPage = () => {
           margin-right: 0.5rem;
         }
         
+        /* Estilos para la sección de simulación */
+        .checkout-simulation-section {
+          margin-top: 2rem;
+          padding: 1.5rem;
+          background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
+          border-radius: var(--checkout-radius-lg);
+          border: 1px solid var(--checkout-border);
+        }
+        
+        .checkout-dev-info {
+          margin-bottom: 1.5rem;
+        }
+        
+        .checkout-dev-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+        
+        .checkout-dev-header h4 {
+          margin: 0;
+          color: var(--checkout-navy);
+          font-size: 1.125rem;
+        }
+        
+        .checkout-dev-header .checkout-icon {
+          width: 1.5rem;
+          height: 1.5rem;
+          color: var(--checkout-purple);
+        }
+        
+        .checkout-dev-description {
+          color: var(--checkout-gray-dark);
+          line-height: 1.5;
+          margin-bottom: 0.75rem;
+          padding: 0.75rem;
+          background: rgba(59, 130, 246, 0.1);
+          border-radius: 0.5rem;
+          border-left: 4px solid var(--checkout-blue);
+        }
+        
+        .checkout-dev-note {
+          font-size: 0.875rem;
+          color: var(--checkout-gray-dark);
+          background: rgba(0, 0, 0, 0.05);
+          padding: 0.75rem;
+          border-radius: 0.5rem;
+          margin-top: 1rem;
+        }
+        
+        .checkout-simulation-buttons {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          margin: 1.5rem 0;
+        }
+        
+        @media (min-width: 640px) {
+          .checkout-simulation-buttons {
+            flex-direction: row;
+          }
+        }
+        
+        .checkout-btn-success {
+          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+          color: white;
+          border: none;
+          flex: 1;
+        }
+        
+        .checkout-btn-danger {
+          background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+          color: white;
+          border: none;
+          flex: 1;
+        }
+        
+        .checkout-btn-success:hover:not(:disabled) {
+          background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
+          transform: translateY(-2px);
+        }
+        
+        .checkout-btn-danger:hover:not(:disabled) {
+          background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+          transform: translateY(-2px);
+        }
+        
+        .checkout-production-info {
+          margin-top: 1.5rem;
+          padding-top: 1rem;
+          border-top: 1px solid var(--checkout-border);
+        }
+        
+        .checkout-production-info h5 {
+          color: var(--checkout-navy);
+          margin-bottom: 0.5rem;
+        }
+        
+        .checkout-production-info ol {
+          margin: 0;
+          padding-left: 1.25rem;
+          color: var(--checkout-gray-dark);
+          font-size: 0.875rem;
+        }
+        
+        .checkout-production-info li {
+          margin-bottom: 0.25rem;
+        }
+        
+        .checkout-success-message {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+          color: white;
+          border-radius: 0.5rem;
+          margin-bottom: 1.5rem;
+        }
+        
+        .checkout-payment-fallback {
+          text-align: center;
+          padding: 2rem;
+        }
+        
+        .checkout-icon.spinning {
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        
+        /* 🚨 COMENTADO: Estilos para MercadoPago real */
+        /*
         .checkout-mercadopago-container {
           margin: 2rem 0;
         }
@@ -1331,116 +1476,7 @@ const CheckoutPage = () => {
           color: var(--checkout-navy);
           font-size: 0.875rem;
         }
-        
-        .payment-status {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1rem;
-          border-radius: 0.75rem;
-          margin: 1rem 0;
-        }
-        
-        .payment-status-green {
-          background-color: rgba(72, 187, 120, 0.1);
-          border-left: 4px solid #48bb78;
-        }
-        
-        .payment-status-red {
-          background-color: rgba(245, 101, 101, 0.1);
-          border-left: 4px solid #f56565;
-        }
-        
-        .payment-status-orange {
-          background-color: rgba(237, 137, 54, 0.1);
-          border-left: 4px solid #ed8936;
-        }
-        
-        .payment-status-icon .icon {
-          width: 1.5rem;
-          height: 1.5rem;
-        }
-        
-        .payment-status-icon .icon.spinning {
-          animation: spin 1s linear infinite;
-        }
-        
-        .payment-status-content h4 {
-          margin: 0 0 0.25rem 0;
-          font-size: 1rem;
-          color: var(--checkout-navy);
-        }
-        
-        .payment-status-message {
-          margin: 0 0 0.25rem 0;
-          font-weight: 600;
-        }
-        
-        .payment-status-details {
-          margin: 0;
-          font-size: 0.875rem;
-          color: var(--checkout-gray-dark);
-        }
-        
-        .checkout-payment-instruction {
-          color: var(--checkout-gray-dark);
-          line-height: 1.5;
-          margin-bottom: 1.5rem;
-        }
-        
-        .checkout-dev-options {
-          margin-top: 2rem;
-          padding-top: 1.5rem;
-          border-top: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-dev-options h5 {
-          margin-bottom: 1rem;
-          color: var(--checkout-navy);
-        }
-        
-        .checkout-dev-buttons {
-          display: flex;
-          gap: 1rem;
-        }
-        
-        .checkout-btn-success {
-          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-          color: white;
-          border: none;
-        }
-        
-        .checkout-btn-danger {
-          background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-          color: white;
-          border: none;
-        }
-        
-        .checkout-btn-sm {
-          padding: 0.5rem 1rem;
-          font-size: 0.875rem;
-        }
-        
-        .checkout-payment-fallback {
-          text-align: center;
-          padding: 2rem;
-        }
-        
-        .checkout-success-message {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 1rem;
-          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-          color: white;
-          border-radius: 0.5rem;
-          margin-bottom: 1.5rem;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
+        */
       `}</style>
     </div>
   );
