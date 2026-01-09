@@ -48,7 +48,7 @@ const Admin = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [gender, setGender] = useState("");
-  const [type, setType] = useState("");
+  const [type, setType] = useState("SUPERIOR"); // Por defecto SUPERIOR
 
   const [variants, setVariants] = useState<Variant[]>([
     {
@@ -201,7 +201,7 @@ const Admin = () => {
   };
 
   const validateForm = () => {
-    if (!name.trim() || !description.trim() || !gender.trim() || !type.trim()) {
+    if (!name.trim() || !description.trim() || !gender.trim()) {
       alert("Los campos generales del producto son obligatorios.");
       return false;
     }
@@ -240,7 +240,7 @@ const Admin = () => {
       name: name.trim(),
       description: description.trim(),
       gender: gender.trim(),
-      type: type.trim(),
+      type: "SUPERIOR", // Siempre SUPERIOR
       variants: variants.map(variant => ({
         ...(editingProductId && variant.id ? { id: variant.id } : {}),
         color: variant.color.trim(),
@@ -308,7 +308,7 @@ const Admin = () => {
     setName("");
     setDescription("");
     setGender("");
-    setType("");
+    setType("SUPERIOR"); // Restablecer a SUPERIOR
     setVariants([
       {
         color: "",
@@ -496,8 +496,8 @@ const Admin = () => {
               disabled={isLoading}
             >
               <option value="">Seleccionar Género</option>
-              <option value="MUJER">MUJER</option>
-              <option value="HOMBRE">HOMBRE</option>
+              <option value="NIÑOS">NIÑOS</option>
+              <option value="NIÑAS">NIÑAS</option>
               <option value="UNISEX">UNISEX</option>
             </select>
           </div>
@@ -516,21 +516,13 @@ const Admin = () => {
           />
         </div>
 
-        <div className={styles.formGrid}>
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Tipo:</label>
-            <select
-              className={styles.select}
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              required
-              disabled={isLoading}
-            >
-              <option value="">Seleccionar Tipo</option>
-              <option value="SUPERIOR">SUPERIOR</option>
-              <option value="INFERIOR">INFERIOR</option>
-              <option value="CALZADO">CALZADO</option>
-            </select>
+        <div className={styles.formGroup}>
+          <label className={styles.label}>Tipo:</label>
+          <div className={styles.typeInfo}>
+            <span className={styles.typeBadge}>👕 SUPERIOR (Predeterminado)</span>
+            <span className={styles.typeNote}>
+              Todos los productos serán registrados como SUPERIOR según los requerimientos.
+            </span>
           </div>
         </div>
 
@@ -811,12 +803,11 @@ const Admin = () => {
                 <h3 className={styles.productName}>{product.name}</h3>
                 <div className={styles.productBadges}>
                   <span className={`${styles.badge} ${styles.genderBadge}`}>
-                    {product.gender === 'MUJER' ? '👩' : 
-                     product.gender === 'HOMBRE' ? '👨' : '👥'} {product.gender}
+                    {product.gender === 'NIÑAS' ? '👧' : 
+                     product.gender === 'NIÑOS' ? '👦' : '👥'} {product.gender}
                   </span>
                   <span className={`${styles.badge} ${styles.typeBadge}`}>
-                    {product.type === 'SUPERIOR' ? '👕' : 
-                     product.type === 'INFERIOR' ? '👖' : '👟'} {product.type}
+                    👕 {product.type}
                   </span>
                 </div>
               </div>
