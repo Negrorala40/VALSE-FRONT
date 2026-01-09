@@ -27,11 +27,9 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -71,9 +69,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     }
   };
 
-  const toggleSubmenu = (menu: string) =>
-    setSubmenuOpen(submenuOpen === menu ? null : menu);
-
   const toggleSearch = () => {
     setSearchOpen(!searchOpen);
     if (searchOpen) {
@@ -94,12 +89,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     alt: 'A Marte - Pijamas para niños',
   };
 
-  // Check login status
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    setIsLoggedIn(!!token);
-  }, []);
-
   // Scroll effect
   useEffect(() => {
     const handleScroll = () => {
@@ -119,6 +108,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     }
   };
 
+  /* COMENTADO: Botón de perfil desactivado
   const handleUserClick = () => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -127,13 +117,13 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
     }
   };
+  */
 
   // Handle click outside para menú y búsqueda
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
-        setSubmenuOpen(null);
         document.body.style.overflow = 'auto';
       }
       
@@ -150,7 +140,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   // Close menu on route change
   useEffect(() => {
     setMenuOpen(false);
-    setSubmenuOpen(null);
     setSearchOpen(false);
     document.body.style.overflow = 'auto';
   }, [pathname]);
@@ -159,51 +148,22 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const displayCartItems = setCartItems ? cartItems : localCartItems;
   const cartItemCount = displayCartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Cambiado: Solo categorías principales, sin submenús
   const menuCategories = [
     {
-      id: 'hombre',
-      label: 'Hombre',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-        </svg>
-      ),
-      subcategories: [
-        { label: 'Superior', href: '/menu?gender=hombre&type=superior' },
-        { label: 'Inferior', href: '/menu?gender=hombre&type=inferior' },
-        { label: 'Calzado', href: '/menu?gender=hombre&type=calzado' },
-      ],
+      id: 'ninos',
+      label: 'Niños',
+      href: '/menu?gender=ninos&type=superior', // URL directa
     },
     {
-      id: 'mujer',
-      label: 'Mujer',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-        </svg>
-      ),
-      subcategories: [
-        { label: 'Superior', href: '/menu?gender=mujer&type=superior' },
-        { label: 'Inferior', href: '/menu?gender=mujer&type=inferior' },
-        { label: 'Calzado', href: '/menu?gender=mujer&type=calzado' },
-      ],
+      id: 'ninas',
+      label: 'Niñas',
+      href: '/menu?gender=ninas&type=superior', // URL directa
     },
     {
       id: 'unisex',
       label: 'Unisex',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
-          <circle cx="12" cy="12" r="10" />
-        </svg>
-      ),
-      subcategories: [
-        { label: 'Superior', href: '/menu?gender=unisex&type=superior' },
-        { label: 'Inferior', href: '/menu?gender=unisex&type=inferior' },
-        { label: 'Calzado', href: '/menu?gender=unisex&type=calzado' },
-      ],
+      href: '/menu?gender=unisex&type=superior', // URL directa
     },
   ];
 
@@ -221,14 +181,14 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         <div className={styles.headerDecoration}></div>
 
         <div className={styles.headerContainer}>
-          {/* Logo - Left side */}
+          {/* Logo - Left side - CON MÁRGEN VERTICAL */}
           <Link href="/" className={styles.headerLogo} aria-label="Inicio - A Marte">
             <div className={styles.headerLogoWrapper}>
               <Image
                 src={logoConfig.src || "/images/logos/logver.svg"}
                 alt={logoConfig.alt}
-                width={140}
-                height={70}
+                width={150}
+                height={80}
                 priority={true}
                 loading="eager"
                 onLoad={() => setLogoLoaded(true)}
@@ -242,24 +202,16 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             </div>
           </Link>
 
-          {/* Navigation - Desktop */}
+          {/* Navigation - Desktop - SIN SUBMENÚS */}
           <nav className={styles.headerNav}>
             {menuCategories.map((cat) => (
-              <div key={cat.id} className={styles.headerNavItem}>
-                <button className={styles.headerNavLink}>
-                  {cat.label}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-                <div className={styles.headerDropdown}>
-                  {cat.subcategories.map((sub) => (
-                    <Link key={sub.href} href={sub.href} className={styles.headerDropdownLink}>
-                      {sub.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
+              <Link 
+                key={cat.id} 
+                href={cat.href}
+                className={styles.headerNavLink}
+              >
+                {cat.label}
+              </Link>
             ))}
             <Link href="/menu" className={`${styles.headerNavLink} ${styles.headerNavLinkAll}`}>
               Ver Todo
@@ -274,18 +226,20 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               onClick={toggleSearch}
               aria-label="Buscar"
             >
-              <FaSearch size={18} />
+              <FaSearch size={22} />
             </button>
 
-            {/* User */}
+            {/* User - COMENTADO: Botón deshabilitado */}
+            {/*
             <button
               className={`${styles.headerActionBtn} ${styles.headerActionBtnUser} ${isLoggedIn ? styles.headerActionBtnLogged : ''}`}
               onClick={handleUserClick}
               aria-label={isLoggedIn ? "Ver perfil" : "Iniciar sesión"}
             >
-              <FaUserAstronaut size={18} />
+              <FaUserAstronaut size={22} />
               {isLoggedIn && <span className={styles.headerStatusDot}></span>}
             </button>
+            */}
 
             {/* Cart */}
             <button
@@ -293,7 +247,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               onClick={toggleCart}
               aria-label="Carrito de compras"
             >
-              <HiShoppingCart size={18} />
+              <HiShoppingCart size={22} />
               {cartItemCount > 0 && (
                 <span className={styles.headerCartBadge}>{cartItemCount > 9 ? "9+" : cartItemCount}</span>
               )}
@@ -315,8 +269,8 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </header>
 
-      {/* Search Panel */}
-      <div className={`${styles.searchPanel} ${searchOpen ? styles.searchPanelOpen : ''}`} ref={searchRef}>
+            {/* Search Panel - CORREGIDO: Opacidad */}
+      <div className={`${styles.searchPanel} ${searchOpen ? styles.searchPanelOpen : styles.searchPanelClosed}`} ref={searchRef}>
         <div className={styles.searchPanelHeader}>
           <h3 className={styles.searchPanelTitle}>
             <FaSearch size={18} />
@@ -397,8 +351,8 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </div>
 
-      {/* Mobile Side Menu */}
-      <div className={`${styles.sideMenu} ${menuOpen ? styles.sideMenuOpen : ''}`} ref={menuRef}>
+      {/* Mobile Side Menu - CORREGIDO: Opacidad */}
+      <div className={`${styles.sideMenu} ${menuOpen ? styles.sideMenuOpen : styles.sideMenuClosed}`} ref={menuRef}>
         <div className={styles.sideMenuHeader}>
           <div className={styles.sideMenuBrand}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -424,40 +378,36 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         <nav className={styles.sideMenuNav}>
           {menuCategories.map((cat) => (
             <div key={cat.id} className={styles.sideMenuCategory}>
-              <button
-                className={`${styles.sideMenuCategoryToggle} ${submenuOpen === cat.id ? styles.sideMenuCategoryToggleOpen : ''}`}
-                onClick={() => toggleSubmenu(cat.id)}
+              <Link 
+                href={cat.href} 
+                className={styles.sideMenuLink}
+                onClick={() => {
+                  setMenuOpen(false);
+                  document.body.style.overflow = 'auto';
+                }}
               >
-                <span className={styles.sideMenuCategoryIcon}>{cat.icon}</span>
+                <span className={styles.sideMenuCategoryIcon}>
+                  {cat.id === 'ninos' && (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+                    </svg>
+                  )}
+                  {cat.id === 'ninas' && (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+                    </svg>
+                  )}
+                  {cat.id === 'unisex' && (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
+                      <circle cx="12" cy="12" r="10" />
+                    </svg>
+                  )}
+                </span>
                 <span>{cat.label}</span>
-                <svg
-                  className={styles.sideMenuArrow}
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              <ul className={`${styles.sideMenuSubmenu} ${submenuOpen === cat.id ? styles.sideMenuSubmenuOpen : ''}`}>
-                {cat.subcategories.map((sub) => (
-                  <li key={sub.href}>
-                    <Link 
-                      href={sub.href} 
-                      className={styles.sideMenuLink} 
-                      onClick={() => {
-                        setMenuOpen(false);
-                        document.body.style.overflow = 'auto';
-                      }}
-                    >
-                      {sub.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              </Link>
             </div>
           ))}
         </nav>
@@ -496,7 +446,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </div>
 
-      {/* Overlay - SOLO cuando hay menú o búsqueda abiertos */}
+      {/* Overlay - SOLO cuando hay menú o búsqueda abiertos - FIXED */}
       {(menuOpen || searchOpen) && (
         <div
           className={styles.headerOverlay}
