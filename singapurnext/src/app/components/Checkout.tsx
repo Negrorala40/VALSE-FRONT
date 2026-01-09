@@ -725,62 +725,91 @@ const CheckoutPage = () => {
   // Simular pago (PARA DESARROLLO LOCAL)
   const simulatePayment = async (status: 'approved' | 'rejected') => {
     if (!orderId) {
-      setError('No hay orden creada');
-      return;
+        setError('No hay orden creada');
+        return;
     }
 
     try {
-      setSimulationInProgress(true);
-      setError('');
-      
-      console.log('🎮 Simulando pago con status:', status, 'orderId:', orderId);
-      
-      const response = await fetch(MERCADOPAGO_SIMULATE, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderId: parseInt(orderId),
-          status: status
-        }),
-      });
-
-      console.log('🎮 Simulación response:', response.status);
-      
-      if (response.ok) {
-        if (status === 'approved') {
-          setSuccessMessage('¡Pago simulado exitosamente! Redirigiendo a página de éxito...');
-          // Limpiar carrito localmente
-          setCartItems([]);
-          setTotal(0);
-          
-          // Limpiar localStorage de carrito pendiente
-          localStorage.removeItem('pendingCartItem');
-          
-          // Redirigir a página de éxito después de 1.5 segundos
-          setTimeout(() => {
-            window.location.href = `/checkout/success?orderId=${orderId}`;
-          }, 1500);
-        } else {
-          setError('Pago simulado rechazado. Redirigiendo a página de error...');
-          // Redirigir a página de error después de 1.5 segundos
-          setTimeout(() => {
-            window.location.href = `/checkout/failure?orderId=${orderId}`;
-          }, 1500);
+        setSimulationInProgress(true);
+        setError('');
+        setSuccessMessage('');
+        
+        console.log('🎮 Simulando pago con status:', status, 'orderId:', orderId);
+        
+        // IMPORTANTE: Para usuarios autenticados, enviar el token
+        const token = localStorage.getItem('token');
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
         }
-      } else {
-        const errorData = await response.text();
-        console.error('🎮 Error en simulación:', errorData);
-        setError(`Error simulando pago: ${errorData}`);
-      }
-    } catch (error) {
-      console.error('🛑 Error simulando pago:', error);
-      setError('Error de conexión al simular pago');
+        
+        const response = await fetch(MERCADOPAGO_SIMULATE, {
+            method: 'POST',
+            headers,
+            credentials: 'include', // Importante para enviar cookies (sessionId)
+            body: JSON.stringify({
+                orderId: parseInt(orderId),
+                status: status
+            }),
+        });
+
+        console.log('🎮 Simulación response:', response.status, response.statusText);
+        
+        const responseText = await response.text();
+        console.log('🎮 Response body:', responseText);
+        
+        if (response.ok) {
+            const result = JSON.parse(responseText);
+            console.log('✅ Resultado simulación:', result);
+            
+            if (status === 'approved') {
+                setSuccessMessage(`✅ Pago aprobado exitosamente! Orden #${orderId} confirmada.`);
+                
+                // Limpiar carrito localmente
+                setCartItems([]);
+                setTotal(0);
+                
+                // Limpiar localStorage de carrito pendiente
+                localStorage.removeItem('pendingCartItem');
+                
+                // Opcional: Redirigir a página de éxito después de 2 segundos
+                setTimeout(() => {
+                    window.location.href = `/checkout/success?orderId=${orderId}`;
+                }, 2000);
+            } else {
+                setError(`❌ Pago rechazado para orden #${orderId}.`);
+                
+                // Opcional: Redirigir a página de error después de 2 segundos
+                setTimeout(() => {
+                    window.location.href = `/checkout/failure?orderId=${orderId}`;
+                }, 2000);
+            }
+        } else {
+            console.error('❌ Error en simulación:', responseText);
+            
+            try {
+                const errorJson = JSON.parse(responseText);
+                setError(`❌ Error simulando pago: ${errorJson.error || responseText}`);
+            } catch {
+                setError(`❌ Error simulando pago: ${responseText}`);
+            }
+            
+            // Mostrar mensaje de error por 5 segundos
+            setTimeout(() => setError(''), 5000);
+        }
+    } catch (error: any) {
+        console.error('🛑 Error de conexión al simular pago:', error);
+        setError(`❌ Error de conexión: ${error.message || 'Error desconocido'}`);
+        
+        // Mostrar mensaje de error por 5 segundos
+        setTimeout(() => setError(''), 5000);
     } finally {
-      setSimulationInProgress(false);
+        setSimulationInProgress(false);
     }
-  };
+};
 
   // Crear orden cuando llegamos al paso 3
   useEffect(() => {
