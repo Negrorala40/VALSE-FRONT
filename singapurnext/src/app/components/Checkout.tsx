@@ -9,7 +9,10 @@ import {
   ADDRESS, 
   ORDERS,
   API_BASE_URL,
-  MERCADOPAGO_SIMULATE
+  MERCADOPAGO_SIMULATE,
+  CHECKOUT_ANONYMOUS,
+  CHECKOUT_AUTHENTICATED,
+  MIGRATE_ORDERS
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -27,7 +30,10 @@ import {
   X,
   Loader2,
   ExternalLink,
-  Wallet
+  Wallet,
+  User,
+  Mail,
+  Phone
 } from 'lucide-react';
 
 interface CartItem {
@@ -75,20 +81,13 @@ interface OrderResponse {
   }>;
 }
 
-// ========================================================
-// 🚨 COMENTADO: CÓDIGO DE MERCADOPAGO REAL
-// Descomentar cuando tengas las claves de MercadoPago
-// ========================================================
-/*
-interface PaymentPreferenceResponse {
-  id: string;
-  init_point: string;
-  [key: string]: any;
+// Interface para checkout anónimo
+interface AnonymousUserInfo {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
 }
-
-const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
-const MERCADOPAGO_STATUS = `${API_BASE_URL}/api/payments/status`;
-*/
 
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -100,6 +99,7 @@ const CheckoutPage = () => {
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
   const [step, setStep] = useState<number>(1);
 
@@ -111,22 +111,75 @@ const CheckoutPage = () => {
     country: '',
   });
 
+  // Datos para usuario anónimo
+  const [anonymousUserInfo, setAnonymousUserInfo] = useState<AnonymousUserInfo>({
+    email: '',
+    firstName: '',
+    lastName: '',
+    phone: ''
+  });
+
   const [orderCreated, setOrderCreated] = useState(false);
-  
-  // ========================================================
-  // 🚨 COMENTADO: ESTADOS DE MERCADOPAGO REAL
-  // ========================================================
-  /*
-  const [paymentPreference, setPaymentPreference] = useState<PaymentPreferenceResponse | null>(null);
-  const [redirectingToMP, setRedirectingToMP] = useState(false);
-  */
-  
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [simulationInProgress, setSimulationInProgress] = useState(false);
   
   // Refs
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
+
+  // Verificar autenticación y cargar datos
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const isAuth = !!token;
+    setIsAuthenticated(isAuth);
+
+    if (isAuth && !hasFetchedRef.current) {
+      loadAuthenticatedData(token!);
+    } else if (!isAuth && !hasFetchedRef.current) {
+      loadAnonymousCart();
+    }
+  }, []);
+
+  const loadAuthenticatedData = async (token: string) => {
+    setLoading(true);
+    
+    if (fetchControllerRef.current) {
+      fetchControllerRef.current.abort();
+    }
+    
+    fetchControllerRef.current = new AbortController();
+    const signal = fetchControllerRef.current.signal;
+    
+    try {
+      hasFetchedRef.current = true;
+      
+      await Promise.all([
+        fetchCart(token, signal),
+        fetchUser(token, signal)
+      ]);
+      
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error('Error loading authenticated data:', err);
+        setError('Error cargando los datos');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAnonymousCart = async () => {
+    setLoading(true);
+    try {
+      // El carrito anónimo se carga sin token
+      await fetchCart(null);
+    } catch (err: any) {
+      console.error('Error loading anonymous cart:', err);
+      setError('Error cargando el carrito');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Formateador de precio
   const formatPrice = (price: number) => {
@@ -143,13 +196,23 @@ const CheckoutPage = () => {
     setTotal(newTotal);
   }, []);
 
-  // Fetch carrito
-  const fetchCart = useCallback(async (token: string, signal?: AbortSignal) => {
+  // Fetch carrito (funciona para ambos tipos de usuarios)
+  const fetchCart = async (token: string | null, signal?: AbortSignal) => {
     try {
       console.log('Fetching cart data...');
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const res = await fetch(CART, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal
+        headers,
+        signal,
+        credentials: 'include' // Importante para cookies
       });
       
       if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
@@ -159,15 +222,15 @@ const CheckoutPage = () => {
       
       const items: CartItem[] = data.map(
         (item: any) => ({
-          id: item.id,
-          image: item.imageUrls?.[0] || '/placeholder.png',
-          name: item.productName || item.name,
-          price: item.price,
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          stock: item.stock || 100,
-          productVariantId: item.productVariantId?.toString() || item.id,
+          id: item.id.toString(),
+          image: item.imageUrl || item.imageUrls?.[0] || '/placeholder.png',
+          name: item.productName || item.name || 'Producto',
+          price: item.price || item.productVariant?.price || 0,
+          size: item.size || item.productVariant?.size || '',
+          color: item.color || item.productVariant?.color || '',
+          quantity: item.quantity || 1,
+          stock: item.stock || item.productVariant?.stock || 100,
+          productVariantId: item.productVariantId?.toString() || item.id?.toString(),
         })
       );
       
@@ -176,10 +239,10 @@ const CheckoutPage = () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') throw error;
     }
-  }, [calculateTotal]);
+  };
 
-  // Fetch usuario
-  const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
+  // Fetch usuario (solo autenticados)
+  const fetchUser = async (token: string, signal?: AbortSignal) => {
     try {
       console.log('Fetching user data...');
       const res = await fetch(PERFIL_ME, {
@@ -206,60 +269,18 @@ const CheckoutPage = () => {
       if (user.addresses && user.addresses.length > 0) {
         setSelectedAddress(user.addresses[0]);
       }
+
+      // Prellenar datos del usuario
+      setAnonymousUserInfo({
+        email: user.email || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        phone: user.phone || ''
+      });
     } catch (error: any) {
       if (error.name !== 'AbortError') throw error;
     }
-  }, []);
-
-  // Cargar datos iniciales
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Usuario no autenticado');
-      return;
-    }
-
-    if (hasFetchedRef.current) return;
-
-    const fetchInitialData = async () => {
-      setLoading(true);
-      
-      if (fetchControllerRef.current) {
-        fetchControllerRef.current.abort();
-      }
-      
-      fetchControllerRef.current = new AbortController();
-      const signal = fetchControllerRef.current.signal;
-      
-      try {
-        hasFetchedRef.current = true;
-        
-        await Promise.all([
-          fetchCart(token, signal),
-          fetchUser(token, signal)
-        ]);
-        
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error('Error loading initial data:', err);
-          setError('Error cargando los datos iniciales');
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const timer = setTimeout(() => {
-      fetchInitialData();
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      if (fetchControllerRef.current) {
-        fetchControllerRef.current.abort();
-      }
-    };
-  }, [fetchCart, fetchUser]);
+  };
 
   // Actualizar cantidad
   const updateQuantity = async (itemId: string, newQuantity: number) => {
@@ -274,16 +295,22 @@ const CheckoutPage = () => {
     }
 
     const token = localStorage.getItem('token');
-    if (!token) return;
-
+    
     try {
       setLoading(true);
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT',
-        headers: { 
-          Authorization: `Bearer ${token}`, 
-          'Content-Type': 'application/json' 
-        },
+        headers,
+        credentials: 'include'
       });
       
       if (!res.ok) throw new Error('Error actualizando cantidad');
@@ -303,19 +330,25 @@ const CheckoutPage = () => {
 
   // Eliminar item
   const removeItem = async (itemId: string) => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
     if (!confirm('¿Estás seguro de eliminar este producto del carrito?')) return;
 
+    const token = localStorage.getItem('token');
+    
     try {
       setLoading(true);
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const res = await fetch(`${CART}/remove/${itemId}`, {
         method: 'DELETE',
-        headers: { 
-          Authorization: `Bearer ${token}`, 
-          'Content-Type': 'application/json' 
-        },
+        headers,
+        credentials: 'include'
       });
       
       if (!res.ok) throw new Error('Error eliminando producto');
@@ -331,11 +364,11 @@ const CheckoutPage = () => {
     }
   };
 
-  // Agregar dirección
+  // Agregar dirección (solo autenticados)
   const addAddress = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      setError('No autenticado');
+      setError('Necesitas iniciar sesión para guardar direcciones');
       return;
     }
 
@@ -399,7 +432,7 @@ const CheckoutPage = () => {
     }
   };
 
-  // Eliminar dirección
+  // Eliminar dirección (solo autenticados)
   const deleteAddress = async (addressId: number) => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -447,10 +480,28 @@ const CheckoutPage = () => {
       setError('Tu carrito está vacío');
       return;
     }
-    if (step === 2 && !selectedAddress) {
-      setError('Selecciona una dirección de envío');
-      return;
+    
+    if (step === 2) {
+      // Validar según tipo de usuario
+      if (isAuthenticated) {
+        if (!selectedAddress) {
+          setError('Selecciona una dirección de envío');
+          return;
+        }
+      } else {
+        // Validar datos de usuario anónimo
+        if (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone) {
+          setError('Completa tus datos de contacto para continuar');
+          return;
+        }
+        
+        if (!selectedAddress) {
+          setError('Debes agregar una dirección de envío');
+          return;
+        }
+      }
     }
+    
     setStep((prev) => Math.min(prev + 1, 3));
     setError('');
   };
@@ -460,24 +511,15 @@ const CheckoutPage = () => {
     setError('');
   };
 
-  // ========================================================
-  // 🚨 MODIFICADO: Función simplificada para desarrollo local
-  // Solo crea la orden, sin MercadoPago
-  // ========================================================
+  // Crear orden y pago
   const createOrderAndPayment = useCallback(async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Usuario no autenticado');
+    if (cartItems.length === 0) {
+      setError('Carrito vacío');
       return;
     }
     
     if (!selectedAddress) {
       setError('Selecciona una dirección');
-      return;
-    }
-    
-    if (cartItems.length === 0) {
-      setError('Carrito vacío');
       return;
     }
 
@@ -486,29 +528,70 @@ const CheckoutPage = () => {
       setError('');
       setSuccessMessage('');
 
-      // 1. Crear orden en nuestro sistema
-      console.log('Creando orden...');
-      const orderRes = await fetch(ORDERS, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          shippingAddressId: selectedAddress.id
-        }),
-      });
+      let orderResponse: OrderResponse;
+      
+      if (isAuthenticated) {
+        // Checkout para usuario autenticado
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error('Usuario no autenticado');
+        
+        const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            shippingAddressId: selectedAddress.id
+          }),
+        });
 
-      if (!orderRes.ok) {
-        let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
-        try {
-          const errorData = await orderRes.text();
-          errorMessage = errorData || errorMessage;
-        } catch {}
-        throw new Error(errorMessage);
+        if (!orderRes.ok) {
+          let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
+          try {
+            const errorData = await orderRes.text();
+            errorMessage = errorData || errorMessage;
+          } catch {}
+          throw new Error(errorMessage);
+        }
+
+        orderResponse = await orderRes.json();
+        
+      } else {
+        // Checkout para usuario anónimo
+        if (!anonymousUserInfo.email) {
+          throw new Error('Email requerido para usuarios anónimos');
+        }
+        
+        const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            customerEmail: anonymousUserInfo.email,
+            shippingAddress: {
+              address: selectedAddress.address,
+              city: selectedAddress.city,
+              state: selectedAddress.state,
+              country: selectedAddress.country
+            }
+          }),
+        });
+
+        if (!orderRes.ok) {
+          let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
+          try {
+            const errorData = await orderRes.text();
+            errorMessage = errorData || errorMessage;
+          } catch {}
+          throw new Error(errorMessage);
+        }
+
+        orderResponse = await orderRes.json();
       }
 
-      const orderResponse: OrderResponse = await orderRes.json();
       console.log('Orden creada:', orderResponse);
 
       if (!orderResponse.id) {
@@ -520,59 +603,14 @@ const CheckoutPage = () => {
       setOrderCreated(true);
       setSuccessMessage(`✅ Orden #${orderId} creada exitosamente. Usa los botones de simulación.`);
 
-      // ========================================================
-      // 🚨 COMENTADO: CÓDIGO DE MERCADOPAGO REAL
-      // Descomentar cuando tengas las claves de MercadoPago
-      // ========================================================
-      /*
-      // 2. Crear preferencia de pago en MercadoPago (PRODUCCIÓN)
-      console.log('Creando preferencia de pago en MercadoPago...');
-      const paymentRes = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderId: orderResponse.id
-        }),
-      });
-
-      if (!paymentRes.ok) {
-        let errorMessage = `Error creando preferencia: ${paymentRes.statusText}`;
-        try {
-          const errorData = await paymentRes.text();
-          errorMessage = errorData || errorMessage;
-        } catch {}
-        throw new Error(errorMessage);
-      }
-
-      const paymentPreference: PaymentPreferenceResponse = await paymentRes.json();
-      console.log('Preferencia creada:', paymentPreference);
-
-      if (!paymentPreference.id || !paymentPreference.init_point) {
-        throw new Error('Respuesta de MercadoPago incompleta');
-      }
-
-      setPaymentPreference(paymentPreference);
-      setSuccessMessage('Preferencia de pago creada exitosamente');
-
-      // 3. Redirigir a MercadoPago automáticamente después de 2 segundos
-      setTimeout(() => {
-        setRedirectingToMP(true);
-        window.location.href = paymentPreference.init_point;
-      }, 2000);
-      */
-
     } catch (err: any) {
       console.error('Error en checkout:', err);
       setError(`Error: ${err.message || 'Error desconocido'}`);
       setOrderCreated(false);
-      // setPaymentPreference(null); // 🚨 COMENTADO
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems]);
+  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo]);
 
   // Simular pago (PARA DESARROLLO LOCAL)
   const simulatePayment = async (status: 'approved' | 'rejected') => {
@@ -599,6 +637,10 @@ const CheckoutPage = () => {
       if (response.ok) {
         if (status === 'approved') {
           setSuccessMessage('¡Pago simulado exitosamente! Redirigiendo a página de éxito...');
+          // Limpiar carrito localmente
+          setCartItems([]);
+          setTotal(0);
+          
           // Redirigir a página de éxito después de 1.5 segundos
           setTimeout(() => {
             window.location.href = `/checkout/success?orderId=${orderId}`;
@@ -631,7 +673,7 @@ const CheckoutPage = () => {
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
-    { number: 2, label: "Envío", icon: MapPin },
+    { number: 2, label: isAuthenticated ? "Envío" : "Datos", icon: isAuthenticated ? MapPin : User },
     { number: 3, label: "Pago", icon: CreditCard },
   ];
 
@@ -663,6 +705,20 @@ const CheckoutPage = () => {
           <Sparkles className="checkout-icon-sm" />
         </div>
       </div>
+
+      {/* Info de usuario */}
+      {!isAuthenticated && step > 1 && (
+        <div className="checkout-user-info-banner">
+          <User className="checkout-icon" />
+          <span>Comprando como invitado</span>
+          <button 
+            onClick={() => window.location.href = '/login'}
+            className="checkout-login-prompt-btn"
+          >
+            Iniciar sesión
+          </button>
+        </div>
+      )}
 
       {/* Progress Steps */}
       <div className="checkout-progress-section">
@@ -726,6 +782,12 @@ const CheckoutPage = () => {
                   <div>
                     <h2 className="checkout-section-title">Tu Carrito</h2>
                     <p className="checkout-section-subtitle">{cartItems.length} producto(s)</p>
+                    {!isAuthenticated && (
+                      <p className="checkout-guest-notice">
+                        <User className="checkout-icon" size={16} />
+                        Estás comprando como invitado
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -807,143 +869,304 @@ const CheckoutPage = () => {
               </div>
             )}
 
-            {/* Step 2: Address */}
+            {/* Step 2: Address & User Info */}
             {step === 2 && (
               <div className="checkout-animate-in-right">
                 <div className="checkout-section-header">
                   <div className="checkout-section-icon address">
-                    <MapPin className="checkout-icon" />
+                    {isAuthenticated ? <MapPin className="checkout-icon" /> : <User className="checkout-icon" />}
                   </div>
                   <div>
-                    <h2 className="checkout-section-title">Dirección de Envío</h2>
-                    <p className="checkout-section-subtitle">¿A dónde enviamos tus pijamas?</p>
+                    <h2 className="checkout-section-title">
+                      {isAuthenticated ? 'Dirección de Envío' : 'Tus Datos de Contacto'}
+                    </h2>
+                    <p className="checkout-section-subtitle">
+                      {isAuthenticated ? '¿A dónde enviamos tus pijamas?' : 'Necesitamos algunos datos para tu pedido'}
+                    </p>
                   </div>
                 </div>
 
                 <div className="checkout-card">
                   <div className="checkout-card-content">
-                    {!userData ? (
-                      <div className="checkout-loading-state">
-                        <div className="checkout-spinner"></div>
-                        <p>Cargando tus datos...</p>
-                      </div>
-                    ) : userData.addresses.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "2rem 0" }}>
-                        <MapPin className="checkout-icon" style={{ width: "3rem", height: "3rem", color: "var(--checkout-gray-dark)", margin: "0 auto 1rem" }} />
-                        <p style={{ color: "var(--checkout-gray-dark)", marginBottom: "1rem" }}>
-                          No tienes direcciones guardadas
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="checkout-address-list">
-                        {userData.addresses.map((address) => (
-                          <div
-                            key={address.id}
-                            onClick={() => setSelectedAddress(address)}
-                            className={`checkout-address-card ${selectedAddress?.id === address.id ? "selected" : ""}`}
-                          >
-                            <div className="checkout-address-card-inner">
-                              <div className="checkout-address-radio">
-                                {selectedAddress?.id === address.id && <Check className="checkout-icon" strokeWidth={3} />}
-                              </div>
-                              <div className="checkout-address-details">
-                                <p>{address.address}</p>
-                                <p>
-                                  {address.city}, {address.state}
-                                </p>
-                                <p>{address.country}</p>
-                              </div>
-                              <button
-                                className="checkout-address-delete-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteAddress(address.id);
-                                }}
-                                disabled={loading}
-                              >
-                                <Trash2 className="checkout-icon" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Add New Address */}
-                    {addingAddress ? (
-                      <div className="checkout-add-address-form">
-                        <h3 className="checkout-add-address-title">
-                          <Plus className="checkout-icon" />
-                          Nueva Dirección
+                    {/* User Info Form (para anónimos) */}
+                    {!isAuthenticated && (
+                      <div className="checkout-user-info-form">
+                        <h3 className="checkout-user-info-title">
+                          <User className="checkout-icon" />
+                          Información de Contacto
                         </h3>
                         <div className="checkout-form-grid">
                           <div className="checkout-form-group">
-                            <label htmlFor="address">Dirección Completa</label>
+                            <label htmlFor="email">
+                              <Mail className="checkout-icon" size={16} />
+                              Email *
+                            </label>
                             <input
-                              id="address"
-                              type="text"
+                              id="email"
+                              type="email"
                               className="checkout-form-input"
-                              placeholder="Calle 123 #45-67, Apto 301"
-                              value={newAddress.address}
-                              onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                              placeholder="tu@email.com"
+                              value={anonymousUserInfo.email}
+                              onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, email: e.target.value})}
+                              required
                             />
                           </div>
+                          
                           <div className="checkout-form-grid-2">
                             <div className="checkout-form-group">
-                              <label htmlFor="city">Ciudad</label>
+                              <label htmlFor="firstName">Nombre *</label>
                               <input
-                                id="city"
+                                id="firstName"
                                 type="text"
                                 className="checkout-form-input"
-                                placeholder="Bogotá"
-                                value={newAddress.city}
-                                onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                                placeholder="Tu nombre"
+                                value={anonymousUserInfo.firstName}
+                                onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, firstName: e.target.value})}
+                                required
                               />
                             </div>
                             <div className="checkout-form-group">
-                              <label htmlFor="state">Departamento</label>
+                              <label htmlFor="lastName">Apellido</label>
                               <input
-                                id="state"
+                                id="lastName"
                                 type="text"
                                 className="checkout-form-input"
-                                placeholder="Cundinamarca"
-                                value={newAddress.state}
-                                onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                                placeholder="Tu apellido"
+                                value={anonymousUserInfo.lastName}
+                                onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, lastName: e.target.value})}
                               />
                             </div>
                           </div>
+                          
                           <div className="checkout-form-group">
-                            <label htmlFor="country">País</label>
+                            <label htmlFor="phone">
+                              <Phone className="checkout-icon" size={16} />
+                              Teléfono *
+                            </label>
                             <input
-                              id="country"
-                              type="text"
+                              id="phone"
+                              type="tel"
                               className="checkout-form-input"
-                              placeholder="Colombia"
-                              value={newAddress.country}
-                              onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                              placeholder="+57 300 123 4567"
+                              value={anonymousUserInfo.phone}
+                              onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, phone: e.target.value})}
+                              required
                             />
                           </div>
-                          <div className="checkout-form-actions">
-                            <button onClick={addAddress} className="checkout-btn checkout-btn-primary" disabled={loading}>
-                              <Check className="checkout-icon" />
-                              {loading ? 'Guardando...' : 'Guardar'}
-                            </button>
-                            <button onClick={() => setAddingAddress(false)} className="checkout-btn checkout-btn-outline">
-                              Cancelar
-                            </button>
-                          </div>
+                        </div>
+                        
+                        <div className="checkout-guest-notice">
+                          <small>
+                            ⚠️ Como invitado, tu pedido se vinculará a tu email. 
+                            Puedes registrarte después para ver el historial de tus órdenes.
+                          </small>
                         </div>
                       </div>
-                    ) : (
-                      <button 
-                        className="checkout-add-address-btn" 
-                        onClick={() => setAddingAddress(true)}
-                        disabled={loading}
-                      >
-                        <Plus className="checkout-icon" />
-                        Agregar Nueva Dirección
-                      </button>
                     )}
+
+                    {/* Direcciones (para ambos) */}
+                    <div className="checkout-address-section">
+                      <h3 className="checkout-address-section-title">
+                        <MapPin className="checkout-icon" />
+                        Dirección de Envío
+                      </h3>
+
+                      {isAuthenticated ? (
+                        // Usuario autenticado - direcciones guardadas
+                        <>
+                          {!userData ? (
+                            <div className="checkout-loading-state">
+                              <div className="checkout-spinner"></div>
+                              <p>Cargando tus direcciones...</p>
+                            </div>
+                          ) : userData.addresses.length === 0 ? (
+                            <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                              <MapPin className="checkout-icon" style={{ width: "3rem", height: "3rem", color: "var(--checkout-gray-dark)", margin: "0 auto 1rem" }} />
+                              <p style={{ color: "var(--checkout-gray-dark)", marginBottom: "1rem" }}>
+                                No tienes direcciones guardadas
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="checkout-address-list">
+                              {userData.addresses.map((address) => (
+                                <div
+                                  key={address.id}
+                                  onClick={() => setSelectedAddress(address)}
+                                  className={`checkout-address-card ${selectedAddress?.id === address.id ? "selected" : ""}`}
+                                >
+                                  <div className="checkout-address-card-inner">
+                                    <div className="checkout-address-radio">
+                                      {selectedAddress?.id === address.id && <Check className="checkout-icon" strokeWidth={3} />}
+                                    </div>
+                                    <div className="checkout-address-details">
+                                      <p>{address.address}</p>
+                                      <p>
+                                        {address.city}, {address.state}
+                                      </p>
+                                      <p>{address.country}</p>
+                                    </div>
+                                    <button
+                                      className="checkout-address-delete-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteAddress(address.id);
+                                      }}
+                                      disabled={loading}
+                                    >
+                                      <Trash2 className="checkout-icon" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Add New Address (solo autenticados) */}
+                          {addingAddress ? (
+                            <div className="checkout-add-address-form">
+                              <h3 className="checkout-add-address-title">
+                                <Plus className="checkout-icon" />
+                                Nueva Dirección
+                              </h3>
+                              <div className="checkout-form-grid">
+                                <div className="checkout-form-group">
+                                  <label htmlFor="address">Dirección Completa</label>
+                                  <input
+                                    id="address"
+                                    type="text"
+                                    className="checkout-form-input"
+                                    placeholder="Calle 123 #45-67, Apto 301"
+                                    value={newAddress.address}
+                                    onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                                  />
+                                </div>
+                                <div className="checkout-form-grid-2">
+                                  <div className="checkout-form-group">
+                                    <label htmlFor="city">Ciudad</label>
+                                    <input
+                                      id="city"
+                                      type="text"
+                                      className="checkout-form-input"
+                                      placeholder="Bogotá"
+                                      value={newAddress.city}
+                                      onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                                    />
+                                  </div>
+                                  <div className="checkout-form-group">
+                                    <label htmlFor="state">Departamento</label>
+                                    <input
+                                      id="state"
+                                      type="text"
+                                      className="checkout-form-input"
+                                      placeholder="Cundinamarca"
+                                      value={newAddress.state}
+                                      onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="checkout-form-group">
+                                  <label htmlFor="country">País</label>
+                                  <input
+                                    id="country"
+                                    type="text"
+                                    className="checkout-form-input"
+                                    placeholder="Colombia"
+                                    value={newAddress.country}
+                                    onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                                  />
+                                </div>
+                                <div className="checkout-form-actions">
+                                  <button onClick={addAddress} className="checkout-btn checkout-btn-primary" disabled={loading}>
+                                    <Check className="checkout-icon" />
+                                    {loading ? 'Guardando...' : 'Guardar'}
+                                  </button>
+                                  <button onClick={() => setAddingAddress(false)} className="checkout-btn checkout-btn-outline">
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <button 
+                              className="checkout-add-address-btn" 
+                              onClick={() => setAddingAddress(true)}
+                              disabled={loading}
+                            >
+                              <Plus className="checkout-icon" />
+                              Agregar Nueva Dirección
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        // Usuario anónimo - formulario simple de dirección
+                        <div className="checkout-anonymous-address-form">
+                          <div className="checkout-form-grid">
+                            <div className="checkout-form-group">
+                              <label htmlFor="anon-address">Dirección Completa *</label>
+                              <input
+                                id="anon-address"
+                                type="text"
+                                className="checkout-form-input"
+                                placeholder="Calle 123 #45-67, Apto 301"
+                                value={selectedAddress?.address || ''}
+                                onChange={(e) => setSelectedAddress({
+                                  ...selectedAddress || {id: Date.now(), city: '', state: '', country: ''},
+                                  address: e.target.value
+                                })}
+                                required
+                              />
+                            </div>
+                            <div className="checkout-form-grid-2">
+                              <div className="checkout-form-group">
+                                <label htmlFor="anon-city">Ciudad *</label>
+                                <input
+                                  id="anon-city"
+                                  type="text"
+                                  className="checkout-form-input"
+                                  placeholder="Bogotá"
+                                  value={selectedAddress?.city || ''}
+                                  onChange={(e) => setSelectedAddress({
+                                    ...selectedAddress || {id: Date.now(), address: '', state: '', country: ''},
+                                    city: e.target.value
+                                  })}
+                                  required
+                                />
+                              </div>
+                              <div className="checkout-form-group">
+                                <label htmlFor="anon-state">Departamento *</label>
+                                <input
+                                  id="anon-state"
+                                  type="text"
+                                  className="checkout-form-input"
+                                  placeholder="Cundinamarca"
+                                  value={selectedAddress?.state || ''}
+                                  onChange={(e) => setSelectedAddress({
+                                    ...selectedAddress || {id: Date.now(), address: '', city: '', country: ''},
+                                    state: e.target.value
+                                  })}
+                                  required
+                                />
+                              </div>
+                            </div>
+                            <div className="checkout-form-group">
+                              <label htmlFor="anon-country">País *</label>
+                              <input
+                                id="anon-country"
+                                type="text"
+                                className="checkout-form-input"
+                                placeholder="Colombia"
+                                value={selectedAddress?.country || ''}
+                                onChange={(e) => setSelectedAddress({
+                                  ...selectedAddress || {id: Date.now(), address: '', city: '', state: ''},
+                                  country: e.target.value
+                                })}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -959,27 +1182,52 @@ const CheckoutPage = () => {
                   <div>
                     <h2 className="checkout-section-title">Confirmar y Pagar</h2>
                     <p className="checkout-section-subtitle">Un paso más y tus pijamas van a Marte</p>
+                    {!isAuthenticated && (
+                      <p className="checkout-guest-notice">
+                        <User className="checkout-icon" size={16} />
+                        Pedido como: {anonymousUserInfo.email}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 <div className="checkout-card">
                   <div className="checkout-card-content">
-                    {/* Shipping Address */}
-                    {selectedAddress && (
-                      <div className="checkout-shipping-summary">
-                        <div className="checkout-shipping-summary-header">
-                          <MapPin className="checkout-icon" />
-                          <span>Envío a:</span>
+                    {/* User & Shipping Summary */}
+                    <div className="checkout-summary-section">
+                      {/* User Info */}
+                      <div className="checkout-user-summary">
+                        <div className="checkout-user-summary-header">
+                          <User className="checkout-icon" />
+                          <span>Datos del cliente:</span>
                         </div>
                         <p>
-                          {selectedAddress.address}
+                          {isAuthenticated 
+                            ? `${userData?.firstName} ${userData?.lastName} (${userData?.email})`
+                            : `${anonymousUserInfo.firstName} ${anonymousUserInfo.lastName} (${anonymousUserInfo.email})`
+                          }
                           <br />
-                          {selectedAddress.city}, {selectedAddress.state}
-                          <br />
-                          {selectedAddress.country}
+                          Tel: {isAuthenticated ? userData?.phone : anonymousUserInfo.phone}
                         </p>
                       </div>
-                    )}
+
+                      {/* Shipping Address */}
+                      {selectedAddress && (
+                        <div className="checkout-shipping-summary">
+                          <div className="checkout-shipping-summary-header">
+                            <MapPin className="checkout-icon" />
+                            <span>Envío a:</span>
+                          </div>
+                          <p>
+                            {selectedAddress.address}
+                            <br />
+                            {selectedAddress.city}, {selectedAddress.state}
+                            <br />
+                            {selectedAddress.country}
+                          </p>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Order Items Preview */}
                     <div className="checkout-order-items-preview">
@@ -1015,10 +1263,7 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {/* ======================================================== */}
-                    {/* 🚨 MODIFICADO: Sección de simulación para desarrollo */}
-                    {/* ======================================================== */}
-                    
+                    {/* Simulation Section */}
                     {orderCreated && !isProcessingPayment && (
                       <div className="checkout-simulation-section">
                         {/* Info para desarrollo */}
@@ -1033,9 +1278,9 @@ const CheckoutPage = () => {
                           </p>
                           <div className="checkout-dev-note">
                             <small>
-              ⚠️ <strong>Nota:</strong> En producción, esto redirigiría a MercadoPago real.
-              Para activar el modo producción, necesitas configurar las claves de MercadoPago en el backend.
-            </small>
+                              ⚠️ <strong>Nota:</strong> En producción, esto redirigiría a MercadoPago real.
+                              Para activar el modo producción, necesitas configurar las claves de MercadoPago en el backend.
+                            </small>
                           </div>
                         </div>
 
@@ -1085,49 +1330,11 @@ const CheckoutPage = () => {
                             <li>Crea una cuenta en MercadoPago Developers</li>
                             <li>Obtén las claves ACCESS_TOKEN y PUBLIC_KEY</li>
                             <li>Configúralas en el backend (application.properties)</li>
-                            <li>Descomenta el código marcado con 🚨 en este componente</li>
+                            <li>Descomenta el código marcado con 🚨 en el componente</li>
                           </ol>
                         </div>
                       </div>
                     )}
-
-                    {/* ======================================================== */}
-                    {/* 🚨 COMENTADO: Sección de MercadoPago real */}
-                    {/* Descomentar cuando tengas las claves */}
-                    {/* ======================================================== */}
-                    {/*
-                    {orderCreated && paymentPreference && (
-                      <div className="checkout-payment-options">
-                        <h4>¡Listo para pagar!</h4>
-                        <p className="checkout-payment-instruction">
-                          Tu orden ha sido creada exitosamente. Ahora puedes proceder con el pago seguro a través de MercadoPago.
-                        </p>
-
-                        <div className="checkout-mercadopago-container">
-                          <button
-                            className="checkout-mercadopago-btn"
-                            onClick={() => window.location.href = paymentPreference.init_point}
-                            disabled={redirectingToMP}
-                          >
-                            <img 
-                              src="https://http2.mlstatic.com/frontend-assets/ui-nav/5.10.1/mercadopago/logo__large_plus.png" 
-                              alt="MercadoPago" 
-                              className="mercadopago-logo"
-                            />
-                            <span>Pagar con MercadoPago</span>
-                            <ExternalLink className="icon" />
-                          </button>
-
-                          {redirectingToMP && (
-                            <div className="checkout-redirecting">
-                              <div className="checkout-spinner small"></div>
-                              <span>Redirigiendo a MercadoPago...</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    */}
 
                     {/* Order Created but processing error */}
                     {orderCreated && !isProcessingPayment && error && (
@@ -1136,9 +1343,15 @@ const CheckoutPage = () => {
                         <p>Tu orden #{orderId} ha sido creada. Te contactaremos para completar el pago.</p>
                         <button 
                           className="checkout-btn checkout-btn-primary"
-                          onClick={() => window.location.href = `/orders`}
+                          onClick={() => {
+                            if (isAuthenticated) {
+                              window.location.href = `/orders`;
+                            } else {
+                              window.location.href = `/`;
+                            }
+                          }}
                         >
-                          Ver mis órdenes
+                          {isAuthenticated ? 'Ver mis órdenes' : 'Volver al inicio'}
                         </button>
                       </div>
                     )}
@@ -1217,6 +1430,23 @@ const CheckoutPage = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Login Prompt for Guests */}
+                  {!isAuthenticated && (
+                    <div className="checkout-login-prompt">
+                      <User className="checkout-icon" size={16} />
+                      <p>
+                        <strong>¿Quieres guardar tus datos?</strong>
+                        <br />
+                        <small>
+                          <a href="/login" className="checkout-login-link">
+                            Inicia sesión o regístrate
+                          </a>{' '}
+                          para guardar direcciones y ver tu historial de pedidos.
+                        </small>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1257,7 +1487,14 @@ const CheckoutPage = () => {
             <button 
               className="checkout-btn checkout-btn-primary checkout-btn-lg" 
               onClick={nextStep} 
-              disabled={(step === 2 && !selectedAddress) || loading || isProcessingPayment}
+              disabled={
+                (step === 2 && (
+                  (isAuthenticated && !selectedAddress) || 
+                  (!isAuthenticated && (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone || !selectedAddress))
+                )) || 
+                loading || 
+                isProcessingPayment
+              }
             >
               Continuar
               <ChevronRight className="checkout-icon" />
@@ -1266,160 +1503,114 @@ const CheckoutPage = () => {
         </div>
       </main>
 
-      {/* CSS adicional para este componente */}
+      {/* CSS adicional */}
       <style jsx>{`
-        .checkout-processing-payment {
-          text-align: center;
-          padding: 2rem;
-          background: linear-gradient(135deg, var(--checkout-bg-light) 0%, #f8f9ff 100%);
-          border-radius: 1rem;
-          margin: 1.5rem 0;
-        }
-        
-        .checkout-spinner.large {
-          width: 3rem;
-          height: 3rem;
-          border-width: 3px;
-          border: 4px solid rgba(61, 178, 138, 0.3);
-          border-top-color: var(--checkout-mint);
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-          margin: 0 auto 1rem;
-        }
-        
-        .checkout-spinner.small {
-          width: 1rem;
-          height: 1rem;
-          border-width: 2px;
-          margin-right: 0.5rem;
-        }
-        
-        /* Estilos para la sección de simulación */
-        .checkout-simulation-section {
-          margin-top: 2rem;
-          padding: 1.5rem;
-          background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
-          border-radius: var(--checkout-radius-lg);
-          border: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-dev-info {
-          margin-bottom: 1.5rem;
-        }
-        
-        .checkout-dev-header {
+        .checkout-user-info-banner {
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          margin-bottom: 0.75rem;
+          padding: 0.75rem 1rem;
+          background: linear-gradient(135deg, var(--checkout-purple-light) 0%, rgba(128, 111, 247, 0.1) 100%);
+          border-radius: 0.5rem;
+          margin-bottom: 1.5rem;
+          border: 1px solid var(--checkout-border);
         }
         
-        .checkout-dev-header h4 {
-          margin: 0;
-          color: var(--checkout-navy);
-          font-size: 1.125rem;
-        }
-        
-        .checkout-dev-header .checkout-icon {
-          width: 1.5rem;
-          height: 1.5rem;
+        .checkout-user-info-banner .checkout-icon {
           color: var(--checkout-purple);
         }
         
-        .checkout-dev-description {
-          color: var(--checkout-gray-dark);
-          line-height: 1.5;
-          margin-bottom: 0.75rem;
-          padding: 0.75rem;
-          background: rgba(59, 130, 246, 0.1);
-          border-radius: 0.5rem;
-          border-left: 4px solid var(--checkout-blue);
-        }
-        
-        .checkout-dev-note {
-          font-size: 0.875rem;
-          color: var(--checkout-gray-dark);
-          background: rgba(0, 0, 0, 0.05);
-          padding: 0.75rem;
-          border-radius: 0.5rem;
-          margin-top: 1rem;
-        }
-        
-        .checkout-simulation-buttons {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          margin: 1.5rem 0;
-        }
-        
-        @media (min-width: 640px) {
-          .checkout-simulation-buttons {
-            flex-direction: row;
-          }
-        }
-        
-        .checkout-btn-success {
-          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        .checkout-login-prompt-btn {
+          margin-left: auto;
+          background: var(--checkout-purple);
           color: white;
           border: none;
-          flex: 1;
-        }
-        
-        .checkout-btn-danger {
-          background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
-          color: white;
-          border: none;
-          flex: 1;
-        }
-        
-        .checkout-btn-success:hover:not(:disabled) {
-          background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-          transform: translateY(-2px);
-        }
-        
-        .checkout-btn-danger:hover:not(:disabled) {
-          background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-          transform: translateY(-2px);
-        }
-        
-        .checkout-production-info {
-          margin-top: 1.5rem;
-          padding-top: 1rem;
-          border-top: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-production-info h5 {
-          color: var(--checkout-navy);
-          margin-bottom: 0.5rem;
-        }
-        
-        .checkout-production-info ol {
-          margin: 0;
-          padding-left: 1.25rem;
-          color: var(--checkout-gray-dark);
+          padding: 0.25rem 0.75rem;
+          border-radius: 0.25rem;
           font-size: 0.875rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
         }
         
-        .checkout-production-info li {
-          margin-bottom: 0.25rem;
+        .checkout-login-prompt-btn:hover {
+          background: var(--checkout-purple-dark);
+          transform: translateY(-1px);
         }
         
-        .checkout-success-message {
+        .checkout-guest-notice {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          padding: 0.75rem 1rem;
-          background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-          color: white;
-          border-radius: 0.5rem;
+          color: var(--checkout-gray-dark);
+          font-size: 0.875rem;
+          margin-top: 0.25rem;
+        }
+        
+        .checkout-user-info-form {
+          margin-bottom: 2rem;
+          padding-bottom: 1.5rem;
+          border-bottom: 1px solid var(--checkout-border);
+        }
+        
+        .checkout-user-info-title {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+          color: var(--checkout-navy);
+        }
+        
+        .checkout-summary-section {
+          display: grid;
+          gap: 1rem;
           margin-bottom: 1.5rem;
         }
         
-        .checkout-payment-fallback {
-          text-align: center;
-          padding: 2rem;
+        .checkout-user-summary,
+        .checkout-shipping-summary {
+          background: var(--checkout-bg-light);
+          padding: 1rem;
+          border-radius: 0.5rem;
+          border: 1px solid var(--checkout-border);
         }
         
+        .checkout-user-summary-header,
+        .checkout-shipping-summary-header {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          margin-bottom: 0.5rem;
+          font-weight: 600;
+          color: var(--checkout-navy);
+        }
+        
+        .checkout-login-prompt {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.75rem;
+          padding: 1rem;
+          background: linear-gradient(135deg, var(--checkout-bg-light) 0%, #f0f7ff 100%);
+          border-radius: 0.5rem;
+          margin-top: 1rem;
+          border: 1px dashed var(--checkout-blue);
+        }
+        
+        .checkout-login-prompt .checkout-icon {
+          color: var(--checkout-blue);
+          margin-top: 0.125rem;
+        }
+        
+        .checkout-login-link {
+          color: var(--checkout-blue);
+          text-decoration: underline;
+          font-weight: 600;
+        }
+        
+        .checkout-login-link:hover {
+          color: var(--checkout-blue-dark);
+        }
+        
+        /* Animación para spinner */
         .checkout-icon.spinning {
           animation: spin 1s linear infinite;
         }
@@ -1428,55 +1619,6 @@ const CheckoutPage = () => {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
-        
-        /* 🚨 COMENTADO: Estilos para MercadoPago real */
-        /*
-        .checkout-mercadopago-container {
-          margin: 2rem 0;
-        }
-        
-        .checkout-mercadopago-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.75rem;
-          width: 100%;
-          padding: 1rem 1.5rem;
-          background: linear-gradient(135deg, #009ee3 0%, #00a650 100%);
-          color: white;
-          border: none;
-          border-radius: 0.75rem;
-          font-size: 1rem;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-        
-        .checkout-mercadopago-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0, 158, 227, 0.3);
-        }
-        
-        .checkout-mercadopago-btn:disabled {
-          opacity: 0.7;
-          cursor: not-allowed;
-        }
-        
-        .mercadopago-logo {
-          height: 24px;
-          filter: brightness(0) invert(1);
-        }
-        
-        .checkout-redirecting {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          margin-top: 1rem;
-          color: var(--checkout-navy);
-          font-size: 0.875rem;
-        }
-        */
       `}</style>
     </div>
   );

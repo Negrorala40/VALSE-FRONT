@@ -1,7 +1,7 @@
 'use client';
 
 import { CART } from '../utils/Api';
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './Cart.css';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -46,8 +46,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-  const memoizedSetCartItems = useCallback(setCartItems, [setCartItems]);
-
   const handleClose = () => {
     setIsClosing(true);
     setTimeout(() => {
@@ -74,22 +72,29 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen]);
 
+  // CORREGIDO: Solo depende de isOpen
   useEffect(() => {
     const fetchCart = async () => {
       const token = localStorage.getItem('token');
       const userId = localStorage.getItem('userId');
 
+      console.log('🛒 Fetching cart - Token:', !!token, 'UserId:', userId);
+
       if (token && userId) {
+        // Usuario autenticado
         try {
           const res = await fetch(`${CART}`, {
             headers: {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
+            credentials: 'include', // IMPORTANTE: Incluir cookies
           });
 
           if (!res.ok) throw new Error('Error al obtener el carrito');
           const data: ApiCartItem[] = await res.json();
+
+          console.log('🛒 Carrito obtenido (autenticado):', data);
 
           const transformedItems: CartItem[] = data.map((item) => ({
             id: item.id.toString(),
@@ -102,32 +107,71 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
             stock: item.stock || 100,
           }));
 
-          memoizedSetCartItems(transformedItems);
+          setCartItems(transformedItems);
         } catch (err) {
-          console.error('🛑 Error al cargar el carrito:', err);
+          console.error('🛑 Error al cargar el carrito (autenticado):', err);
         }
       } else {
-        const pending = localStorage.getItem('pendingCartItem');
-        if (pending) {
-          try {
-            const parsed = JSON.parse(pending);
-            const validatedItem: CartItem = {
-              id: parsed.id?.toString() || `pending-${Date.now()}`,
-              image: parsed.imageUrl?.trim() || parsed.image?.trim() || '/images/placeholder.png',
-              name: parsed.productName?.trim() || parsed.name?.trim() || 'Producto sin nombre',
-              price: parsed.price || 0,
-              size: parsed.size || '',
-              color: parsed.color || '',
-              quantity: parsed.quantity || 1,
-              stock: parsed.stock || 100,
-            };
-            memoizedSetCartItems([validatedItem]);
-          } catch {
-            console.error('Error al parsear pendingCartItem');
-            memoizedSetCartItems([]);
+        // Usuario NO autenticado - usar cookies automáticamente
+        try {
+          const res = await fetch(`${CART}`, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include', // CRÍTICO: Esto envía las cookies automáticamente
+          });
+
+          console.log('🛒 Response status:', res.status);
+          
+          if (!res.ok) {
+            if (res.status === 404) {
+              console.log('🛒 Carrito vacío (404)');
+              setCartItems([]);
+              return;
+            }
+            throw new Error(`Error ${res.status} al obtener el carrito`);
           }
-        } else {
-          memoizedSetCartItems([]);
+          
+          const data: ApiCartItem[] = await res.json();
+          console.log('🛒 Carrito obtenido (no autenticado):', data);
+
+          const transformedItems: CartItem[] = data.map((item) => ({
+            id: item.id.toString(),
+            image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
+            name: item.productName?.trim() || 'Producto sin nombre',
+            price: item.price,
+            size: item.size,
+            color: item.color,
+            quantity: item.quantity,
+            stock: item.stock || 100,
+          }));
+
+          setCartItems(transformedItems);
+        } catch (err) {
+          console.error('🛑 Error al cargar el carrito (no autenticado):', err);
+          // Fallback a localStorage
+          const pending = localStorage.getItem('pendingCartItem');
+          if (pending) {
+            try {
+              const parsed = JSON.parse(pending);
+              const validatedItem: CartItem = {
+                id: parsed.id?.toString() || `pending-${Date.now()}`,
+                image: parsed.imageUrl?.trim() || parsed.image?.trim() || '/images/placeholder.png',
+                name: parsed.productName?.trim() || parsed.name?.trim() || 'Producto sin nombre',
+                price: parsed.price || 0,
+                size: parsed.size || '',
+                color: parsed.color || '',
+                quantity: parsed.quantity || 1,
+                stock: parsed.stock || 100,
+              };
+              setCartItems([validatedItem]);
+            } catch {
+              console.error('Error al parsear pendingCartItem');
+              setCartItems([]);
+            }
+          } else {
+            setCartItems([]);
+          }
         }
       }
     };
@@ -135,7 +179,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     if (isOpen) {
       fetchCart();
     }
-  }, [memoizedSetCartItems, isOpen]);
+  }, [isOpen]); // SOLO isOpen
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -149,61 +193,95 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     }
 
     const token = localStorage.getItem('token');
-    if (token) {
-      try {
+    const userId = localStorage.getItem('userId');
+    
+    try {
+      if (token && userId) {
+        // Usuario autenticado
         const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
           method: 'PUT',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
         });
 
         if (!res.ok) throw new Error('Error actualizando cantidad');
-      } catch (err) {
-        console.error('🛑 Error actualizando cantidad:', err);
-        return;
-      }
-    } else {
-      const updatedItem = { ...item, quantity: newQuantity };
-      localStorage.setItem('pendingCartItem', JSON.stringify(updatedItem));
-    }
+      } else {
+        // Usuario no autenticado
+        const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Envía cookies automáticamente
+        });
 
-    const updatedCart = cartItems.map((item) =>
-      item.id === itemId ? { ...item, quantity: newQuantity } : item
-    );
-    memoizedSetCartItems(updatedCart);
+        if (!res.ok) throw new Error('Error actualizando cantidad');
+      }
+
+      // Actualizar UI localmente
+      const updatedCart = cartItems.map((item) =>
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      );
+      setCartItems(updatedCart);
+    } catch (err) {
+      console.error('🛑 Error actualizando cantidad:', err);
+      alert('Error al actualizar la cantidad');
+    }
   };
 
   const removeItem = async (itemId: string) => {
     const token = localStorage.getItem('token');
-
-    if (token) {
-      try {
+    const userId = localStorage.getItem('userId');
+    
+    try {
+      if (token && userId) {
+        // Usuario autenticado
         const res = await fetch(`${CART}/remove/${itemId}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
         });
 
         if (!res.ok) throw new Error('Error eliminando el producto');
-      } catch (err) {
-        console.error('🛑 Error eliminando producto:', err);
-        return;
-      }
-    } else {
-      localStorage.removeItem('pendingCartItem');
-    }
+      } else {
+        // Usuario no autenticado
+        const res = await fetch(`${CART}/remove/${itemId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Envía cookies automáticamente
+        });
 
-    const updatedCart = cartItems.filter(item => item.id !== itemId);
-    memoizedSetCartItems(updatedCart);
+        if (!res.ok) throw new Error('Error eliminando el producto');
+      }
+
+      // Actualizar UI localmente
+      const updatedCart = cartItems.filter(item => item.id !== itemId);
+      setCartItems(updatedCart);
+    } catch (err) {
+      console.error('🛑 Error eliminando producto:', err);
+      alert('Error al eliminar el producto');
+    }
   };
 
   const handleCheckout = () => {
     if (cartItems.length === 0) {
       alert('Tu carrito está vacío');
+      return;
+    }
+    
+    // Verificar si el usuario está autenticado
+    const token = localStorage.getItem('token');
+    if (!token) {
+      router.push('/auth/login?redirect=/checkout');
+      handleClose();
       return;
     }
     

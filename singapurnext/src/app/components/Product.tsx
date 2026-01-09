@@ -3,9 +3,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import axios from 'axios';
 import styles from './Product.module.css';
-import { PRODUCT_DETAIL, ADD_TO_CART } from '../utils/Api';
+import { PRODUCT_DETAIL } from '../utils/Api';
+import { useCart } from '../context/CartContext'; // Usar contexto del carrito
 
 interface Imagen {
   imageUrl: string;
@@ -60,6 +60,7 @@ const ProductContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const productId = searchParams.get('id');
+  const { addToCart } = useCart(); // Usar contexto del carrito
 
   const [producto, setProducto] = useState<Producto | null>(null);
   const [cargando, setCargando] = useState<boolean>(true);
@@ -94,8 +95,9 @@ const ProductContent = () => {
 
     const obtenerProducto = async () => {
       try {
-        const response = await axios.get<Producto>(PRODUCT_DETAIL(productId));
-        const data = response.data;
+        const response = await fetch(PRODUCT_DETAIL(productId));
+        if (!response.ok) throw new Error('Error al cargar el producto');
+        const data: Producto = await response.json();
         setProducto(data);
 
         const primeraVariante = data.variants[0];
@@ -189,9 +191,6 @@ const ProductContent = () => {
       return;
     }
 
-    const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-
     const variante = producto?.variants.find(
       (v) => v.size === tallaSeleccionada && v.color === colorSeleccionado
     );
@@ -201,48 +200,25 @@ const ProductContent = () => {
       return;
     }
 
-    const itemCarrito = {
-      userId,
-      variantId: variante.id,
-      quantity: cantidad,
-      productName: producto.name,
-      color: colorSeleccionado,
-      size: tallaSeleccionada,
-      imageUrl: variante.images?.[0]?.imageUrl || '',
-      price: variante.price,
-    };
-
-    if (!token || !userId) {
-      localStorage.setItem('pendingCartItem', JSON.stringify(itemCarrito));
-      showNotification('Producto guardado. Inicia sesión.', 'info');
-      router.push('/login');
-      return;
-    }
-
     try {
-      const response = await axios.post(
-        ADD_TO_CART,
-        {
-          userId,
-          productVariantId: variante.id,
-          quantity: cantidad,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.status === 200 || response.status === 201) {
-        showNotification('¡Agregado al carrito!', 'success');
-        setTimeout(() => router.push('/menu'), 1500);
+      // Usar el contexto del carrito
+      await addToCart(variante.id, cantidad);
+      
+      showNotification('¡Agregado al carrito!', 'success');
+      
+      // Redirigir al menú después de un breve delay
+      setTimeout(() => router.push('/menu'), 1500);
+      
+    } catch (err: any) {
+      console.error('Error:', err);
+      
+      // Si hay error de autenticación (aunque no debería con carrito anónimo)
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        showNotification('Inicia sesión para continuar', 'info');
+        router.push('/login');
       } else {
-        throw new Error('Error al agregar al carrito');
+        showNotification('Error al agregar al carrito', 'error');
       }
-    } catch (err: unknown) {
-      showNotification('Error al agregar al carrito', 'error');
     }
   };
 
