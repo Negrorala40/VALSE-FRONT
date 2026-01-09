@@ -124,73 +124,79 @@
 
     // Cargar datos de la orden desde API
     useEffect(() => {
-      const loadOrderData = async () => {
-        try {
-          if (!orderId) {
-            setError('No se encontró número de orden');
-            setPaymentStatus('error');
-            return;
-          }
+      // En el useEffect de loadOrderData, modifica el fetch:
+// En tu componente PaymentResult, modifica el useEffect:
+const loadOrderData = async () => {
+  try {
+    if (!orderId) {
+      setError('No se encontró número de orden');
+      setPaymentStatus('error');
+      return;
+    }
 
-          const token = localStorage.getItem('token');
-          const isAuth = !!token;
+    console.log('📦 Cargando orden via proxy...');
+    console.log('📦 URL: /api/orders/' + orderId);
+    
+    // IMPORTANTE: Ahora usa la ruta relativa /api/...
+    // Next.js redirigirá esto a http://localhost:8080/api/...
+    const response = await fetch(`/api/orders/${orderId}`, {
+      method: 'GET',
+      credentials: 'include', // Esto es CRUCIAL para enviar cookies
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      }
+    });
 
-          console.log('📦 Cargando orden:', { orderId, isAuthenticated: isAuth });
+    console.log('📦 Response status:', response.status);
 
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json'
-          };
+    if (response.status === 403) {
+      setError('No tienes acceso a esta orden. Inicia sesión o verifica tu sesión.');
+      setPaymentStatus('error');
+      return;
+    }
 
-          if (isAuth) {
-            headers['Authorization'] = `Bearer ${token}`;
-          }
+    if (response.status === 404) {
+      const errorText = await response.text();
+      // Verifica si es un error real del backend
+      if (errorText.includes('<!DOCTYPE html>')) {
+        console.error('⚠️ Error: Proxy no funcionando, recibiendo HTML de Next.js');
+        setError('Error de configuración del proxy. El backend puede no estar corriendo.');
+      } else {
+        console.error('⚠️ Orden no encontrada en backend:', errorText);
+        setError('Orden no encontrada en el sistema.');
+      }
+      setPaymentStatus('error');
+      return;
+    }
 
-          const response = await fetch(`/api/orders/${orderId}`, {
-            headers,
-            credentials: 'include'
-          });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Error ${response.status}: ${errorText || 'No se pudo cargar la orden'}`);
+    }
 
-          console.log('📦 Response status:', response.status);
+    const orderData: OrderResponse = await response.json();
+    console.log('✅ Datos de orden recibidos via proxy:', orderData);
+    
+    setOrder(orderData);
+    
+    // Tu lógica de estados...
+    if (orderData.status === 'PAGO_APROBADO') {
+      setPaymentStatus('approved');
+    } else if (orderData.status === 'PAGO_RECHAZADO') {
+      setPaymentStatus('rejected');
+    } else if (orderData.status === 'PENDIENTE') {
+      setPaymentStatus('pending');
+    } else {
+      setPaymentStatus('approved');
+    }
 
-          if (response.status === 403) {
-            setError('No tienes acceso a esta orden');
-            setPaymentStatus('error');
-            return;
-          }
-
-          if (response.status === 404) {
-            setError('Orden no encontrada');
-            setPaymentStatus('error');
-            return;
-          }
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error ${response.status}: ${errorText || 'No se pudo cargar la orden'}`);
-          }
-
-          const orderData: OrderResponse = await response.json();
-          console.log('✅ Datos de orden recibidos:', orderData);
-          
-          setOrder(orderData);
-
-          // Determinar estado basado en datos reales del backend
-          if (orderData.status === 'PAGO_APROBADO') {
-            setPaymentStatus('approved');
-          } else if (orderData.status === 'PAGO_RECHAZADO') {
-            setPaymentStatus('rejected');
-          } else if (orderData.status === 'PENDIENTE') {
-            setPaymentStatus('pending');
-          } else {
-            setPaymentStatus('approved');
-          }
-
-        } catch (err: any) {
-          console.error('❌ Error loading order:', err);
-          setError(err.message || 'Error al cargar los detalles de la orden');
-          setPaymentStatus('error');
-        }
-      };
+  } catch (err: any) {
+    console.error('❌ Error loading order via proxy:', err);
+    setError(err.message || 'Error al cargar los detalles de la orden');
+    setPaymentStatus('error');
+  }
+};
 
       loadOrderData();
     }, [orderId]);
