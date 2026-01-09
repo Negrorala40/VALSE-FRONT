@@ -171,7 +171,7 @@ const CheckoutPage = () => {
   const loadAnonymousCart = async () => {
     setLoading(true);
     try {
-      // El carrito anónimo se carga sin token
+      // El carrito anónimo se carga sin token, con cookies
       await fetchCart(null);
     } catch (err: any) {
       console.error('Error loading anonymous cart:', err);
@@ -199,7 +199,7 @@ const CheckoutPage = () => {
   // Fetch carrito (funciona para ambos tipos de usuarios)
   const fetchCart = async (token: string | null, signal?: AbortSignal) => {
     try {
-      console.log('Fetching cart data...');
+      console.log('🛒 Fetching cart data...');
       
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
@@ -212,19 +212,37 @@ const CheckoutPage = () => {
       const res = await fetch(CART, {
         headers,
         signal,
-        credentials: 'include' // Importante para cookies
+        credentials: 'include' // CRÍTICO: Esto envía las cookies automáticamente
       });
       
-      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
+      console.log('🛒 Response status:', res.status);
+      
+      if (!res.ok) {
+        if (res.status === 404 || res.status === 204) {
+          console.log('🛒 Carrito vacío');
+          setCartItems([]);
+          calculateTotal([]);
+          return;
+        }
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      }
       
       const data = await res.json();
-      console.log('Datos del carrito recibidos:', data);
+      console.log('🛒 Datos del carrito recibidos:', data);
+      
+      // Validar que la respuesta sea un array
+      if (!Array.isArray(data)) {
+        console.error('🛑 La respuesta no es un array:', data);
+        setCartItems([]);
+        calculateTotal([]);
+        return;
+      }
       
       const items: CartItem[] = data.map(
         (item: any) => ({
-          id: item.id.toString(),
-          image: item.imageUrl || item.imageUrls?.[0] || '/placeholder.png',
-          name: item.productName || item.name || 'Producto',
+          id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
+          image: item.imageUrls?.[0]?.trim() || item.imageUrl?.trim() || '/images/placeholder.png',
+          name: item.productName?.trim() || item.name?.trim() || 'Producto',
           price: item.price || item.productVariant?.price || 0,
           size: item.size || item.productVariant?.size || '',
           color: item.color || item.productVariant?.color || '',
@@ -237,23 +255,57 @@ const CheckoutPage = () => {
       setCartItems(items);
       calculateTotal(items);
     } catch (error: any) {
-      if (error.name !== 'AbortError') throw error;
+      if (error.name !== 'AbortError') {
+        console.error('🛑 Error fetching cart:', error);
+        // Si hay error, intentar cargar desde localStorage como fallback
+        const pendingCart = localStorage.getItem('pendingCartItem');
+        if (pendingCart && !token) {
+          try {
+            const parsed = JSON.parse(pendingCart);
+            const fallbackItem: CartItem = {
+              id: parsed.id?.toString() || `pending-${Date.now()}`,
+              image: parsed.image?.trim() || parsed.imageUrl?.trim() || '/images/placeholder.png',
+              name: parsed.name?.trim() || parsed.productName?.trim() || 'Producto',
+              price: parsed.price || 0,
+              size: parsed.size || '',
+              color: parsed.color || '',
+              quantity: parsed.quantity || 1,
+              stock: parsed.stock || 100,
+            };
+            setCartItems([fallbackItem]);
+            calculateTotal([fallbackItem]);
+          } catch {
+            setCartItems([]);
+            calculateTotal([]);
+          }
+        } else {
+          setCartItems([]);
+          calculateTotal([]);
+        }
+        throw error;
+      }
     }
   };
 
   // Fetch usuario (solo autenticados)
   const fetchUser = async (token: string, signal?: AbortSignal) => {
     try {
-      console.log('Fetching user data...');
+      console.log('👤 Fetching user data...');
       const res = await fetch(PERFIL_ME, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        signal,
+        credentials: 'include'
       });
       
       if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
       
       const user = await res.json();
+      console.log('👤 Datos de usuario recibidos:', user);
       
+      // Procesar direcciones
       if (user.addresses && Array.isArray(user.addresses)) {
         const uniqueAddresses = new Map();
         user.addresses.forEach((address: Address) => {
@@ -263,6 +315,8 @@ const CheckoutPage = () => {
         });
         
         user.addresses = Array.from(uniqueAddresses.values());
+      } else {
+        user.addresses = [];
       }
       
       setUserData(user);
@@ -270,7 +324,7 @@ const CheckoutPage = () => {
         setSelectedAddress(user.addresses[0]);
       }
 
-      // Prellenar datos del usuario
+      // Prellenar datos del usuario en el formulario anónimo
       setAnonymousUserInfo({
         email: user.email || '',
         firstName: user.firstName || '',
@@ -278,7 +332,10 @@ const CheckoutPage = () => {
         phone: user.phone || ''
       });
     } catch (error: any) {
-      if (error.name !== 'AbortError') throw error;
+      if (error.name !== 'AbortError') {
+        console.error('🛑 Error fetching user:', error);
+        throw error;
+      }
     }
   };
 
@@ -310,19 +367,24 @@ const CheckoutPage = () => {
       const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT',
         headers,
-        credentials: 'include'
+        credentials: 'include' // IMPORTANTE: Envía cookies
       });
       
-      if (!res.ok) throw new Error('Error actualizando cantidad');
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText || 'Error actualizando cantidad'}`);
+      }
       
+      // Actualizar UI localmente
       const updatedItems = cartItems.map((i) =>
         i.id === itemId ? { ...i, quantity: newQuantity } : i
       );
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
-    } catch (err) {
-      console.error('Error updating quantity:', err);
-      setError('Error actualizando la cantidad');
+      
+    } catch (err: any) {
+      console.error('🛑 Error updating quantity:', err);
+      setError(`Error actualizando la cantidad: ${err.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -348,17 +410,22 @@ const CheckoutPage = () => {
       const res = await fetch(`${CART}/remove/${itemId}`, {
         method: 'DELETE',
         headers,
-        credentials: 'include'
+        credentials: 'include' // IMPORTANTE: Envía cookies
       });
       
-      if (!res.ok) throw new Error('Error eliminando producto');
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando producto'}`);
+      }
       
+      // Actualizar UI localmente
       const updatedItems = cartItems.filter((i) => i.id !== itemId);
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
-    } catch (err) {
-      console.error('Error removing item:', err);
-      setError('Error eliminando el producto');
+      
+    } catch (err: any) {
+      console.error('🛑 Error removing item:', err);
+      setError(`Error eliminando el producto: ${err.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -393,7 +460,10 @@ const CheckoutPage = () => {
         body: JSON.stringify(newAddress),
       });
 
-      if (!res.ok) throw new Error('Error agregando dirección');
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText || 'Error agregando dirección'}`);
+      }
       
       const createdAddress = await res.json();
 
@@ -424,9 +494,9 @@ const CheckoutPage = () => {
       setNewAddress({ address: '', city: '', state: '', country: '' });
       setError('');
       
-    } catch (e) {
-      console.error('Error adding address:', e);
-      setError('No se pudo agregar la dirección');
+    } catch (err: any) {
+      console.error('🛑 Error adding address:', err);
+      setError(`No se pudo agregar la dirección: ${err.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -446,10 +516,16 @@ const CheckoutPage = () => {
       setLoading(true);
       const res = await fetch(`${ADDRESS}/${addressId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
       });
 
-      if (!res.ok) throw new Error('Error eliminando dirección');
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando dirección'}`);
+      }
 
       setUserData(prevUserData => {
         if (!prevUserData) return prevUserData;
@@ -466,9 +542,9 @@ const CheckoutPage = () => {
         prevSelected?.id === addressId ? null : prevSelected
       );
       
-    } catch (e) {
-      console.error('Error deleting address:', e);
-      setError('No se pudo eliminar la dirección');
+    } catch (err: any) {
+      console.error('🛑 Error deleting address:', err);
+      setError(`No se pudo eliminar la dirección: ${err.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -495,8 +571,28 @@ const CheckoutPage = () => {
           return;
         }
         
+        // Validar email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(anonymousUserInfo.email)) {
+          setError('Ingresa un email válido');
+          return;
+        }
+        
+        // Validar teléfono (al menos 8 dígitos)
+        if (anonymousUserInfo.phone.replace(/\D/g, '').length < 8) {
+          setError('Ingresa un número de teléfono válido');
+          return;
+        }
+        
         if (!selectedAddress) {
           setError('Debes agregar una dirección de envío');
+          return;
+        }
+        
+        // Validar campos de dirección
+        if (!selectedAddress.address?.trim() || !selectedAddress.city?.trim() || 
+            !selectedAddress.state?.trim() || !selectedAddress.country?.trim()) {
+          setError('Completa todos los campos de la dirección');
           return;
         }
       }
@@ -528,6 +624,8 @@ const CheckoutPage = () => {
       setError('');
       setSuccessMessage('');
 
+      console.log('🚀 Creando orden...');
+      
       let orderResponse: OrderResponse;
       
       if (isAuthenticated) {
@@ -535,17 +633,22 @@ const CheckoutPage = () => {
         const token = localStorage.getItem('token');
         if (!token) throw new Error('Usuario no autenticado');
         
+        console.log('👤 Usuario autenticado, creando orden con shippingAddressId:', selectedAddress.id);
+        
         const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({
             shippingAddressId: selectedAddress.id
           }),
         });
 
+        console.log('📦 Orden autenticada response:', orderRes.status);
+        
         if (!orderRes.ok) {
           let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
           try {
@@ -556,6 +659,7 @@ const CheckoutPage = () => {
         }
 
         orderResponse = await orderRes.json();
+        console.log('✅ Orden autenticada creada:', orderResponse);
         
       } else {
         // Checkout para usuario anónimo
@@ -563,14 +667,19 @@ const CheckoutPage = () => {
           throw new Error('Email requerido para usuarios anónimos');
         }
         
+        console.log('👤 Usuario anónimo, creando orden con email:', anonymousUserInfo.email);
+        
         const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include',
+          credentials: 'include', // CRÍTICO: Envía cookies con sessionId
           body: JSON.stringify({
             customerEmail: anonymousUserInfo.email,
+            customerFirstName: anonymousUserInfo.firstName,
+            customerLastName: anonymousUserInfo.lastName,
+            customerPhone: anonymousUserInfo.phone,
             shippingAddress: {
               address: selectedAddress.address,
               city: selectedAddress.city,
@@ -580,6 +689,8 @@ const CheckoutPage = () => {
           }),
         });
 
+        console.log('📦 Orden anónima response:', orderRes.status);
+        
         if (!orderRes.ok) {
           let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
           try {
@@ -590,9 +701,8 @@ const CheckoutPage = () => {
         }
 
         orderResponse = await orderRes.json();
+        console.log('✅ Orden anónima creada:', orderResponse);
       }
-
-      console.log('Orden creada:', orderResponse);
 
       if (!orderResponse.id) {
         throw new Error('No se pudo obtener el ID de la orden');
@@ -604,7 +714,7 @@ const CheckoutPage = () => {
       setSuccessMessage(`✅ Orden #${orderId} creada exitosamente. Usa los botones de simulación.`);
 
     } catch (err: any) {
-      console.error('Error en checkout:', err);
+      console.error('🛑 Error en checkout:', err);
       setError(`Error: ${err.message || 'Error desconocido'}`);
       setOrderCreated(false);
     } finally {
@@ -623,6 +733,8 @@ const CheckoutPage = () => {
       setSimulationInProgress(true);
       setError('');
       
+      console.log('🎮 Simulando pago con status:', status, 'orderId:', orderId);
+      
       const response = await fetch(MERCADOPAGO_SIMULATE, {
         method: 'POST',
         headers: {
@@ -634,12 +746,17 @@ const CheckoutPage = () => {
         }),
       });
 
+      console.log('🎮 Simulación response:', response.status);
+      
       if (response.ok) {
         if (status === 'approved') {
           setSuccessMessage('¡Pago simulado exitosamente! Redirigiendo a página de éxito...');
           // Limpiar carrito localmente
           setCartItems([]);
           setTotal(0);
+          
+          // Limpiar localStorage de carrito pendiente
+          localStorage.removeItem('pendingCartItem');
           
           // Redirigir a página de éxito después de 1.5 segundos
           setTimeout(() => {
@@ -654,10 +771,11 @@ const CheckoutPage = () => {
         }
       } else {
         const errorData = await response.text();
+        console.error('🎮 Error en simulación:', errorData);
         setError(`Error simulando pago: ${errorData}`);
       }
     } catch (error) {
-      console.error('Error simulando pago:', error);
+      console.error('🛑 Error simulando pago:', error);
       setError('Error de conexión al simular pago');
     } finally {
       setSimulationInProgress(false);
@@ -670,6 +788,31 @@ const CheckoutPage = () => {
       createOrderAndPayment();
     }
   }, [step, createOrderAndPayment, isProcessingPayment, orderCreated]);
+
+  // Función para migrar carrito anónimo a usuario recién logueado
+  const migrateCartToUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      const res = await fetch(MIGRATE_ORDERS, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
+      if (res.ok) {
+        console.log('🔄 Carrito migrado exitosamente');
+        // Recargar datos
+        loadAuthenticatedData(token);
+      }
+    } catch (err) {
+      console.error('Error migrando carrito:', err);
+    }
+  };
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -712,7 +855,7 @@ const CheckoutPage = () => {
           <User className="checkout-icon" />
           <span>Comprando como invitado</span>
           <button 
-            onClick={() => window.location.href = '/login'}
+            onClick={() => window.location.href = '/auth/login?redirect=/checkout'}
             className="checkout-login-prompt-btn"
           >
             Iniciar sesión
@@ -814,6 +957,10 @@ const CheckoutPage = () => {
                               fill
                               style={{ objectFit: "cover" }}
                               sizes="(max-width: 640px) 100vw, 9rem"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = '/images/placeholder.png';
+                              }}
                             />
                             <span className="checkout-cart-item-size-badge">{item.size}</span>
                           </div>
@@ -823,7 +970,7 @@ const CheckoutPage = () => {
                               <h3 className="checkout-cart-item-name">{item.name}</h3>
                               <div className="checkout-cart-item-badges">
                                 <span className="checkout-badge checkout-badge-outline checkout-badge-purple">{item.color}</span>
-                                <span className="checkout-badge checkout-badge-outline checkout-badge-mint">Stock: {item.stock}</span>
+                                <span className="checkout-badge checkout-badge-outline checkout-badge-mint">Stock: {item.stock || 'Disponible'}</span>
                               </div>
                               <p className="checkout-cart-item-price">{formatPrice(item.price)}</p>
                             </div>
@@ -974,19 +1121,19 @@ const CheckoutPage = () => {
                       {isAuthenticated ? (
                         // Usuario autenticado - direcciones guardadas
                         <>
-                          {!userData ? (
+                          {loading ? (
                             <div className="checkout-loading-state">
                               <div className="checkout-spinner"></div>
                               <p>Cargando tus direcciones...</p>
                             </div>
-                          ) : userData.addresses.length === 0 ? (
+                          ) : userData && userData.addresses.length === 0 ? (
                             <div style={{ textAlign: "center", padding: "2rem 0" }}>
                               <MapPin className="checkout-icon" style={{ width: "3rem", height: "3rem", color: "var(--checkout-gray-dark)", margin: "0 auto 1rem" }} />
                               <p style={{ color: "var(--checkout-gray-dark)", marginBottom: "1rem" }}>
                                 No tienes direcciones guardadas
                               </p>
                             </div>
-                          ) : (
+                          ) : userData ? (
                             <div className="checkout-address-list">
                               {userData.addresses.map((address) => (
                                 <div
@@ -1019,7 +1166,7 @@ const CheckoutPage = () => {
                                 </div>
                               ))}
                             </div>
-                          )}
+                          ) : null}
 
                           {/* Add New Address (solo autenticados) */}
                           {addingAddress ? (
@@ -1203,11 +1350,11 @@ const CheckoutPage = () => {
                         </div>
                         <p>
                           {isAuthenticated 
-                            ? `${userData?.firstName} ${userData?.lastName} (${userData?.email})`
+                            ? `${userData?.firstName || ''} ${userData?.lastName || ''} (${userData?.email || ''})`
                             : `${anonymousUserInfo.firstName} ${anonymousUserInfo.lastName} (${anonymousUserInfo.email})`
                           }
                           <br />
-                          Tel: {isAuthenticated ? userData?.phone : anonymousUserInfo.phone}
+                          Tel: {isAuthenticated ? userData?.phone || '' : anonymousUserInfo.phone}
                         </p>
                       </div>
 
@@ -1241,6 +1388,10 @@ const CheckoutPage = () => {
                               fill
                               style={{ objectFit: "cover" }}
                               sizes="3.5rem"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = '/images/placeholder.png';
+                              }}
                             />
                           </div>
                           <div className="checkout-order-item-preview-details">
@@ -1439,7 +1590,7 @@ const CheckoutPage = () => {
                         <strong>¿Quieres guardar tus datos?</strong>
                         <br />
                         <small>
-                          <a href="/login" className="checkout-login-link">
+                          <a href="/auth/login" className="checkout-login-link">
                             Inicia sesión o regístrate
                           </a>{' '}
                           para guardar direcciones y ver tu historial de pedidos.

@@ -277,14 +277,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       return;
     }
     
-    // Verificar si el usuario está autenticado
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/auth/login?redirect=/checkout');
-      handleClose();
-      return;
-    }
-    
+    // Redirigir siempre a /checkout (funciona para usuarios autenticados y anónimos)
     router.push('/checkout');
     handleClose();
   };
