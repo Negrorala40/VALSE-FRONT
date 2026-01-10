@@ -153,17 +153,17 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     {
       id: 'ninos',
       label: 'Niños',
-      href: '/menu?gender=ninos&type=superior', // URL directa
+      href: '/menu?gender=NIÑOS&type=SUPERIOR', // URL directa
     },
     {
       id: 'ninas',
       label: 'Niñas',
-      href: '/menu?gender=ninas&type=superior', // URL directa
+      href: '/menu?gender=NIÑAS&type=SUPERIOR', // URL directa
     },
     {
       id: 'unisex',
       label: 'Unisex',
-      href: '/menu?gender=unisex&type=superior', // URL directa
+      href: '/menu?gender=UNISEX&type=SUPERIOR', // URL directa
     },
   ];
 
