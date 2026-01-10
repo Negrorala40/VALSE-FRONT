@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Añadir useCallback
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link'; // Importar al inicio
+import Link from 'next/link';
 import BlogContent from '@/app/components/BlogContent/BlogContent';
 import styles from './BlogListPage.module.css';
 
@@ -55,22 +55,8 @@ export default function BlogListPage() {
 
   const size = 12;
 
-  useEffect(() => {
-    const tag = searchParams.get('tag');
-    const search = searchParams.get('search');
-    
-    // Solo actualizar si hay cambios reales
-    if (tag !== selectedTag) {
-      setSelectedTag(tag);
-    }
-    if (search !== searchTerm) {
-      setSearchTerm(search || '');
-    }
-    
-    fetchPosts();
-  }, [page, searchParams]);
-
-  const fetchPosts = async () => {
+  // Mover fetchPosts ANTES del useEffect
+  const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -112,13 +98,29 @@ export default function BlogListPage() {
         setTotalPages(1);
       }
       
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los posts');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar los posts';
+      setError(errorMessage);
       console.error('Error fetching posts:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, searchParams, size]); // Agregar dependencias
+
+  useEffect(() => {
+    const tag = searchParams.get('tag');
+    const search = searchParams.get('search');
+    
+    // Solo actualizar si hay cambios reales
+    if (tag !== selectedTag) {
+      setSelectedTag(tag);
+    }
+    if (search !== searchTerm) {
+      setSearchTerm(search || '');
+    }
+    
+    fetchPosts();
+  }, [page, searchParams, fetchPosts, searchTerm, selectedTag]);
 
   const handlePostClick = (postId: number) => {
     const post = posts.find(p => p.id === postId);

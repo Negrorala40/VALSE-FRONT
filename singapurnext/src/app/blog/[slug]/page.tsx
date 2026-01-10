@@ -1,10 +1,36 @@
 import BlogDetail from '@/app/components/BlogDetail/BlogDetail';
 import type { Metadata } from 'next';
+import { BLOG_POSTS, BLOG_POST_BY_SLUG } from '@/app/utils/Api'; // <-- Importa BLOG_POST_BY_SLUG
 
+// Definición de tipos
 interface PageProps {
   params: {
     slug: string;
   };
+}
+
+interface BlogPost {
+  id: number | string;
+  slug: string;
+  title: string;
+  content: string;
+  excerpt?: string;
+  metaTitle?: string;
+  metaDescription?: string;
+  featuredImageUrl?: string;
+  publicationDate?: string;
+  authorName?: string;
+}
+
+interface BlogListResponse {
+  content?: BlogPost[];
+  pageable?: {
+    pageNumber: number;
+    pageSize: number;
+  };
+  totalElements?: number;
+  totalPages?: number;
+  last?: boolean;
 }
 
 export default function BlogDetailPage({ params }: PageProps) {
@@ -18,8 +44,7 @@ export default function BlogDetailPage({ params }: PageProps) {
 // Metadata dinámica para SEO
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-    const response = await fetch(`${API_URL}/api/blog/slug/${params.slug}`, {
+    const response = await fetch(BLOG_POST_BY_SLUG(params.slug), { // <-- Usa la constante aquí
       next: { revalidate: 3600 } // Cache por 1 hora
     });
     
@@ -30,15 +55,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       };
     }
     
-    const post = await response.json();
+    const post: BlogPost = await response.json();
+    
+    // Extraer contenido para descripción
+    const descriptionContent = post.metaDescription || post.excerpt || 
+      (post.content ? post.content.substring(0, 160) : '');
+    
+    // Configurar imágenes para OpenGraph
+    const openGraphImages = post.featuredImageUrl ? [post.featuredImageUrl] : [];
     
     return {
       title: post.metaTitle || `${post.title} | Singapur Next Blog`,
-      description: post.metaDescription || post.excerpt || post.content.substring(0, 160),
+      description: descriptionContent,
       openGraph: {
         title: post.metaTitle || post.title,
-        description: post.metaDescription || post.excerpt || post.content.substring(0, 160),
-        images: post.featuredImageUrl ? [post.featuredImageUrl] : [],
+        description: descriptionContent,
+        images: openGraphImages,
         type: 'article',
         publishedTime: post.publicationDate,
         authors: [post.authorName || 'Singapur Next'],
@@ -55,18 +87,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 // Generar páginas estáticas (opcional)
 export async function generateStaticParams() {
   try {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-    const response = await fetch(`${API_URL}/api/blog?size=100`);
+    const response = await fetch(`${BLOG_POSTS}?size=100`, {
+      next: { revalidate: 3600 } // Cache por 1 hora
+    });
     
     if (!response.ok) {
       console.error('Error fetching posts for static generation');
       return [];
     }
     
-    const data = await response.json();
-    const posts = data.content || data || [];
+    const data: BlogListResponse = await response.json();
+    const posts: BlogPost[] = data.content || [];
     
-    return posts.map((post: any) => ({
+    return posts.map((post: BlogPost) => ({
       slug: post.slug || post.id.toString(),
     }));
   } catch (error) {

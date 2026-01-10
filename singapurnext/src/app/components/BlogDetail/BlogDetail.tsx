@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import BlogComments from '@/app/components/BlogComments/BlogComments';
+import { BLOG_POST_BY_SLUG } from '@/app/utils/Api'; // Importa la constante
 import styles from './BlogDetail.module.css';
 
 // TIPOS
@@ -47,8 +48,6 @@ interface Comment {
   blogPostTitle?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
 interface BlogDetailProps {
   slug: string;
   postId?: number;
@@ -83,9 +82,9 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
       
       let url = '';
       if (slug) {
-        url = `${API_URL}/api/blog/slug/${encodeURIComponent(slug)}`;
+        url = BLOG_POST_BY_SLUG(slug); // Usa la constante
       } else if (postId) {
-        url = `${API_URL}/api/blog/${postId}`;
+        url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/${postId}`;
       } else {
         throw new Error('Se requiere ID o slug del post');
       }
@@ -94,8 +93,11 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        }
+          // Si quieres usar Cache-Control, asegúrate que el backend lo permita
+          // 'Cache-Control': 'no-cache' // COMENTA ESTA LÍNEA TEMPORALMENTE
+        },
+        // Opcional: usa cache del navegador
+        cache: 'default'
       });
 
       if (!response.ok) {
@@ -123,7 +125,7 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
     try {
       setLoadingComments(true);
       const response = await fetch(
-        `${API_URL}/api/blog/${post.id}/comments?page=0&size=50&sort=createdAt,desc`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/${post.id}/comments?page=0&size=50&sort=createdAt,desc`,
         {
           method: 'GET',
           headers: {
@@ -154,7 +156,12 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
       // Tomar la primera etiqueta para buscar posts relacionados
       const mainTag = tags[0];
       const response = await fetch(
-        `${API_URL}/api/blog/tag/${encodeURIComponent(mainTag)}?page=0&size=4&sort=publicationDate,desc`
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/tag/${encodeURIComponent(mainTag)}?page=0&size=4&sort=publicationDate,desc`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
       if (response.ok) {

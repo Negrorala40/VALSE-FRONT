@@ -39,6 +39,7 @@ export const MERCADOPAGO_SIMULATE = `${API_BASE_URL}/api/payments/simulate-payme
 
 // ======================= BLOG ENDPOINTS =======================
 export const BLOG_POSTS = `${API_BASE_URL}/api/blog`;
+export const BLOG_POST_BY_SLUG = (slug: string) => `${API_BASE_URL}/api/blog/slug/${slug}`; // <-- AÑADIR ESTA LÍNEA
 export const BLOG_POST_DETAIL = (id: string | number) => `${API_BASE_URL}/api/blog/${id}`;
 export const BLOG_ADMIN_POSTS = `${API_BASE_URL}/api/blog/admin/posts`;
 export const BLOG_ADMIN_POSTS_PAGINATED = (page: number = 0, size: number = 100) => 
@@ -46,3 +47,15 @@ export const BLOG_ADMIN_POSTS_PAGINATED = (page: number = 0, size: number = 100)
 export const BLOG_CREATE = `${API_BASE_URL}/api/blog`;
 export const BLOG_UPDATE = (id: number) => `${API_BASE_URL}/api/blog/${id}`;
 export const BLOG_DELETE = (id: number) => `${API_BASE_URL}/api/blog/${id}`;
+
+// ======================= CATEGORÍAS BLOG =======================
+export const BLOG_CATEGORIES = `${API_BASE_URL}/api/blog/categories`;
+export const BLOG_CATEGORIES_WITH_COUNT = `${API_BASE_URL}/api/blog/categories/with-count`;
+
+// ======================= TAGS BLOG =======================
+export const BLOG_TAGS = `${API_BASE_URL}/api/blog/tags`;
+export const BLOG_TAGS_WITH_COUNT = `${API_BASE_URL}/api/blog/tags/with-count`;
+
+// ======================= BÚSQUEDA BLOG =======================
+export const BLOG_SEARCH = (query: string) => `${API_BASE_URL}/api/blog/search?q=${encodeURIComponent(query)}`;
+export const BLOG_FILTER = `${API_BASE_URL}/api/blog/filter`;

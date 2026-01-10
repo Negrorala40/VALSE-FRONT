@@ -561,8 +561,8 @@ export default function AdminBlogPage() {
           <div className={styles.formHeader}>
             <h2 className={styles.formTitle}>
               {editingPost ? (
-                <>
-                  <i className="fas fa-edit"></i> Editando: "{editingPost.title.substring(0, 50)}..."
+               <>
+                  <i className="fas fa-edit"></i> Editando: &apos;{editingPost.title.substring(0, 50)}...&apos;
                 </>
               ) : (
                 <>
