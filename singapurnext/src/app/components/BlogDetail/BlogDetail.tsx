@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import BlogComments from '@/app/components/BlogComments/BlogComments';
-import { BLOG_POST_BY_SLUG } from '@/app/utils/Api'; // Importa la constante
+import { BLOG_POST_BY_SLUG } from '@/app/utils/Api';
 import styles from './BlogDetail.module.css';
 
 // TIPOS
@@ -53,133 +53,53 @@ interface BlogDetailProps {
   postId?: number;
 }
 
+// Tipos para datos de la API
+interface ApiPostData {
+  id?: number;
+  title?: string;
+  content?: string;
+  excerpt?: string;
+  featuredImageUrl?: string;
+  publicationDate?: string;
+  tags?: string;
+  authorName?: string;
+  published?: boolean;
+  slug?: string;
+  viewCount?: number;
+  commentCount?: number;
+  images?: Array<{
+    id?: number;
+    imageUrl?: string;
+    altText?: string;
+    caption?: string;
+    displayOrder?: number;
+    isFeatured?: boolean;
+  }>;
+  metaTitle?: string;
+  metaDescription?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface ApiCommentData {
+  id?: number;
+  userName?: string;
+  userEmail?: string;
+  content?: string;
+  createdAt?: string;
+  approved?: boolean;
+  blogPostId?: number;
+  blogPostTitle?: string;
+}
+
 export default function BlogDetail({ slug, postId }: BlogDetailProps) {
-  const router = useRouter();
   const [post, setPost] = useState<BlogPost | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingComments, setLoadingComments] = useState(false);
   const [error, setError] = useState('');
   const [relatedPosts, setRelatedPosts] = useState<BlogPost[]>([]);
 
-  useEffect(() => {
-    if (slug || postId) {
-      fetchBlogPost();
-    }
-  }, [slug, postId]);
-
-  useEffect(() => {
-    if (post?.id && post?.tags) {
-      fetchRelatedPosts();
-      fetchComments();
-    }
-  }, [post?.id, post?.tags]);
-
-  const fetchBlogPost = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      let url = '';
-      if (slug) {
-        url = BLOG_POST_BY_SLUG(slug); // Usa la constante
-      } else if (postId) {
-        url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/${postId}`;
-      } else {
-        throw new Error('Se requiere ID o slug del post');
-      }
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          // Si quieres usar Cache-Control, asegúrate que el backend lo permita
-          // 'Cache-Control': 'no-cache' // COMENTA ESTA LÍNEA TEMPORALMENTE
-        },
-        // Opcional: usa cache del navegador
-        cache: 'default'
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('El artículo que buscas no existe o ha sido eliminado.');
-          return;
-        }
-        throw new Error(`Error ${response.status}: No se pudo cargar el artículo`);
-      }
-
-      const data = await response.json();
-      const formattedPost = formatPostFromAPI(data);
-      setPost(formattedPost);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar el artículo. Por favor, intenta nuevamente.');
-      console.error('Error fetching blog post:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchComments = async () => {
-    if (!post?.id) return;
-
-    try {
-      setLoadingComments(true);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/${post.id}/comments?page=0&size=50&sort=createdAt,desc`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const commentsData = data.content || data || [];
-        setComments(commentsData.map(formatCommentFromAPI));
-      }
-    } catch (err) {
-      console.error('Error fetching comments:', err);
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-
-  const fetchRelatedPosts = async () => {
-    if (!post?.tags || !post.id) return;
-
-    try {
-      const tags = extractTags(post.tags);
-      if (tags.length === 0) return;
-
-      // Tomar la primera etiqueta para buscar posts relacionados
-      const mainTag = tags[0];
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/tag/${encodeURIComponent(mainTag)}?page=0&size=4&sort=publicationDate,desc`,
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const postsData = data.content || data || [];
-        // Filtrar el post actual
-        const related = postsData
-          .filter((p: any) => p.id !== post.id)
-          .slice(0, 3)
-          .map(formatPostFromAPI);
-        setRelatedPosts(related);
-      }
-    } catch (err) {
-      console.error('Error fetching related posts:', err);
-    }
-  };
-
-  const formatPostFromAPI = (postData: any): BlogPost => ({
+  const formatPostFromAPI = useCallback((postData: ApiPostData): BlogPost => ({
     id: postData.id || 0,
     title: postData.title || 'Sin título',
     content: postData.content || '',
@@ -196,7 +116,7 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
     metaDescription: postData.metaDescription || '',
     createdAt: postData.createdAt || '',
     updatedAt: postData.updatedAt || '',
-    images: postData.images?.map((img: any) => ({
+    images: postData.images?.map((img) => ({
       id: img.id,
       imageUrl: img.imageUrl || '',
       altText: img.altText || '',
@@ -204,9 +124,9 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
       displayOrder: img.displayOrder || 0,
       isFeatured: img.isFeatured || false
     })) || []
-  });
+  }), []);
 
-  const formatCommentFromAPI = (commentData: any): Comment => ({
+  const formatCommentFromAPI = useCallback((commentData: ApiCommentData): Comment => ({
     id: commentData.id || 0,
     userName: commentData.userName || 'Anónimo',
     userEmail: commentData.userEmail || '',
@@ -215,7 +135,113 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
     approved: commentData.approved !== false,
     blogPostId: commentData.blogPostId || 0,
     blogPostTitle: commentData.blogPostTitle || ''
-  });
+  }), []);
+
+  const fetchBlogPost = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      let url = '';
+      if (slug) {
+        url = BLOG_POST_BY_SLUG(slug);
+      } else if (postId) {
+        url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/${postId}`;
+      } else {
+        throw new Error('Se requiere ID o slug del post');
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'default'
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError('El artículo que buscas no existe o ha sido eliminado.');
+          return;
+        }
+        throw new Error(`Error ${response.status}: No se pudo cargar el artículo`);
+      }
+
+      const data = await response.json();
+      const formattedPost = formatPostFromAPI(data);
+      setPost(formattedPost);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar el artículo. Por favor, intenta nuevamente.';
+      setError(errorMessage);
+      console.error('Error fetching blog post:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [slug, postId, formatPostFromAPI]);
+
+  const fetchComments = useCallback(async (postId: number) => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/${postId}/comments?page=0&size=50&sort=createdAt,desc`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const commentsData = data.content || data || [];
+        setComments(commentsData.map(formatCommentFromAPI));
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
+    }
+  }, [formatCommentFromAPI]);
+
+  const fetchRelatedPosts = useCallback(async (postId: number, tags: string[]) => {
+    if (tags.length === 0) return;
+
+    try {
+      const mainTag = tags[0];
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/blog/tag/${encodeURIComponent(mainTag)}?page=0&size=4&sort=publicationDate,desc`,
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const postsData = data.content || data || [];
+        const related = postsData
+          .filter((p: ApiPostData) => p.id !== postId)
+          .slice(0, 3)
+          .map(formatPostFromAPI);
+        setRelatedPosts(related);
+      }
+    } catch (err) {
+      console.error('Error fetching related posts:', err);
+    }
+  }, [formatPostFromAPI]);
+
+  useEffect(() => {
+    if (slug || postId) {
+      fetchBlogPost();
+    }
+  }, [slug, postId, fetchBlogPost]);
+
+  useEffect(() => {
+    if (post?.id && post?.tags) {
+      const tags = extractTags(post.tags);
+      fetchComments(post.id);
+      fetchRelatedPosts(post.id, tags);
+    }
+  }, [post?.id, post?.tags, fetchComments, fetchRelatedPosts]);
 
   const getFeaturedImage = (): string => {
     if (!post) return '/images/blog-placeholder.jpg';
@@ -265,8 +291,8 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
   };
 
   const handleCommentAdded = () => {
-    fetchComments();
     if (post) {
+      fetchComments(post.id);
       // Actualizar contador de comentarios localmente
       setPost({
         ...post,
@@ -415,14 +441,17 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
       {/* Featured Image */}
       {featuredImage && (
         <div className={styles.featuredImage}>
-          <img 
+          <Image 
             src={featuredImage} 
             alt={post.title}
             className={styles.mainImage}
+            width={1200}
+            height={630}
             loading="lazy"
             onError={(e) => {
-              e.currentTarget.src = '/images/blog-placeholder.jpg';
-              e.currentTarget.classList.add(styles.placeholderImage);
+              const target = e.currentTarget as HTMLImageElement;
+              target.src = '/images/blog-placeholder.jpg';
+              target.classList.add(styles.placeholderImage);
             }}
           />
           {post.images?.[0]?.caption && (
@@ -442,13 +471,16 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
               .filter((img, index) => index > 0) // Excluir la primera (ya mostrada)
               .map((image, index) => (
                 <div key={index} className={styles.galleryItem}>
-                  <img 
+                  <Image 
                     src={image.imageUrl} 
                     alt={image.altText || `Imagen ${index + 2} del artículo`}
                     className={styles.galleryImage}
+                    width={400}
+                    height={300}
                     loading="lazy"
                     onError={(e) => {
-                      e.currentTarget.src = '/images/blog-placeholder.jpg';
+                      const target = e.currentTarget as HTMLImageElement;
+                      target.src = '/images/blog-placeholder.jpg';
                     }}
                   />
                   {image.caption && (
@@ -550,12 +582,15 @@ export default function BlogDetail({ slug, postId }: BlogDetailProps) {
                 className={styles.relatedCard}
               >
                 {relatedPost.featuredImageUrl && (
-                  <img 
+                  <Image 
                     src={relatedPost.featuredImageUrl} 
                     alt={relatedPost.title}
                     className={styles.relatedImage}
+                    width={400}
+                    height={250}
                     onError={(e) => {
-                      e.currentTarget.src = '/images/blog-placeholder.jpg';
+                      const target = e.currentTarget as HTMLImageElement;
+                      target.src = '/images/blog-placeholder.jpg';
                     }}
                   />
                 )}

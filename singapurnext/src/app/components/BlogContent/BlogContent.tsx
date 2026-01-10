@@ -145,14 +145,17 @@ export default function BlogContent({
                   onClick={(e) => handlePostClick(e, post.id)}
                   className={styles.imageLink}
                 >
-                  <img 
+                  <Image 
                     src={featuredImage} 
                     alt={post.title || 'Imagen del post'}
                     className={styles.image}
+                    width={400}
+                    height={250}
                     loading="lazy"
                     onError={(e) => {
-                      e.currentTarget.src = '/images/blog-placeholder.jpg';
-                      e.currentTarget.classList.add(styles.placeholderImage);
+                      const target = e.currentTarget as HTMLImageElement;
+                      target.src = '/images/blog-placeholder.jpg';
+                      target.classList.add(styles.placeholderImage);
                     }}
                   />
                   <div className={styles.date}>

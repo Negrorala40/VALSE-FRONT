@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styles from './BlogComments.module.css';
 
 interface Comment {
@@ -43,7 +43,7 @@ export default function BlogComments({
   });
 
   // 🔄 Función para obtener comentarios del servidor
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       setLoadingComments(true);
       const response = await fetch(
@@ -66,12 +66,12 @@ export default function BlogComments({
     } finally {
       setLoadingComments(false);
     }
-  };
+  }, [postId]);
 
   // 🔄 Obtener comentarios al cargar el componente y cuando postId cambie
   useEffect(() => {
     fetchComments();
-  }, [postId]);
+  }, [fetchComments]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -132,7 +132,8 @@ export default function BlogComments({
         throw new Error(errorText || 'Error al enviar comentario');
       }
       
-      const newComment = await response.json();
+      // No necesitamos asignar el resultado a una variable si no lo usamos
+      await response.json();
       
       // 🔄 OBTENER TODOS LOS COMENTARIOS NUEVAMENTE DEL SERVIDOR
       await fetchComments();
@@ -140,17 +141,19 @@ export default function BlogComments({
       // Limpiar formulario
       setFormData({ userName: '', userEmail: '', content: '' });
       setShowForm(false);
-      setSuccess('¡Comentario enviado con éxito! Ya está visible.'); // ✅ CAMBIA ESTE MENSAJE
+      setSuccess('¡Comentario enviado con éxito! Ya está visible.');
       
       // Notificar al componente padre
       if (onCommentAdded) {
         onCommentAdded();
       }
       
-    } catch (err: any) {
-      const errorMessage = err.message.includes('JSON') 
-        ? 'Error del servidor. Intenta nuevamente.' 
-        : err.message;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error 
+        ? (err.message.includes('JSON') 
+          ? 'Error del servidor. Intenta nuevamente.' 
+          : err.message)
+        : 'Error desconocido al enviar el comentario';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -180,8 +183,11 @@ export default function BlogComments({
       await fetchComments();
       setSuccess('Comentario eliminado correctamente');
       
-    } catch (err: any) {
-      setError(err.message || 'Error al eliminar comentario');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : 'Error al eliminar comentario';
+      setError(errorMessage);
     }
   };
 
@@ -206,8 +212,11 @@ export default function BlogComments({
       await fetchComments();
       setSuccess('Comentario aprobado correctamente');
       
-    } catch (err: any) {
-      setError(err.message || 'Error al aprobar comentario');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : 'Error al aprobar comentario';
+      setError(errorMessage);
     }
   };
 
@@ -351,7 +360,7 @@ export default function BlogComments({
             
             <div className={styles.formNote}>
               <i className="fas fa-info-circle"></i>
-              <small>Tu comentario será publicado inmediatamente.</small> {/* ✅ CAMBIA ESTE TEXTO */}
+              <small>Tu comentario será publicado inmediatamente.</small>
             </div>
           </div>
         </form>
