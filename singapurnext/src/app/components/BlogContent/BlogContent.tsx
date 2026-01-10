@@ -1,16 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import styles from './BlogContent.module.css';
 
-// TIPOS COMPATIBLES con AdminBlogPage
+// TIPOS compatibles con tu backend
 interface BlogImage {
-  id?: number; // Cambiado a opcional para coincidir
+  id?: number;
   imageUrl: string;
   altText?: string;
   caption?: string;
-  displayOrder?: number; // Cambiado a opcional
-  isFeatured?: boolean; // Cambiado a opcional
+  displayOrder?: number;
+  isFeatured?: boolean;
 }
 
 interface BlogPost {
@@ -26,7 +27,7 @@ interface BlogPost {
   slug: string;
   viewCount: number;
   commentCount: number;
-  images?: BlogImage[]; // Mantener opcional para compatibilidad
+  images?: BlogImage[];
 }
 
 interface BlogContentProps {
@@ -45,43 +46,69 @@ export default function BlogContent({
   onPostClick 
 }: BlogContentProps) {
   
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Fecha no disponible';
+      
+      return date.toLocaleDateString('es-ES', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch {
+      return 'Fecha no disponible';
+    }
   };
 
   // Función para obtener la imagen principal
-  const getFeaturedImage = (post: BlogPost) => {
-    // 1. Usar featuredImageUrl si existe
-    if (post.featuredImageUrl) return post.featuredImageUrl;
+  const getFeaturedImage = (post: BlogPost): string => {
+    // 1. Usar featuredImageUrl si existe y es válida
+    if (post.featuredImageUrl && post.featuredImageUrl.trim() !== '') {
+      return post.featuredImageUrl;
+    }
     
     // 2. Buscar en images
     if (post.images && post.images.length > 0) {
       // Buscar imagen destacada
       const featuredImage = post.images.find(img => img.isFeatured);
-      if (featuredImage && featuredImage.imageUrl) return featuredImage.imageUrl;
+      if (featuredImage?.imageUrl?.trim()) {
+        return featuredImage.imageUrl;
+      }
       
       // O usar la primera imagen
       const firstImage = post.images[0];
-      if (firstImage && firstImage.imageUrl) return firstImage.imageUrl;
+      if (firstImage?.imageUrl?.trim()) {
+        return firstImage.imageUrl;
+      }
     }
     
     // 3. Imagen por defecto
-    return null;
+    return '/images/blog-placeholder.jpg';
   };
 
   // Función para extraer tags
-  const extractTags = (tags: string) => {
-    if (!tags || tags.trim() === '') return [];
-    return tags.split(',').filter(tag => tag.trim() !== '').slice(0, 3);
+  const extractTags = (tags: string): string[] => {
+    if (!tags || typeof tags !== 'string' || tags.trim() === '') return [];
+    
+    return tags
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag !== '')
+      .slice(0, 3);
+  };
+
+  // Manejar clic en post
+  const handlePostClick = (e: React.MouseEvent, postId: number) => {
+    if (onPostClick) {
+      e.preventDefault();
+      onPostClick(postId);
+    }
   };
 
   return (
     <div className={styles.container}>
-      {isAdmin && (
+      {isAdmin && posts.length > 0 && (
         <div className={styles.stats}>
           <div className={styles.stat}>
             <span className={styles.number}>{posts.length}</span>
@@ -106,78 +133,87 @@ export default function BlogContent({
         {posts.map((post) => {
           const featuredImage = getFeaturedImage(post);
           const tags = extractTags(post.tags);
+          const postUrl = `/blog/${post.slug || post.id}`;
+          const isPublished = post.published !== false; // Por defecto true
           
           return (
             <div key={post.id} className={styles.card}>
-              {featuredImage && (
-                <div className={styles.imageContainer}>
+              {/* Imagen */}
+              <div className={styles.imageContainer}>
+                <Link 
+                  href={postUrl} 
+                  onClick={(e) => handlePostClick(e, post.id)}
+                  className={styles.imageLink}
+                >
                   <img 
                     src={featuredImage} 
-                    alt={post.title}
+                    alt={post.title || 'Imagen del post'}
                     className={styles.image}
+                    loading="lazy"
                     onError={(e) => {
                       e.currentTarget.src = '/images/blog-placeholder.jpg';
-                      e.currentTarget.className = styles.placeholderImage;
+                      e.currentTarget.classList.add(styles.placeholderImage);
                     }}
                   />
                   <div className={styles.date}>
                     {formatDate(post.publicationDate)}
                   </div>
-                </div>
-              )}
+                  {isAdmin && !isPublished && (
+                    <div className={styles.draftOverlay}>
+                      <span className={styles.draftText}>BORRADOR</span>
+                    </div>
+                  )}
+                </Link>
+              </div>
               
-              {!featuredImage && (
-                <div className={styles.noImage}>
-                  <i className="fas fa-image"></i>
-                  <div className={styles.date}>
-                    {formatDate(post.publicationDate)}
-                  </div>
-                </div>
-              )}
-              
+              {/* Contenido */}
               <div className={styles.content}>
+                {/* Tags */}
                 {tags.length > 0 && (
                   <div className={styles.tags}>
                     {tags.map((tag, index) => (
-                      <span key={index} className={styles.tag}>{tag.trim()}</span>
+                      <span key={index} className={styles.tag}>
+                        {tag}
+                      </span>
                     ))}
-                    {isAdmin && !post.published && (
+                    {isAdmin && !isPublished && (
                       <span className={`${styles.tag} ${styles.draft}`}>Borrador</span>
                     )}
                   </div>
                 )}
                 
+                {/* Título */}
                 <h3 className={styles.title}>
                   {isAdmin ? (
-                    <span onClick={() => onEdit?.(post)} className={styles.editableTitle}>
-                      {post.title}
-                      {!post.published && (
+                    <span 
+                      onClick={() => onEdit?.(post)} 
+                      className={styles.editableTitle}
+                    >
+                      {post.title || 'Sin título'}
+                      {!isPublished && (
                         <span className={styles.draftBadge}> (Borrador)</span>
                       )}
                     </span>
                   ) : (
                     <Link 
-                      href={`/blog/${post.slug || post.id}`}
+                      href={postUrl}
                       className={styles.titleLink}
-                      onClick={(e) => {
-                        if (onPostClick) {
-                          e.preventDefault();
-                          onPostClick(post.id);
-                        }
-                      }}
+                      onClick={(e) => handlePostClick(e, post.id)}
                     >
-                      {post.title}
+                      {post.title || 'Sin título'}
                     </Link>
                   )}
                 </h3>
                 
+                {/* Extracto */}
                 <p className={styles.excerpt}>
-                  {post.excerpt || post.content.substring(0, 150)}...
-                  {!post.excerpt && post.content.length > 150 && (
-                    <span className={styles.ellipsis}>...</span>
-                  )}
+                  {post.excerpt || 
+                   (post.content 
+                    ? `${post.content.substring(0, 150).replace(/<[^>]*>/g, '')}...`
+                    : 'Sin contenido disponible')}
                 </p>
                 
+                {/* Meta información */}
                 <div className={styles.meta}>
                   <span className={styles.author}>
                     <i className="fas fa-user"></i> {post.authorName || 'Admin'}
@@ -198,6 +234,7 @@ export default function BlogContent({
                         className={styles.editBtn}
                         onClick={() => onEdit(post)}
                         title="Editar post"
+                        type="button"
                       >
                         <i className="fas fa-edit"></i> Editar
                       </button>
@@ -206,20 +243,22 @@ export default function BlogContent({
                       <button 
                         className={styles.deleteBtn}
                         onClick={() => {
-                          if (window.confirm(`¿Eliminar "${post.title}"?`)) {
+                          if (window.confirm(`¿Eliminar definitivamente "${post.title}"?\nEsta acción no se puede deshacer.`)) {
                             onDelete(post.id);
                           }
                         }}
                         title="Eliminar post"
+                        type="button"
                       >
                         <i className="fas fa-trash"></i> Eliminar
                       </button>
                     )}
                     <Link 
-                      href={`/blog/${post.slug || post.id}`} 
+                      href={postUrl} 
                       className={styles.viewBtn}
                       title="Ver en sitio"
                       target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <i className="fas fa-external-link-alt"></i> Ver
                     </Link>
@@ -229,14 +268,9 @@ export default function BlogContent({
                 {/* Botón para usuarios normales */}
                 {!isAdmin && (
                   <Link 
-                    href={`/blog/${post.slug || post.id}`}
+                    href={postUrl}
                     className={styles.readMore}
-                    onClick={(e) => {
-                      if (onPostClick) {
-                        e.preventDefault();
-                        onPostClick(post.id);
-                      }
-                    }}
+                    onClick={(e) => handlePostClick(e, post.id)}
                   >
                     Leer más <i className="fas fa-arrow-right"></i>
                   </Link>
@@ -255,6 +289,7 @@ export default function BlogContent({
             <button 
               className={styles.createFirstBtn}
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              type="button"
             >
               <i className="fas fa-plus"></i> Crear Primer Post
             </button>

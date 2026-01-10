@@ -1,0 +1,295 @@
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  margin-bottom: 30px;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.breadcrumb a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb span {
+  margin: 0 5px;
+}
+
+/* Header */
+.header {
+  margin-bottom: 30px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.tag {
+  background: #e8f4fc;
+  color: #3498db;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.tag:hover {
+  background: #3498db;
+  color: white;
+}
+
+.title {
+  font-size: 2.2rem;
+  color: #2c3e50;
+  margin: 0 0 15px 0;
+  line-height: 1.3;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  color: #7f8c8d;
+  font-size: 0.95rem;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.meta span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.meta i {
+  color: #3498db;
+}
+
+/* Featured Image */
+.featuredImage {
+  margin: 30px 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.image {
+  width: 100%;
+  height: auto;
+  max-height: 500px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+/* Content */
+.content {
+  margin: 40px 0;
+  line-height: 1.8;
+  color: #2c3e50;
+}
+
+.postContent {
+  font-size: 1.1rem;
+}
+
+.postContent h2 {
+  color: #2c3e50;
+  margin-top: 30px;
+  margin-bottom: 15px;
+}
+
+.postContent h3 {
+  color: #34495e;
+  margin-top: 25px;
+  margin-bottom: 12px;
+}
+
+.postContent p {
+  margin-bottom: 20px;
+}
+
+.postContent img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 15px 0;
+}
+
+.postContent a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.postContent a:hover {
+  text-decoration: underline;
+}
+
+/* Share */
+.share {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin: 40px 0;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.shareButtons {
+  display: flex;
+  gap: 10px;
+}
+
+.shareButton {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.shareButton:hover {
+  transform: translateY(-2px);
+}
+
+.shareButton.facebook {
+  background: #3b5998;
+}
+
+.shareButton.twitter {
+  background: #1da1f2;
+}
+
+.shareButton.whatsapp {
+  background: #25d366;
+}
+
+/* Comments */
+.commentsSection {
+  margin: 50px 0;
+}
+
+/* Related Posts */
+.relatedPosts {
+  margin: 40px 0;
+  padding: 25px;
+  background: #e8f4fc;
+  border-radius: 10px;
+}
+
+.relatedPosts h3 {
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+}
+
+.relatedPosts p {
+  color: #34495e;
+  margin: 0 0 15px 0;
+}
+
+.seeAll {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.seeAll:hover {
+  text-decoration: underline;
+}
+
+/* Back to Blog */
+.backToBlog {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 1px solid #eee;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1px solid #3498db;
+  transition: all 0.2s ease;
+}
+
+.backButton:hover {
+  background: #3498db;
+  color: white;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error */
+.error {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.error h2 {
+  color: #e74c3c;
+  margin-bottom: 15px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+  }
+  
+  .title {
+    font-size: 1.8rem;
+  }
+  
+  .meta {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .share {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

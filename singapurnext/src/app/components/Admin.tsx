@@ -3,6 +3,7 @@
 import { MENU_PRODUCTS } from "../utils/Api";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import ImageUploader from "./ImageUploader";
 import styles from "./Admin.module.css";
 
@@ -50,7 +51,7 @@ interface ApiResponse {
   success: boolean;
   message: string;
   canDelete?: boolean;
-  [key: string]: any;
+  data?: unknown;
 }
 
 // Tipo para datos de imagen subida desde ImageUploader
@@ -648,12 +649,16 @@ const Admin = () => {
                           
                           {img.imageUrl && img.imageUrl.trim() !== "" && (
                             <div className={styles.imagePreviewCompact}>
-                              <img 
+                              <Image 
                                 src={img.thumbnailUrl || img.imageUrl} 
                                 alt="Preview" 
+                                width={40}
+                                height={40}
                                 className={styles.thumbnailCompact}
                                 onError={(e) => {
-                                  e.currentTarget.src = "https://via.placeholder.com/40?text=Error";
+                                  // Fallback si la imagen no carga
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = "https://via.placeholder.com/40?text=Error";
                                 }}
                               />
                               <button

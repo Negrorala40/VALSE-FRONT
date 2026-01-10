@@ -1,5 +1,6 @@
-/* === Variables de color === */
-:root {
+/* Variables dentro del selector principal */
+.homeContainer {
+  /* Variables de color */
   --primary-blue: #103359;
   --secondary-green: #3db28a;
   --accent-purple: #806ff7;
@@ -14,10 +15,15 @@
   --shadow-medium: rgba(16, 51, 89, 0.2);
   --gradient-primary: linear-gradient(135deg, var(--primary-blue) 0%, #1a4a7a 100%);
   --gradient-accent: linear-gradient(90deg, var(--secondary-green) 0%, var(--accent-purple) 50%, var(--accent-red) 100%);
-}
-.homeContainer {
+  
+  /* Estilos base */
+  min-height: 100vh;
+  background: var(--light-bg);
+  font-family: "Montserrat", "Segoe UI", sans-serif;
+  overflow-x: hidden;
   margin-top: 5rem;
 }
+
 /* === Animaciones === */
 @keyframes fadeIn {
   from {
@@ -81,15 +87,7 @@
   }
 }
 
-/* === Contenedor principal === */
-.homeContainer {
-  min-height: 100vh;
-  background: var(--light-bg);
-  font-family: "Montserrat", "Segoe UI", sans-serif;
-  overflow-x: hidden;
-  margin-top: 5rem;
-}
-
+/* Contenedor principal */
 .mainContent {
   max-width: 1400px;
   margin: 0 auto;
