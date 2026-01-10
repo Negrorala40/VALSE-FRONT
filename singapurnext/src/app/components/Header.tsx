@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import styles from './Header.module.css';
 import Cart from './Cart';
 import { HiShoppingCart } from "react-icons/hi2";
-import { FaUserAstronaut } from "react-icons/fa6";
 import { FaSearch } from "react-icons/fa";
 
 interface CartItem {
@@ -50,16 +49,16 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   // Actualizar la referencia cuando cambian las props
   useEffect(() => {
     handleSetCartItems.current = setCartItems || setLocalCartItems;
-  }, [setCartItems]);
+  }, [setCartItems, setLocalCartItems]);
 
   // Actualizar localCartItems cuando cambian las props
   useEffect(() => {
     if (setCartItems && cartItems !== localCartItems) {
       setLocalCartItems(cartItems);
     }
-  }, [cartItems, setCartItems]);
+  }, [cartItems, setCartItems, localCartItems]);
 
-  const toggleMenu = () => {
+  const toggleMenu = useCallback(() => {
     setMenuOpen(!menuOpen);
     if (menuOpen) {
       document.body.style.overflow = 'auto';
@@ -67,9 +66,9 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       setSearchOpen(false);
       document.body.style.overflow = 'hidden';
     }
-  };
+  }, [menuOpen]);
 
-  const toggleSearch = () => {
+  const toggleSearch = useCallback(() => {
     setSearchOpen(!searchOpen);
     if (searchOpen) {
       document.body.style.overflow = 'auto';
@@ -77,11 +76,11 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       setMenuOpen(false);
       document.body.style.overflow = 'hidden';
     }
-  };
+  }, [searchOpen]);
 
-  const toggleCart = () => {
+  const toggleCart = useCallback(() => {
     setCartOpen(!cartOpen);
-  };
+  }, [cartOpen]);
 
   // Logo configuration
   const logoConfig = {
@@ -98,7 +97,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSearchSubmit = (event: React.FormEvent) => {
+  const handleSearchSubmit = useCallback((event: React.FormEvent) => {
     event.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/menu?search=${encodeURIComponent(searchQuery.trim())}`);
@@ -106,18 +105,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       setSearchOpen(false);
       document.body.style.overflow = 'auto';
     }
-  };
-
-  /* COMENTADO: Botón de perfil desactivado
-  const handleUserClick = () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      router.push('/perfil');
-    } else {
-      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
-    }
-  };
-  */
+  }, [searchQuery, router]);
 
   // Handle click outside para menú y búsqueda
   useEffect(() => {
@@ -172,6 +160,16 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     return () => {
       document.body.style.overflow = 'auto';
     };
+  }, []);
+
+  const handleCloseSearch = useCallback(() => {
+    setSearchOpen(false);
+    document.body.style.overflow = 'auto';
+  }, []);
+
+  const handleCloseMenu = useCallback(() => {
+    setMenuOpen(false);
+    document.body.style.overflow = 'auto';
   }, []);
 
   return (
@@ -229,18 +227,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               <FaSearch size={22} />
             </button>
 
-            {/* User - COMENTADO: Botón deshabilitado */}
-            {/*
-            <button
-              className={`${styles.headerActionBtn} ${styles.headerActionBtnUser} ${isLoggedIn ? styles.headerActionBtnLogged : ''}`}
-              onClick={handleUserClick}
-              aria-label={isLoggedIn ? "Ver perfil" : "Iniciar sesión"}
-            >
-              <FaUserAstronaut size={22} />
-              {isLoggedIn && <span className={styles.headerStatusDot}></span>}
-            </button>
-            */}
-
             {/* Cart */}
             <button
               className={`${styles.headerActionBtn} ${styles.headerActionBtnCart}`}
@@ -269,7 +255,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </header>
 
-            {/* Search Panel - CORREGIDO: Opacidad */}
+      {/* Search Panel - CORREGIDO: Opacidad */}
       <div className={`${styles.searchPanel} ${searchOpen ? styles.searchPanelOpen : styles.searchPanelClosed}`} ref={searchRef}>
         <div className={styles.searchPanelHeader}>
           <h3 className={styles.searchPanelTitle}>
@@ -278,10 +264,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           </h3>
           <button 
             className={styles.searchPanelClose} 
-            onClick={() => {
-              setSearchOpen(false);
-              document.body.style.overflow = 'auto';
-            }}
+            onClick={handleCloseSearch}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -310,40 +293,28 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             <Link 
               href="/menu?search=astronauta" 
               className={styles.searchPanelTag}
-              onClick={() => {
-                setSearchOpen(false);
-                document.body.style.overflow = 'auto';
-              }}
+              onClick={handleCloseSearch}
             >
               Astronauta
             </Link>
             <Link 
               href="/menu?search=estrellas" 
               className={styles.searchPanelTag}
-              onClick={() => {
-                setSearchOpen(false);
-                document.body.style.overflow = 'auto';
-              }}
+              onClick={handleCloseSearch}
             >
               Estrellas
             </Link>
             <Link 
               href="/menu?search=cohete" 
               className={styles.searchPanelTag}
-              onClick={() => {
-                setSearchOpen(false);
-                document.body.style.overflow = 'auto';
-              }}
+              onClick={handleCloseSearch}
             >
               Cohete
             </Link>
             <Link 
               href="/menu?search=planetas" 
               className={styles.searchPanelTag}
-              onClick={() => {
-                setSearchOpen(false);
-                document.body.style.overflow = 'auto';
-              }}
+              onClick={handleCloseSearch}
             >
               Planetas
             </Link>
@@ -363,10 +334,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           </div>
           <button 
             className={styles.sideMenuClose} 
-            onClick={() => {
-              setMenuOpen(false);
-              document.body.style.overflow = 'auto';
-            }}
+            onClick={handleCloseMenu}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -381,10 +349,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               <Link 
                 href={cat.href} 
                 className={styles.sideMenuLink}
-                onClick={() => {
-                  setMenuOpen(false);
-                  document.body.style.overflow = 'auto';
-                }}
+                onClick={handleCloseMenu}
               >
                 <span className={styles.sideMenuCategoryIcon}>
                   {cat.id === 'ninos' && (
@@ -416,10 +381,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           <Link 
             href="/menu" 
             className={styles.sideMenuCta} 
-            onClick={() => {
-              setMenuOpen(false);
-              document.body.style.overflow = 'auto';
-            }}
+            onClick={handleCloseMenu}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="7" height="7" />

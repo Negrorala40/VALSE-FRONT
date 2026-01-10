@@ -2,6 +2,26 @@
 
 import { useEffect } from 'react';
 
+// Tipo mínimo para Cloudinary
+interface CloudinaryWidgetOptions {
+  cloudName: string;
+  uploadPreset: string;
+  [key: string]: unknown;
+}
+
+interface CloudinaryWidgetInstance {
+  open: (options?: { preset?: string; folder?: string; tags?: string[] }) => void;
+  close: () => void;
+  destroy: () => void;
+}
+
+interface Cloudinary {
+  createUploadWidget: (
+    options: CloudinaryWidgetOptions, 
+    callback: (error: Error | null, result: { event: string; info: unknown }) => void
+  ) => CloudinaryWidgetInstance;
+}
+
 const CloudinaryScript = () => {
   useEffect(() => {
     // Verificar que estamos en el cliente
@@ -13,7 +33,6 @@ const CloudinaryScript = () => {
       return;
     }
     
-    // Cargar el script dinámicamente
     const loadScript = () => {
       const script = document.createElement('script');
       script.src = 'https://upload-widget.cloudinary.com/global/all.js';
@@ -21,7 +40,6 @@ const CloudinaryScript = () => {
       script.onload = () => {
         console.log('✅ Cloudinary Widget cargado correctamente');
         
-        // Configuración global opcional
         if (!window.cloudinaryConfig) {
           window.cloudinaryConfig = {
             cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '',
@@ -37,24 +55,21 @@ const CloudinaryScript = () => {
       document.head.appendChild(script);
       
       return () => {
-        // Cleanup opcional
         document.head.removeChild(script);
       };
     };
     
-    // Pequeño delay para no bloquear la renderización inicial
     const timer = setTimeout(loadScript, 100);
     
     return () => clearTimeout(timer);
   }, []);
 
-  return null; // Este componente no renderiza nada visible
+  return null;
 };
 
-// Extender la interfaz Window para TypeScript
 declare global {
   interface Window {
-    cloudinary?: any;
+    cloudinary?: Cloudinary;
     cloudinaryConfig?: {
       cloudName: string;
       uploadPreset: string;

@@ -7,11 +7,9 @@ import {
   CART, 
   PERFIL_ME, 
   ADDRESS, 
-  ORDERS,
-  API_BASE_URL,
-  MERCADOPAGO_SIMULATE,
   CHECKOUT_ANONYMOUS,
   CHECKOUT_AUTHENTICATED,
+  MERCADOPAGO_SIMULATE,
   MIGRATE_ORDERS
 } from '../utils/Api';
 import { 
@@ -29,7 +27,6 @@ import {
   Sparkles,
   X,
   Loader2,
-  ExternalLink,
   Wallet,
   User,
   Mail,
@@ -127,69 +124,15 @@ const CheckoutPage = () => {
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
 
-  // Verificar autenticación y cargar datos
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const isAuth = !!token;
-    setIsAuthenticated(isAuth);
-
-    if (isAuth && !hasFetchedRef.current) {
-      loadAuthenticatedData(token!);
-    } else if (!isAuth && !hasFetchedRef.current) {
-      loadAnonymousCart();
-    }
-  }, []);
-
-  const loadAuthenticatedData = async (token: string) => {
-    setLoading(true);
-    
-    if (fetchControllerRef.current) {
-      fetchControllerRef.current.abort();
-    }
-    
-    fetchControllerRef.current = new AbortController();
-    const signal = fetchControllerRef.current.signal;
-    
-    try {
-      hasFetchedRef.current = true;
-      
-      await Promise.all([
-        fetchCart(token, signal),
-        fetchUser(token, signal)
-      ]);
-      
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error('Error loading authenticated data:', err);
-        setError('Error cargando los datos');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAnonymousCart = async () => {
-    setLoading(true);
-    try {
-      // El carrito anónimo se carga sin token, con cookies
-      await fetchCart(null);
-    } catch (err: any) {
-      console.error('Error loading anonymous cart:', err);
-      setError('Error cargando el carrito');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Formateador de precio
-  const formatPrice = (price: number) => {
+  const formatPrice = useCallback((price: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(price);
-  };
+  }, []);
 
   const calculateTotal = useCallback((items: CartItem[]) => {
     const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -197,7 +140,7 @@ const CheckoutPage = () => {
   }, []);
 
   // Fetch carrito (funciona para ambos tipos de usuarios)
-  const fetchCart = async (token: string | null, signal?: AbortSignal) => {
+  const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
     try {
       console.log('🛒 Fetching cart data...');
       
@@ -239,7 +182,20 @@ const CheckoutPage = () => {
       }
       
       const items: CartItem[] = data.map(
-        (item: any) => ({
+        (item: {
+          id?: number | string;
+          imageUrls?: string[];
+          imageUrl?: string;
+          productName?: string;
+          name?: string;
+          price?: number;
+          productVariant?: { price?: number; size?: string; color?: string; stock?: number };
+          size?: string;
+          color?: string;
+          quantity?: number;
+          stock?: number;
+          productVariantId?: number | string;
+        }) => ({
           id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
           image: item.imageUrls?.[0]?.trim() || item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || item.name?.trim() || 'Producto',
@@ -254,14 +210,26 @@ const CheckoutPage = () => {
       
       setCartItems(items);
       calculateTotal(items);
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('🛑 Error fetching cart:', error);
+    } catch (error: unknown) {
+      const err = error as Error;
+      if (err.name !== 'AbortError') {
+        console.error('🛑 Error fetching cart:', err);
         // Si hay error, intentar cargar desde localStorage como fallback
         const pendingCart = localStorage.getItem('pendingCartItem');
         if (pendingCart && !token) {
           try {
-            const parsed = JSON.parse(pendingCart);
+            const parsed = JSON.parse(pendingCart) as {
+              id?: string | number;
+              image?: string;
+              imageUrl?: string;
+              name?: string;
+              productName?: string;
+              price?: number;
+              size?: string;
+              color?: string;
+              quantity?: number;
+              stock?: number;
+            };
             const fallbackItem: CartItem = {
               id: parsed.id?.toString() || `pending-${Date.now()}`,
               image: parsed.image?.trim() || parsed.imageUrl?.trim() || '/images/placeholder.png',
@@ -282,13 +250,13 @@ const CheckoutPage = () => {
           setCartItems([]);
           calculateTotal([]);
         }
-        throw error;
+        throw err;
       }
     }
-  };
+  }, [calculateTotal]);
 
   // Fetch usuario (solo autenticados)
-  const fetchUser = async (token: string, signal?: AbortSignal) => {
+  const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       console.log('👤 Fetching user data...');
       const res = await fetch(PERFIL_ME, {
@@ -302,7 +270,7 @@ const CheckoutPage = () => {
       
       if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
       
-      const user = await res.json();
+      const user = await res.json() as UserData;
       console.log('👤 Datos de usuario recibidos:', user);
       
       // Procesar direcciones
@@ -331,13 +299,71 @@ const CheckoutPage = () => {
         lastName: user.lastName || '',
         phone: user.phone || ''
       });
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('🛑 Error fetching user:', error);
-        throw error;
+    } catch (error: unknown) {
+      const err = error as Error;
+      if (err.name !== 'AbortError') {
+        console.error('🛑 Error fetching user:', err);
+        throw err;
       }
     }
-  };
+  }, []);
+
+  // Verificar autenticación y cargar datos
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const isAuth = !!token;
+    setIsAuthenticated(isAuth);
+
+    if (isAuth && !hasFetchedRef.current) {
+      loadAuthenticatedData(token!);
+    } else if (!isAuth && !hasFetchedRef.current) {
+      loadAnonymousCart();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadAuthenticatedData = useCallback(async (token: string) => {
+    setLoading(true);
+    
+    if (fetchControllerRef.current) {
+      fetchControllerRef.current.abort();
+    }
+    
+    fetchControllerRef.current = new AbortController();
+    const signal = fetchControllerRef.current.signal;
+    
+    try {
+      hasFetchedRef.current = true;
+      
+      await Promise.all([
+        fetchCart(token, signal),
+        fetchUser(token, signal)
+      ]);
+      
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (error.name !== 'AbortError') {
+        console.error('Error loading authenticated data:', error);
+        setError('Error cargando los datos');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchCart, fetchUser]);
+
+  const loadAnonymousCart = useCallback(async () => {
+    setLoading(true);
+    try {
+      // El carrito anónimo se carga sin token, con cookies
+      await fetchCart(null);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Error loading anonymous cart:', error);
+      setError('Error cargando el carrito');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchCart]);
 
   // Actualizar cantidad
   const updateQuantity = async (itemId: string, newQuantity: number) => {
@@ -382,9 +408,10 @@ const CheckoutPage = () => {
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
       
-    } catch (err: any) {
-      console.error('🛑 Error updating quantity:', err);
-      setError(`Error actualizando la cantidad: ${err.message || 'Error desconocido'}`);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error updating quantity:', error);
+      setError(`Error actualizando la cantidad: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -423,9 +450,10 @@ const CheckoutPage = () => {
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
       
-    } catch (err: any) {
-      console.error('🛑 Error removing item:', err);
-      setError(`Error eliminando el producto: ${err.message || 'Error desconocido'}`);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error removing item:', error);
+      setError(`Error eliminando el producto: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -465,7 +493,7 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error agregando dirección'}`);
       }
       
-      const createdAddress = await res.json();
+      const createdAddress = await res.json() as Address;
 
       setUserData(prevUserData => {
         if (!prevUserData) return prevUserData;
@@ -494,9 +522,10 @@ const CheckoutPage = () => {
       setNewAddress({ address: '', city: '', state: '', country: '' });
       setError('');
       
-    } catch (err: any) {
-      console.error('🛑 Error adding address:', err);
-      setError(`No se pudo agregar la dirección: ${err.message || 'Error desconocido'}`);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error adding address:', error);
+      setError(`No se pudo agregar la dirección: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -542,9 +571,10 @@ const CheckoutPage = () => {
         prevSelected?.id === addressId ? null : prevSelected
       );
       
-    } catch (err: any) {
-      console.error('🛑 Error deleting address:', err);
-      setError(`No se pudo eliminar la dirección: ${err.message || 'Error desconocido'}`);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error deleting address:', error);
+      setError(`No se pudo eliminar la dirección: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
@@ -658,7 +688,7 @@ const CheckoutPage = () => {
           throw new Error(errorMessage);
         }
 
-        orderResponse = await orderRes.json();
+        orderResponse = await orderRes.json() as OrderResponse;
         console.log('✅ Orden autenticada creada:', orderResponse);
         
       } else {
@@ -693,6 +723,7 @@ const CheckoutPage = () => {
         
         if (!orderRes.ok) {
           let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
+
           try {
             const errorData = await orderRes.text();
             errorMessage = errorData || errorMessage;
@@ -700,7 +731,7 @@ const CheckoutPage = () => {
           throw new Error(errorMessage);
         }
 
-        orderResponse = await orderRes.json();
+        orderResponse = await orderRes.json() as OrderResponse;
         console.log('✅ Orden anónima creada:', orderResponse);
       }
 
@@ -713,9 +744,10 @@ const CheckoutPage = () => {
       setOrderCreated(true);
       setSuccessMessage(`✅ Orden #${orderId} creada exitosamente. Usa los botones de simulación.`);
 
-    } catch (err: any) {
-      console.error('🛑 Error en checkout:', err);
-      setError(`Error: ${err.message || 'Error desconocido'}`);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error en checkout:', error);
+      setError(`Error: ${error.message || 'Error desconocido'}`);
       setOrderCreated(false);
     } finally {
       setIsProcessingPayment(false);
@@ -791,7 +823,7 @@ const CheckoutPage = () => {
             console.error('❌ Error en simulación:', responseText);
             
             try {
-                const errorJson = JSON.parse(responseText);
+                const errorJson = JSON.parse(responseText) as { error?: string };
                 setError(`❌ Error simulando pago: ${errorJson.error || responseText}`);
             } catch {
                 setError(`❌ Error simulando pago: ${responseText}`);
@@ -800,9 +832,10 @@ const CheckoutPage = () => {
             // Mostrar mensaje de error por 5 segundos
             setTimeout(() => setError(''), 5000);
         }
-    } catch (error: any) {
-        console.error('🛑 Error de conexión al simular pago:', error);
-        setError(`❌ Error de conexión: ${error.message || 'Error desconocido'}`);
+    } catch (error: unknown) {
+        const err = error as Error;
+        console.error('🛑 Error de conexión al simular pago:', err);
+        setError(`❌ Error de conexión: ${err.message || 'Error desconocido'}`);
         
         // Mostrar mensaje de error por 5 segundos
         setTimeout(() => setError(''), 5000);
@@ -819,29 +852,30 @@ const CheckoutPage = () => {
   }, [step, createOrderAndPayment, isProcessingPayment, orderCreated]);
 
   // Función para migrar carrito anónimo a usuario recién logueado
-  const migrateCartToUser = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
+  // Comentada porque no se usa actualmente, pero se mantiene para futura implementación
+  // const migrateCartToUser = useCallback(async () => {
+  //   const token = localStorage.getItem('token');
+  //   if (!token) return;
     
-    try {
-      const res = await fetch(MIGRATE_ORDERS, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
+  //   try {
+  //     const res = await fetch(MIGRATE_ORDERS, {
+  //       method: 'POST',
+  //       headers: {
+  //         Authorization: `Bearer ${token}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //       credentials: 'include',
+  //     });
       
-      if (res.ok) {
-        console.log('🔄 Carrito migrado exitosamente');
-        // Recargar datos
-        loadAuthenticatedData(token);
-      }
-    } catch (err) {
-      console.error('Error migrando carrito:', err);
-    }
-  };
+  //     if (res.ok) {
+  //       console.log('🔄 Carrito migrado exitosamente');
+  //       // Recargar datos
+  //       loadAuthenticatedData(token);
+  //     }
+  //   } catch (err: unknown) {
+  //     console.error('Error migrando carrito:', err);
+  //   }
+  // }, [loadAuthenticatedData]);
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -1619,7 +1653,7 @@ const CheckoutPage = () => {
                         <strong>¿Quieres guardar tus datos?</strong>
                         <br />
                         <small>
-                          <a href="/auth/login" className="checkout-login-link">
+                          <a href="/login" className="checkout-login-link">
                             Inicia sesión o regístrate
                           </a>{' '}
                           para guardar direcciones y ver tu historial de pedidos.

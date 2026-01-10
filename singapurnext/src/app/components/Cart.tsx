@@ -174,15 +174,15 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     } finally {
       setIsFetching(false);
     }
-  }, [setCartItems]);
+  }, [setCartItems, isFetching]);
 
   useEffect(() => {
-    if (isOpen && !isFetching) {
+    if (isOpen) {
       fetchCart();
     }
-  }, [isOpen, fetchCart, isFetching]);
+  }, [isOpen, fetchCart]);
 
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
+  const updateQuantity = useCallback(async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
 
     const item = cartItems.find(i => i.id === itemId);
@@ -231,9 +231,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       console.error('🛑 Error actualizando cantidad:', err);
       alert('Error al actualizar la cantidad');
     }
-  };
+  }, [cartItems, setCartItems]);
 
-  const removeItem = async (itemId: string) => {
+  const removeItem = useCallback(async (itemId: string) => {
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
     
@@ -270,9 +270,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       console.error('🛑 Error eliminando producto:', err);
       alert('Error al eliminar el producto');
     }
-  };
+  }, [cartItems, setCartItems]);
 
-  const handleCheckout = () => {
+  const handleCheckout = useCallback(() => {
     if (cartItems.length === 0) {
       alert('Tu carrito está vacío');
       return;
@@ -281,122 +281,122 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     // Redirigir siempre a /checkout (funciona para usuarios autenticados y anónimos)
     router.push('/checkout');
     handleClose();
-  };
+  }, [cartItems, router, handleClose]);
 
-  const handleContinueShopping = () => {
+  const handleContinueShopping = useCallback(() => {
     router.push('/menu');
     handleClose();
-  };
+  }, [router, handleClose]);
 
-  const getSafeImageUrl = (url: string | undefined): string => {
+  const getSafeImageUrl = useCallback((url: string | undefined): string => {
     if (!url || url.trim() === '') {
       return '/images/placeholder.png';
     }
     return url.trim();
-  };
+  }, []);
 
-  const getSafeName = (name: string | undefined): string => {
+  const getSafeName = useCallback((name: string | undefined): string => {
     if (!name || name.trim() === '') {
       return 'Producto sin nombre';
     }
     return name.trim();
-  };
+  }, []);
 
-  const getColorStyle = (color: string): { background: string; border?: string } => {
-  const colorLower = color.toLowerCase().trim();
-  
-  switch(colorLower) {
-    case 'azul':
-      return { background: '#103359' };
-    case 'verde':
-      return { background: '#3DB28A' };
-    case 'rosa':
-      return { background: '#E9566D' };
-    case 'morado':
-    case 'lila':
-    case 'violeta':
-      return { background: '#806FF7' };
-    case 'amarillo':
-      return { 
-        background: '#FFD449',
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-    case 'negro':
-      return { 
-        background: '#000000',
-        border: '1px solid rgba(255,255,255,0.3)'
-      };
-    case 'blanco':
-      return { 
-        background: '#FFFFFF',
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-    case 'rojo':
-      return { background: '#FF0000' };
-    case 'naranja':
-      return { background: '#F47B47' };
-    case 'beige':
-    case 'beis':
-      return { 
-        background: '#F5F5DC',
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-    case 'gris':
-      return { background: '#808080' };
-    case 'celeste':
-      return { background: '#87CEEB' };
-    case 'turquesa':
-      return { background: '#40E0D0' };
-    case 'fucsia':
-      return { background: '#FF00FF' };
-    case 'coral':
-      return { background: '#FF7F50' };
-    case 'marron':
-    case 'café':
-      return { background: '#8B4513' };
-    case 'dorado':
-      return { 
-        background: '#FFD700',
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-    case 'plateado':
-      return { 
-        background: '#C0C0C0',
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-    case 'lavanda':
-      return { background: '#E6E6FA' };
-    case 'menta':
-      return { background: '#98FF98' };
-    case 'melon':
-      return { background: '#FDBCB4' };
-    case 'ocre':
-      return { background: '#CC7722' };
-    case 'mostaza':
-      return { 
-        background: '#FFDB58',
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-    case 'salmon':
-      return { background: '#FA8072' };
-    case 'vino':
-      return { background: '#722F37' };
-    case 'oliva':
-      return { background: '#808000' };
-    default:
-      // Si no reconoce el color, intenta usar un hash para generar uno consistente
-      const colors = [
-        '#103359', '#3DB28A', '#E9566D', '#806FF7', '#F47B47', 
-        '#FFD449', '#000000', '#FFFFFF', '#F5F5DC', '#808080',
-        '#87CEEB', '#40E0D0', '#FF00FF', '#FF7F50', '#8B4513'
-      ];
-      const hash = colorLower.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      return { 
-        background: colors[hash % colors.length],
-        border: '1px solid rgba(0,0,0,0.1)'
-      };
-  }
-};
+  const getColorStyle = useCallback((color: string): { background: string; border?: string } => {
+    const colorLower = color.toLowerCase().trim();
+    
+    switch(colorLower) {
+      case 'azul':
+        return { background: '#103359' };
+      case 'verde':
+        return { background: '#3DB28A' };
+      case 'rosa':
+        return { background: '#E9566D' };
+      case 'morado':
+      case 'lila':
+      case 'violeta':
+        return { background: '#806FF7' };
+      case 'amarillo':
+        return { 
+          background: '#FFD449',
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+      case 'negro':
+        return { 
+          background: '#000000',
+          border: '1px solid rgba(255,255,255,0.3)'
+        };
+      case 'blanco':
+        return { 
+          background: '#FFFFFF',
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+      case 'rojo':
+        return { background: '#FF0000' };
+      case 'naranja':
+        return { background: '#F47B47' };
+      case 'beige':
+      case 'beis':
+        return { 
+          background: '#F5F5DC',
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+      case 'gris':
+        return { background: '#808080' };
+      case 'celeste':
+        return { background: '#87CEEB' };
+      case 'turquesa':
+        return { background: '#40E0D0' };
+      case 'fucsia':
+        return { background: '#FF00FF' };
+      case 'coral':
+        return { background: '#FF7F50' };
+      case 'marron':
+      case 'café':
+        return { background: '#8B4513' };
+      case 'dorado':
+        return { 
+          background: '#FFD700',
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+      case 'plateado':
+        return { 
+          background: '#C0C0C0',
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+      case 'lavanda':
+        return { background: '#E6E6FA' };
+      case 'menta':
+        return { background: '#98FF98' };
+      case 'melon':
+        return { background: '#FDBCB4' };
+      case 'ocre':
+        return { background: '#CC7722' };
+      case 'mostaza':
+        return { 
+          background: '#FFDB58',
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+      case 'salmon':
+        return { background: '#FA8072' };
+      case 'vino':
+        return { background: '#722F37' };
+      case 'oliva':
+        return { background: '#808000' };
+      default:
+        // Si no reconoce el color, intenta usar un hash para generar uno consistente
+        const colors = [
+          '#103359', '#3DB28A', '#E9566D', '#806FF7', '#F47B47', 
+          '#FFD449', '#000000', '#FFFFFF', '#F5F5DC', '#808080',
+          '#87CEEB', '#40E0D0', '#FF00FF', '#FF7F50', '#8B4513'
+        ];
+        const hash = colorLower.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        return { 
+          background: colors[hash % colors.length],
+          border: '1px solid rgba(0,0,0,0.1)'
+        };
+    }
+  }, []);
 
   return (
     <>
