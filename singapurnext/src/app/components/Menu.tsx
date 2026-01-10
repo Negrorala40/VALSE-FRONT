@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';
 import styles from '../menu/menu.module.css';
-import { useCart } from '../context/CartContext'; // Importar contexto del carrito
+import { useCart } from '../context/CartContext';
 
 interface Img {
   id: number;
@@ -25,7 +25,6 @@ interface ProductVariant {
   images: Img[];
 }
 
-// Actualizar enum de géneros
 enum ProductGender {
   NINAS = 'NIÑAS',
   NINOS = 'NIÑOS',
@@ -48,18 +47,14 @@ interface Product {
   createdAt?: string;
 }
 
-// Interface para estado de imágenes por producto
-interface ProductImageState {
+interface ProductSelectionState {
   [productId: number]: {
-    currentImageIndex: number;
-    imagesByColor: {
-      [color: string]: string; // color -> imageUrl
-    };
     selectedColor: string;
+    selectedSize: string;
+    availableSizes: string[];
   };
 }
 
-// Helper para obtener colores hex aproximados
 const getColorHex = (colorName: string): string => {
   const colors: Record<string, string> = {
     'azul': '#103359',
@@ -88,27 +83,49 @@ const getColorHex = (colorName: string): string => {
   return colors[colorName.toLowerCase()] || '#103359';
 };
 
-// Función para obtener el precio mínimo de las variantes - MOVER ANTES DEL COMPONENTE
 const getMinPrice = (variants: ProductVariant[]): number => {
   if (!variants || variants.length === 0) return 0;
   const prices = variants.map(v => Number(v.price || 0)).filter(p => p > 0);
   return prices.length > 0 ? Math.min(...prices) : 0;
 };
 
+const getImageForColor = (variants: ProductVariant[], color: string): string => {
+  const variantWithImage = variants.find(v => 
+    v.color === color && v.images && v.images.length > 0
+  );
+  return variantWithImage?.images?.[0]?.imageUrl || '/images/placeholder.png';
+};
+
+const getUniqueColors = (variants: ProductVariant[]): string[] => {
+  const colors = [...new Set(variants.map((v) => v.color))];
+  return colors.slice(0, 6);
+};
+
+const getSizesForColor = (variants: ProductVariant[], color: string): string[] => {
+  const sizes = variants
+    .filter(v => v.color === color && v.stock > 0)
+    .map(v => v.size)
+    .filter((size, index, self) => self.indexOf(size) === index);
+  
+  return sizes.sort((a, b) => {
+    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    return sizeOrder.indexOf(a) - sizeOrder.indexOf(b);
+  });
+};
+
 const Menu: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { addToCart } = useCart(); // Usar contexto del carrito
+  const { addToCart } = useCart();
   
   const productRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const imageTimeouts = useRef<Map<number, NodeJS.Timeout>>(new Map());
 
   const [products, setProducts] = useState<Product[]>([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState<boolean>(true);
   const [sortOption, setSortOption] = useState<string>('');
   const [visibleCards, setVisibleCards] = useState<boolean[]>([]);
-  const [imageStates, setImageStates] = useState<ProductImageState>({});
+  const [selectionStates, setSelectionStates] = useState<ProductSelectionState>({});
   const [quickAddLoading, setQuickAddLoading] = useState<number | null>(null);
 
   useEffect(() => {
@@ -117,49 +134,22 @@ const Menu: React.FC = () => {
         const response = await axios.get<Product[]>(MENU_PRODUCTS);
         const productsData = response.data;
         
-        // Inicializar estados de imagen para cada producto
-        const initialImageStates: ProductImageState = {};
+        const initialSelections: ProductSelectionState = {};
         
         productsData.forEach(product => {
-          // Obtener colores únicos del producto
-          const uniqueColors = [...new Set(product.variants.map(v => v.color))];
+          const colors = getUniqueColors(product.variants);
+          const firstColor = colors[0] || '';
+          const sizesForFirstColor = firstColor ? getSizesForColor(product.variants, firstColor) : [];
           
-          // Para cada color, obtener la primera imagen disponible
-          const imagesByColor: { [color: string]: string } = {};
-          
-          uniqueColors.forEach(color => {
-            const variantWithImage = product.variants.find(v => 
-              v.color === color && v.images && v.images.length > 0
-            );
-            
-            if (variantWithImage && variantWithImage.images[0]) {
-              imagesByColor[color] = variantWithImage.images[0].imageUrl;
-            }
-          });
-          
-          // Si no hay imágenes por color, usar la primera imagen disponible
-          if (Object.keys(imagesByColor).length === 0) {
-            const firstVariantWithImage = product.variants.find(v => 
-              v.images && v.images.length > 0
-            );
-            
-            if (firstVariantWithImage && firstVariantWithImage.images[0]) {
-              imagesByColor['default'] = firstVariantWithImage.images[0].imageUrl;
-            }
-          }
-          
-          // Seleccionar el primer color disponible
-          const firstColor = uniqueColors[0] || 'default';
-          
-          initialImageStates[product.id] = {
-            currentImageIndex: 0,
-            imagesByColor,
-            selectedColor: firstColor
+          initialSelections[product.id] = {
+            selectedColor: firstColor,
+            selectedSize: sizesForFirstColor[0] || '',
+            availableSizes: sizesForFirstColor
           };
         });
         
         setProducts(productsData);
-        setImageStates(initialImageStates);
+        setSelectionStates(initialSelections);
         setVisibleCards(new Array(productsData.length).fill(false));
         setLoading(false);
       } catch (error) {
@@ -171,7 +161,6 @@ const Menu: React.FC = () => {
     fetchProducts();
   }, []);
 
-  // Intersection Observer para animaciones al hacer scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -201,8 +190,6 @@ const Menu: React.FC = () => {
 
     return () => {
       observer.disconnect();
-      // Limpiar timeouts al desmontar
-      imageTimeouts.current.forEach(timeout => clearTimeout(timeout));
     };
   }, [visibleCount, products.length]);
 
@@ -211,7 +198,6 @@ const Menu: React.FC = () => {
   const typeQuery = searchParams.get('type') || '';
 
   const filteredProducts = products.filter((product) => {
-    // Actualizar lógica de filtro para nuevos géneros
     const matchesGender = !genderQuery || 
       (genderQuery.toLowerCase() === 'niñas' && product.gender === ProductGender.NINAS) ||
       (genderQuery.toLowerCase() === 'niños' && product.gender === ProductGender.NINOS) ||
@@ -244,52 +230,82 @@ const Menu: React.FC = () => {
     }
   });
 
-  const handleProductClick = (productId: number) => {
-    router.push(`/product?id=${productId}`);
+  const handleColorSelect = (e: React.MouseEvent, productId: number, color: string) => {
+    e.stopPropagation();
+    
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const sizesForColor = getSizesForColor(product.variants, color);
+    
+    setSelectionStates(prev => ({
+      ...prev,
+      [productId]: {
+        selectedColor: color,
+        selectedSize: sizesForColor[0] || '',
+        availableSizes: sizesForColor
+      }
+    }));
   };
 
-  const handleShowMore = () => {
-    setVisibleCount((prev) => prev + 20);
+  const handleSizeSelect = (e: React.MouseEvent, productId: number, size: string) => {
+    e.stopPropagation();
+    
+    setSelectionStates(prev => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        selectedSize: size
+      }
+    }));
   };
 
-  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSortOption(e.target.value);
-  };
-
-  const setProductRef = (element: HTMLDivElement | null, index: number) => {
-    if (element) {
-      productRefs.current.set(index, element);
-    } else {
-      productRefs.current.delete(index);
+  const handleQuickAddClick = async (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    
+    const productId = product.id;
+    const selectionState = selectionStates[productId];
+    
+    if (!selectionState || !selectionState.selectedColor || !selectionState.selectedSize) {
+      console.error('Selecciona color y talla primero');
+      return;
+    }
+    
+    // Buscar la variante específica seleccionada
+    const selectedVariant = product.variants.find(v => 
+      v.color === selectionState.selectedColor && 
+      v.size === selectionState.selectedSize
+    );
+    
+    if (!selectedVariant) {
+      console.error('Variante no disponible');
+      return;
+    }
+    
+    if (selectedVariant.stock <= 0) {
+      console.error('Stock agotado para esta variante');
+      return;
+    }
+    
+    setQuickAddLoading(productId);
+    
+    try {
+      await addToCart(selectedVariant.id, 1);
+      console.log('Producto agregado al carrito:', productId);
+      
+      // Aquí podrías mostrar una notificación de éxito
+    } catch (error) {
+      console.error('Error al agregar al carrito:', error);
+      // Aquí podrías mostrar una notificación de error
+    } finally {
+      setQuickAddLoading(null);
     }
   };
 
-  // Obtener colores únicos de un producto
-  const getUniqueColors = (variants: ProductVariant[]): string[] => {
-    const colors = [...new Set(variants.map((v) => v.color))];
-    return colors.slice(0, 6); // Mostrar hasta 6 colores
-  };
-
-  // Obtener tallas disponibles para un color específico
-  const getSizesForColor = (variants: ProductVariant[], color: string): string[] => {
-    const sizes = variants
-      .filter(v => v.color === color && v.stock > 0)
-      .map(v => v.size)
-      .filter((size, index, self) => self.indexOf(size) === index); // Eliminar duplicados
-    
-    return sizes.sort((a, b) => {
-      // Ordenar tallas: XS, S, M, L, XL, etc.
-      const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-      return sizeOrder.indexOf(a) - sizeOrder.indexOf(b);
-    });
-  };
-
-  // Verificar si hay stock bajo
   const hasLowStock = (variants: ProductVariant[]) => {
     return variants.some((v) => v.stock > 0 && v.stock <= 3);
   };
 
-  // Verificar si es nuevo (últimos 30 días)
   const isNew = (createdAt?: string) => {
     if (!createdAt) return false;
     const productDate = new Date(createdAt);
@@ -299,115 +315,6 @@ const Menu: React.FC = () => {
     return productDate >= thirtyDaysAgo;
   };
 
-  // Cambiar imagen al seleccionar color
-  const handleColorSelect = (e: React.MouseEvent, productId: number, color: string) => {
-    e.stopPropagation();
-    
-    setImageStates(prev => {
-      const currentState = prev[productId];
-      if (!currentState || currentState.selectedColor === color) return prev;
-      
-      const newImageUrl = currentState.imagesByColor[color] || 
-                         Object.values(currentState.imagesByColor)[0];
-      
-      if (!newImageUrl) return prev;
-      
-      // Limpiar timeout anterior si existe
-      const existingTimeout = imageTimeouts.current.get(productId);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-      
-      // Establecer un nuevo timeout para actualizar después de la animación
-      const timeout = setTimeout(() => {
-        setImageStates(prevState => ({
-          ...prevState,
-          [productId]: {
-            ...prevState[productId],
-            selectedColor: color
-          }
-        }));
-      }, 300);
-      
-      imageTimeouts.current.set(productId, timeout);
-      
-      return {
-        ...prev,
-        [productId]: {
-          ...currentState,
-          selectedColor: color
-        }
-      };
-    });
-  };
-
-  // Función para manejar el agregado rápido al carrito
-  const handleQuickAddClick = async (e: React.MouseEvent, product: Product) => {
-    e.stopPropagation();
-    
-    const productId = product.id;
-    const imageState = imageStates[productId];
-    
-    if (!imageState || !product.variants.length) {
-      console.error('Producto o variantes no disponibles');
-      return;
-    }
-    
-    // Buscar variante con el color seleccionado y primera talla disponible
-    const selectedColor = imageState.selectedColor;
-    const variantsForColor = product.variants.filter(v => 
-      v.color === selectedColor && v.stock > 0
-    );
-    
-    if (variantsForColor.length === 0) {
-      console.error('No hay stock disponible para este color');
-      return;
-    }
-    
-    // Ordenar variantes por talla y tomar la primera
-    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    const sortedVariants = variantsForColor.sort((a, b) => 
-      sizeOrder.indexOf(a.size) - sizeOrder.indexOf(b.size)
-    );
-    
-    const selectedVariant = sortedVariants[0];
-    
-    if (!selectedVariant) {
-      console.error('No se pudo encontrar una variante válida');
-      return;
-    }
-    
-    setQuickAddLoading(productId);
-    
-    try {
-      // Usar el contexto del carrito para agregar el producto
-      await addToCart(selectedVariant.id, 1);
-      
-      // Aquí podrías mostrar una notificación de éxito
-      console.log('Producto agregado al carrito:', productId);
-      
-    } catch (error) {
-      console.error('Error al agregar al carrito:', error);
-      // Aquí podrías mostrar una notificación de error
-    } finally {
-      setQuickAddLoading(null);
-    }
-  };
-
-  // Obtener la URL de imagen actual para un producto
-  const getCurrentImageUrl = (productId: number): string => {
-    const state = imageStates[productId];
-    if (!state || !state.imagesByColor[state.selectedColor]) {
-      const product = products.find(p => p.id === productId);
-      const firstVariant = product?.variants[0];
-      const firstImage = firstVariant?.images?.[0]?.imageUrl;
-      return firstImage || '/images/placeholder.png';
-    }
-    
-    return state.imagesByColor[state.selectedColor];
-  };
-
-  // Renderizar badges de género (actualizado)
   const renderGenderBadge = (gender: ProductGender) => {
     const badgeConfig = {
       [ProductGender.NINAS]: { text: 'NIÑAS', color: '#E9566D' },
@@ -426,6 +333,14 @@ const Menu: React.FC = () => {
         {config.text}
       </span>
     );
+  };
+
+  const setProductRef = (element: HTMLDivElement | null, index: number) => {
+    if (element) {
+      productRefs.current.set(index, element);
+    } else {
+      productRefs.current.delete(index);
+    }
   };
 
   if (loading) return (
@@ -458,7 +373,7 @@ const Menu: React.FC = () => {
         </div>
       </div>
 
-      {/* Barra de filtros mejorada */}
+      {/* Barra de filtros */}
       <div className={styles.filterBar}>
         <div className={styles.filterBarInner}>
           <div className={styles.resultsCount}>
@@ -472,7 +387,7 @@ const Menu: React.FC = () => {
                 <path d="M3 6H21M6 12H18M9 18H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
-            <select id="sort" className={styles.filterSelect} value={sortOption} onChange={handleSortChange}>
+            <select id="sort" className={styles.filterSelect} value={sortOption} onChange={(e) => setSortOption(e.target.value)}>
               <option value="">Ordenar por</option>
               <option value="price-asc">Precio: Menor a mayor</option>
               <option value="price-desc">Precio: Mayor a menor</option>
@@ -500,13 +415,14 @@ const Menu: React.FC = () => {
           sortedProducts.slice(0, visibleCount).map((product, index) => {
             const price = getMinPrice(product.variants);
             const colors = getUniqueColors(product.variants);
-            const currentImageUrl = getCurrentImageUrl(product.id);
-            const imageState = imageStates[product.id];
-            const selectedColor = imageState?.selectedColor || colors[0];
+            const selectionState = selectionStates[product.id] || {
+              selectedColor: colors[0] || '',
+              selectedSize: '',
+              availableSizes: []
+            };
             
-            // Obtener tallas para el color seleccionado
-            const sizesForColor = selectedColor ? 
-              getSizesForColor(product.variants, selectedColor).slice(0, 3) : [];
+            const currentImageUrl = getImageForColor(product.variants, selectionState.selectedColor);
+            const availableSizes = selectionState.availableSizes || [];
 
             return (
               <div
@@ -514,7 +430,7 @@ const Menu: React.FC = () => {
                 ref={(el) => setProductRef(el, index)}
                 data-index={index}
                 className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''}`}
-                onClick={() => handleProductClick(product.id)}
+                onClick={() => router.push(`/product?id=${product.id}`)}
               >
                 {/* Badges */}
                 <div className={styles.productBadges}>
@@ -523,17 +439,15 @@ const Menu: React.FC = () => {
                   {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
                 </div>
 
-                {/* Imagen con overlay y animación */}
+                {/* Imagen con overlay */}
                 <div className={styles.productImageContainer}>
                   <Image
                     src={currentImageUrl}
                     alt={product.name}
                     width={854}
                     height={1280}
-                    className={`${styles.productImage} ${
-                      imageState && styles.imageTransition
-                    }`}
-                    priority={index < 6} // Priorizar carga de primeras imágenes
+                    className={`${styles.productImage}`}
+                    priority={index < 6}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.src = '/images/placeholder.png';
@@ -548,14 +462,14 @@ const Menu: React.FC = () => {
                 <div className={styles.productDetails}>
                   <h3 className={styles.productName}>{product.name}</h3>
 
-                  {/* Colores disponibles con interacción */}
+                  {/* Selector de color */}
                   {colors.length > 0 && (
                     <div className={styles.productColors}>
                       {colors.map((color, i) => (
                         <button
                           key={i}
                           className={`${styles.colorDotBtn} ${
-                            selectedColor === color ? styles.colorDotSelected : ''
+                            selectionState.selectedColor === color ? styles.colorDotSelected : ''
                           }`}
                           title={color}
                           style={{
@@ -573,19 +487,22 @@ const Menu: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Tallas disponibles para el color seleccionado */}
-                  {selectedColor && sizesForColor.length > 0 && (
+                  {/* Selector de talla */}
+                  {selectionState.selectedColor && availableSizes.length > 0 && (
                     <div className={styles.productSizes}>
-                      <span className={styles.sizesLabel}>Tallas:</span>
-                      <div className={styles.sizesContainer}>
-                        {sizesForColor.map((size, i) => (
-                          <span key={i} className={styles.sizeTag}>
+                      <div className={styles.sizesSelector}>
+                        {availableSizes.map((size, i) => (
+                          <button
+                            key={i}
+                            className={`${styles.sizeOption} ${
+                              selectionState.selectedSize === size ? styles.sizeOptionSelected : ''
+                            }`}
+                            onClick={(e) => handleSizeSelect(e, product.id, size)}
+                            disabled={quickAddLoading === product.id}
+                          >
                             {size}
-                          </span>
+                          </button>
                         ))}
-                        {getSizesForColor(product.variants, selectedColor).length > 3 && (
-                          <span className={styles.sizeMore}>+{getSizesForColor(product.variants, selectedColor).length - 3}</span>
-                        )}
                       </div>
                     </div>
                   )}
@@ -598,23 +515,25 @@ const Menu: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Botón de acción rápida */}
-                <button 
-                  className={`${styles.quickAddBtn} ${
-                    quickAddLoading === product.id ? styles.quickAddLoading : ''
-                  }`}
-                  aria-label="Agregar al carrito"
-                  onClick={(e) => handleQuickAddClick(e, product)}
-                  disabled={quickAddLoading === product.id}
-                >
-                  {quickAddLoading === product.id ? (
-                    <div className={styles.quickAddSpinner}></div>
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  )}
-                </button>
+                {/* Botón de agregar rápido - solo visible si hay color y talla seleccionados */}
+                {selectionState.selectedColor && selectionState.selectedSize && (
+                  <button 
+                    className={`${styles.quickAddBtn} ${
+                      quickAddLoading === product.id ? styles.quickAddLoading : ''
+                    }`}
+                    aria-label="Agregar al carrito"
+                    onClick={(e) => handleQuickAddClick(e, product)}
+                    disabled={quickAddLoading === product.id}
+                  >
+                    {quickAddLoading === product.id ? (
+                      <div className={styles.quickAddSpinner}></div>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </button>
+                )}
               </div>
             );
           })
@@ -623,7 +542,7 @@ const Menu: React.FC = () => {
 
       {/* Botón mostrar más */}
       {visibleCount < sortedProducts.length && (
-        <button className={styles.viewAllButton} onClick={handleShowMore}>
+        <button className={styles.viewAllButton} onClick={() => setVisibleCount(prev => prev + 20)}>
           <span>Mostrar más productos</span>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path

@@ -1035,4 +1035,132 @@
   }
 }
 
-/* Añadir estas actualizaciones al CSS existente */
+/* =============================================
+   SELECTORES DE TALLAS CON ESTILO COHERENTE
+   ============================================= */
+
+/* Contenedor de tallas */
+.productSizes {
+  margin-bottom: 0.75rem;
+}
+
+.sizesSelector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+/* Botones de talla - estilo similar a los colores */
+.sizeOption {
+  padding: 0.4rem 0.7rem;
+  border: 2px solid #e2e8f0;
+  background: var(--color-white);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary); /* Azul oscuro */
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 36px;
+  text-align: center;
+  position: relative;
+}
+
+/* Hover de talla */
+.sizeOption:hover:not(:disabled) {
+  border-color: var(--color-secondary);
+  color: var(--color-primary);
+  background: rgba(61, 178, 138, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(61, 178, 138, 0.1);
+}
+
+/* Talla seleccionada - bolita verde (igual que los colores) */
+.sizeOptionSelected {
+  border-color: var(--color-secondary);
+  color: var(--color-primary);
+  background: var(--color-white);
+  position: relative;
+}
+
+.sizeOptionSelected::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  background: var(--color-secondary);
+  border: 2px solid var(--color-white);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+/* Talla deshabilitada (sin stock) */
+.sizeOption:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
+/* Ajustar altura de detalles del producto para incluir selectores */
+.productDetails {
+  min-height: 150px; /* Aumentado para selectores */
+}
+
+/* Botón de agregar rápido - solo cuando hay selección */
+.quickAddBtn:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Responsive para selectores de tallas */
+@media (max-width: 768px) {
+  .productDetails {
+    min-height: 140px;
+  }
+  
+  .sizeOption {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.7rem;
+    min-width: 32px;
+  }
+  
+  .sizeOptionSelected::after {
+    width: 10px;
+    height: 10px;
+    top: -3px;
+    right: -3px;
+  }
+  
+  .sizesSelector {
+    gap: 0.3rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .productDetails {
+    min-height: 130px;
+  }
+  
+  .sizeOption {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.65rem;
+    min-width: 28px;
+  }
+  
+  .sizeOptionSelected::after {
+    width: 8px;
+    height: 8px;
+    top: -2px;
+    right: -2px;
+  }
+  
+  .sizesSelector {
+    gap: 0.25rem;
+  }
+}
