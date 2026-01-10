@@ -860,3 +860,179 @@
     max-width: 1600px;
   }
 }
+/* =============================================
+   A MARTE - MENU DE PRODUCTOS - ACTUALIZACIONES
+   ============================================= */
+
+/* Variables CSS locales (agregar si no existen) */
+.menuContainer {
+  --color-ninas: #E9566D;
+  --color-ninos: #103359;
+  --color-unisex: #3DB28A;
+  /* ... resto de variables existentes ... */
+}
+
+/* Badge de género */
+.badgeGender {
+  background: var(--color-primary);
+  color: var(--color-white);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Botones de color interactivos */
+.colorDotBtn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  padding: 2px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast);
+}
+
+.colorDotBtn:hover {
+  transform: scale(1.15);
+}
+
+.colorDot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--color-white);
+  box-shadow: 0 0 0 1px rgba(16, 51, 89, 0.15);
+}
+
+.colorDotSelected .colorDot {
+  box-shadow: 0 0 0 2px var(--color-secondary),
+              0 0 0 3px var(--color-white);
+}
+
+/* Sección de tallas */
+.productSizes {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.8rem;
+}
+
+.sizesLabel {
+  color: var(--color-text-light);
+  font-weight: 500;
+  font-size: 0.75rem;
+}
+
+.sizesContainer {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.sizeTag {
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(16, 51, 89, 0.1);
+}
+
+.sizeMore {
+  font-size: 0.7rem;
+  color: var(--color-text-light);
+  font-weight: 600;
+  margin-left: 0.25rem;
+}
+
+/* Animación de transición de imagen */
+.imageTransition {
+  transition: opacity 0.3s ease-in-out;
+}
+
+.productImageContainer:hover .imageTransition {
+  opacity: 0.9;
+}
+
+/* Spinner para botón de agregar rápido */
+.quickAddSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--color-white);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.quickAddLoading {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ajustes para mostrar más colores */
+.productColors {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.colorMore {
+  font-size: 0.7rem;
+  color: var(--color-text-light);
+  font-weight: 600;
+  margin-left: 0.25rem;
+}
+
+/* Ajuste de altura mínima para detalles del producto */
+.productDetails {
+  min-height: 120px; /* Aumentado para acomodar tallas */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .productSizes {
+    font-size: 0.75rem;
+  }
+  
+  .sizeTag {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.3rem;
+  }
+  
+  .productDetails {
+    min-height: 110px;
+  }
+}
+
+@media (max-width: 576px) {
+  .productDetails {
+    min-height: 100px;
+  }
+  
+  .productSizes {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .sizesContainer {
+    width: 100%;
+  }
+}
+
+/* Añadir estas actualizaciones al CSS existente */

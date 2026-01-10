@@ -31,10 +31,10 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
 
   // Configuración CORREGIDA con tipos específicos
   const cloudinaryConfig: CloudinaryUploadWidgetOptions = {
-    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '',
+    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dzs8sf5li',
     uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ecommerce_uploads',
     folder: 'ecommerce/productos',
-    sources: ['local', 'url'] as CloudinaryUploadWidgetOptions['sources'], // Cast necesario
+    sources: ['local', 'url'] as any, // Cast para evitar errores de tipos
     multiple: false,
     maxFiles: 1,
     clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
@@ -78,7 +78,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         largeUrl: largeUrl
       };
       
-      // Llamar a la función callback con parámetros opcionales
+      // Llamar a la función callback
       onUploadSuccess(imageData, variantIndex, imageIndex);
       
       setPreviewUrl(thumbnailUrl);
@@ -96,15 +96,19 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
     
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecciona solo archivos de imagen (JPG, PNG, etc.)');
+      return;
+    }
+    
     setUploading(true);
     
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', cloudinaryConfig.uploadPreset!);
-    formData.append('folder', cloudinaryConfig.folder!);
-    formData.append('cloud_name', cloudinaryConfig.cloudName!);
-    
     try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', cloudinaryConfig.uploadPreset!);
+      formData.append('folder', cloudinaryConfig.folder!);
+      
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/upload`,
         {

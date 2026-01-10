@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { MENU_PRODUCTS } from "../utils/Api";
 import React, { useState, useEffect } from "react";
@@ -6,13 +6,26 @@ import { useRouter } from "next/navigation";
 import ImageUploader from "./ImageUploader";
 import styles from "./Admin.module.css";
 
+// Tipos de datos compatibles
 interface Image {
   id?: number;
   fileName: string;
   imageUrl: string;
-  thumbnailUrl?: string;
-  mediumUrl?: string;
-  largeUrl?: string;
+  thumbnailUrl: string;
+  mediumUrl: string;
+  largeUrl: string;
+}
+
+interface Size {
+  size: string;
+  stock: number;
+  price: number;
+}
+
+interface ColorVariant {
+  color: string;
+  images: Image[];
+  sizes: Size[];
 }
 
 interface Variant {
@@ -21,7 +34,7 @@ interface Variant {
   size: string;
   stock: number;
   price: number;
-  images: Image[];
+  images?: Image[];
 }
 
 interface Product {
@@ -40,29 +53,42 @@ interface ApiResponse {
   [key: string]: any;
 }
 
+// Tipo para datos de imagen subida desde ImageUploader
+interface ImageData {
+  fileName: string;
+  imageUrl: string;
+  thumbnailUrl: string;
+  mediumUrl: string;
+  largeUrl: string;
+}
+
 const Admin = () => {
   const router = useRouter();
   const [role, setRole] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
+  // Estado para formulario compacto
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [gender, setGender] = useState("");
-  const [type, setType] = useState("SUPERIOR"); // Por defecto SUPERIOR
-
-  const [variants, setVariants] = useState<Variant[]>([
+  const [colorVariants, setColorVariants] = useState<ColorVariant[]>([
     {
       color: "",
-      size: "",
-      stock: 0,
-      price: 0,
-      images: [{ fileName: "", imageUrl: "" }],
-    },
+      images: [{ 
+        fileName: "", 
+        imageUrl: "", 
+        thumbnailUrl: "", 
+        mediumUrl: "", 
+        largeUrl: "" 
+      }],
+      sizes: [{ size: "", stock: 0, price: 0 }]
+    }
   ]);
 
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const [collapsedColors, setCollapsedColors] = useState<number[]>([]);
 
   useEffect(() => {
     const storedRole = localStorage.getItem("role");
@@ -97,107 +123,133 @@ const Admin = () => {
     }
   };
 
-  const handleVariantChange = (index: number, field: string, value: string | number) => {
-    const updatedVariants = [...variants];
-    const variant = updatedVariants[index];
-    
-    switch (field) {
-      case 'color':
-        variant.color = value as string;
-        break;
-      case 'size':
-        variant.size = value as string;
-        break;
-      case 'stock':
-        variant.stock = value as number;
-        break;
-      case 'price':
-        variant.price = value as number;
-        break;
+  // Manejar color - compacto
+  const handleColorChange = (colorIndex: number, value: string) => {
+    const updatedColors = [...colorVariants];
+    updatedColors[colorIndex].color = value;
+    setColorVariants(updatedColors);
+  };
+
+  // Manejar imágenes del color
+  const handleImageUploaded = (imageData: ImageData, colorIndex?: number, imageIndex?: number) => {
+    if (colorIndex === undefined || imageIndex === undefined) {
+      console.error("Índices no definidos");
+      return;
     }
-    
-    setVariants(updatedVariants);
-  };
 
-  const handleImageUploaded = (imageData: any, variantIndex: number, imageIndex: number) => {
-      if (variantIndex === undefined || imageIndex === undefined) return;
-
-    const updatedVariants = [...variants];
-    const image = updatedVariants[variantIndex].images[imageIndex];
+    const updatedColors = [...colorVariants];
     
-    // Actualizar con los datos de Cloudinary
-    image.fileName = imageData.fileName;
-  image.imageUrl = imageData.imageUrl;
-  image.thumbnailUrl = imageData.thumbnailUrl;
-  image.mediumUrl = imageData.mediumUrl;
-  image.largeUrl = imageData.largeUrl;
-    
-    setVariants(updatedVariants);
-    
-    // Mostrar mensaje de éxito
-  console.log("✅ Imagen subida a Cloudinary:", imageData);
-  };
-
-  const handleImageChange = (variantIndex: number, imageIndex: number, field: string, value: string) => {
-    const updatedVariants = [...variants];
-    const image = updatedVariants[variantIndex].images[imageIndex];
-    
-    switch (field) {
-      case 'fileName':
-        image.fileName = value;
-        break;
-      case 'imageUrl':
-        image.imageUrl = value;
-        break;
+    if (colorIndex < updatedColors.length && 
+        imageIndex < updatedColors[colorIndex].images.length) {
+      
+      const image = updatedColors[colorIndex].images[imageIndex];
+      
+      // Actualizar con datos de Cloudinary
+      image.fileName = imageData.fileName;
+      image.imageUrl = imageData.imageUrl;
+      image.thumbnailUrl = imageData.thumbnailUrl;
+      image.mediumUrl = imageData.mediumUrl;
+      image.largeUrl = imageData.largeUrl;
+      
+      setColorVariants(updatedColors);
+      console.log("✅ Imagen actualizada para color:", updatedColors[colorIndex].color);
+    } else {
+      console.error("Índices fuera de rango");
     }
-    
-    setVariants(updatedVariants);
   };
 
-  const handleAddImage = (variantIndex: number) => {
-    const updatedVariants = [...variants];
-    updatedVariants[variantIndex].images.push({ 
+  const handleAddImage = (colorIndex: number) => {
+    const updatedColors = [...colorVariants];
+    updatedColors[colorIndex].images.push({ 
       fileName: "", 
       imageUrl: "",
       thumbnailUrl: "",
       mediumUrl: "",
       largeUrl: ""
     });
-    setVariants(updatedVariants);
+    setColorVariants(updatedColors);
   };
 
-  const handleRemoveImage = (variantIndex: number, imageIndex: number) => {
-    const updatedVariants = [...variants];
-    if (updatedVariants[variantIndex].images.length > 1) {
-      updatedVariants[variantIndex].images.splice(imageIndex, 1);
-      setVariants(updatedVariants);
+  const handleRemoveImage = (colorIndex: number, imageIndex: number) => {
+    const updatedColors = [...colorVariants];
+    if (updatedColors[colorIndex].images.length > 1) {
+      updatedColors[colorIndex].images.splice(imageIndex, 1);
+      setColorVariants(updatedColors);
     }
   };
 
-  const handleAddVariant = () => {
-    setVariants([
-      ...variants,
+  // Manejar tallas de un color
+  const handleSizeChange = (colorIndex: number, sizeIndex: number, field: keyof Size, value: string | number) => {
+    const updatedColors = [...colorVariants];
+    
+    if (colorIndex < updatedColors.length && 
+        sizeIndex < updatedColors[colorIndex].sizes.length) {
+      
+      const size = updatedColors[colorIndex].sizes[sizeIndex];
+      
+      if (field === 'size') size.size = value as string;
+      else if (field === 'stock') size.stock = Number(value);
+      else if (field === 'price') size.price = Number(value);
+      
+      setColorVariants(updatedColors);
+    }
+  };
+
+  const handleAddSize = (colorIndex: number) => {
+    const updatedColors = [...colorVariants];
+    updatedColors[colorIndex].sizes.push({ 
+      size: "", 
+      stock: 0, 
+      price: 0 
+    });
+    setColorVariants(updatedColors);
+  };
+
+  const handleRemoveSize = (colorIndex: number, sizeIndex: number) => {
+    const updatedColors = [...colorVariants];
+    if (updatedColors[colorIndex].sizes.length > 1) {
+      updatedColors[colorIndex].sizes.splice(sizeIndex, 1);
+      setColorVariants(updatedColors);
+    }
+  };
+
+  // Manejar colores
+  const handleAddColor = () => {
+    setColorVariants([
+      ...colorVariants,
       {
         color: "",
-        size: "",
-        stock: 0,
-        price: 0,
         images: [{ 
           fileName: "", 
-          imageUrl: "",
-          thumbnailUrl: "",
-          mediumUrl: "",
-          largeUrl: ""
+          imageUrl: "", 
+          thumbnailUrl: "", 
+          mediumUrl: "", 
+          largeUrl: "" 
         }],
-      },
+        sizes: [{ size: "", stock: 0, price: 0 }]
+      }
     ]);
   };
 
-  const handleRemoveVariant = (index: number) => {
-    if (variants.length > 1) {
-      const updatedVariants = variants.filter((_, i) => i !== index);
-      setVariants(updatedVariants);
+  const handleRemoveColor = (colorIndex: number) => {
+    if (colorVariants.length > 1) {
+      const updatedColors = colorVariants.filter((_, i) => i !== colorIndex);
+      setColorVariants(updatedColors);
+      // Ajustar collapsed colors
+      setCollapsedColors(prev => prev
+        .filter(index => index !== colorIndex)
+        .map(index => index > colorIndex ? index - 1 : index)
+      );
     }
+  };
+
+  // Toggle collapse de color
+  const toggleColorCollapse = (colorIndex: number) => {
+    setCollapsedColors(prev => 
+      prev.includes(colorIndex) 
+        ? prev.filter(i => i !== colorIndex)
+        : [...prev, colorIndex]
+    );
   };
 
   const validateForm = () => {
@@ -206,26 +258,64 @@ const Admin = () => {
       return false;
     }
 
-    for (let i = 0; i < variants.length; i++) {
-      const variant = variants[i];
-      if (
-        !variant.color.trim() ||
-        !variant.size.trim() ||
-        variant.stock <= 0 ||
-        variant.price <= 0
-      ) {
-        alert(`La variante ${i + 1} tiene campos incompletos o valores inválidos.`);
+    for (let i = 0; i < colorVariants.length; i++) {
+      const colorVariant = colorVariants[i];
+      
+      if (!colorVariant.color.trim()) {
+        alert(`El color ${i + 1} no tiene nombre.`);
         return false;
       }
 
-      // Verificar que todas las imágenes tengan URL (puede ser de Cloudinary o manual)
-      if (variant.images.some((img) => !img.imageUrl.trim())) {
-        alert(`La variante ${i + 1} tiene imágenes sin subir. Por favor, sube las imágenes.`);
+      // Verificar imágenes del color
+      if (colorVariant.images.some(img => !img.imageUrl.trim())) {
+        alert(`El color "${colorVariant.color}" tiene imágenes sin subir.`);
         return false;
+      }
+
+      // Verificar tallas del color
+      for (let j = 0; j < colorVariant.sizes.length; j++) {
+        const size = colorVariant.sizes[j];
+        if (!size.size.trim() || size.stock <= 0 || size.price <= 0) {
+          alert(`El color "${colorVariant.color}" tiene tallas incompletas.`);
+          return false;
+        }
       }
     }
 
     return true;
+  };
+
+  const transformToProductData = (): Product => {
+    // Transformar la estructura compacta a la estructura esperada por el backend
+    const variants: Variant[] = [];
+    
+    colorVariants.forEach(colorVariant => {
+      colorVariant.sizes.forEach(size => {
+        variants.push({
+          color: colorVariant.color.trim(),
+          size: size.size.trim(),
+          stock: Number(size.stock),
+          price: Number(size.price),
+          images: colorVariant.images.map(img => ({
+            ...(img.id ? { id: img.id } : {}),
+            fileName: img.fileName.trim() || `producto_${colorVariant.color}`,
+            imageUrl: img.imageUrl.trim(),
+            thumbnailUrl: img.thumbnailUrl,
+            mediumUrl: img.mediumUrl,
+            largeUrl: img.largeUrl
+          }))
+        });
+      });
+    });
+
+    return {
+      ...(editingProductId ? { id: editingProductId } : {}),
+      name: name.trim(),
+      description: description.trim(),
+      gender: gender.trim(),
+      type: "SUPERIOR",
+      variants
+    };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -235,70 +325,39 @@ const Admin = () => {
 
     setIsLoading(true);
 
-    // Preparar los datos para enviar al backend Spring
-    const productData: Product = {
-      name: name.trim(),
-      description: description.trim(),
-      gender: gender.trim(),
-      type: "SUPERIOR", // Siempre SUPERIOR
-      variants: variants.map(variant => ({
-        ...(editingProductId && variant.id ? { id: variant.id } : {}),
-        color: variant.color.trim(),
-        size: variant.size.trim(),
-        stock: Number(variant.stock),
-        price: Number(variant.price),
-        images: variant.images.map(img => ({
-          ...(editingProductId && img.id ? { id: img.id } : {}),
-          fileName: img.fileName.trim() || "producto_imagen",
-          imageUrl: img.imageUrl.trim(),
-          // Opcional: enviar también las URLs optimizadas si tu backend las soporta
-          ...(img.thumbnailUrl && { thumbnailUrl: img.thumbnailUrl }),
-          ...(img.mediumUrl && { mediumUrl: img.mediumUrl }),
-          ...(img.largeUrl && { largeUrl: img.largeUrl })
-        }))
-      }))
-    };
-
-    // Solo incluir el ID del producto si estamos editando
-    if (editingProductId) {
-      productData.id = editingProductId;
-    }
+    const productData = transformToProductData();
 
     try {
       const token = localStorage.getItem("token");
-
-      const response = editingProductId
-        ? await fetch(`${MENU_PRODUCTS}/${editingProductId}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(productData),
-          })
-        : await fetch(MENU_PRODUCTS, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(productData),
-          });
+      const url = editingProductId 
+        ? `${MENU_PRODUCTS}/${editingProductId}`
+        : MENU_PRODUCTS;
+      
+      const method = editingProductId ? "PUT" : "POST";
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(productData),
+      });
 
       const result: ApiResponse = await response.json();
       
       if (response.ok) {
         console.log("✅ Producto guardado/actualizado:", result);
-        alert(result.message || (editingProductId ? "Producto actualizado exitosamente" : "Producto creado exitosamente"));
+        alert(editingProductId ? "Producto actualizado" : "Producto creado");
         fetchProducts();
         resetForm();
       } else {
-        console.error("❌ Error al guardar el producto:", result);
-        alert(`Error: ${result.message || "No se pudo guardar el producto"}`);
+        console.error("❌ Error:", result);
+        alert(`Error: ${result.message || "No se pudo guardar"}`);
       }
     } catch (error) {
       console.error("Error en la solicitud:", error);
-      alert("Error de conexión. Por favor, inténtalo de nuevo.");
+      alert("Error de conexión");
     } finally {
       setIsLoading(false);
     }
@@ -308,46 +367,68 @@ const Admin = () => {
     setName("");
     setDescription("");
     setGender("");
-    setType("SUPERIOR"); // Restablecer a SUPERIOR
-    setVariants([
+    setColorVariants([
       {
         color: "",
-        size: "",
-        stock: 0,
-        price: 0,
         images: [{ 
           fileName: "", 
-          imageUrl: "",
-          thumbnailUrl: "",
-          mediumUrl: "",
-          largeUrl: ""
+          imageUrl: "", 
+          thumbnailUrl: "", 
+          mediumUrl: "", 
+          largeUrl: "" 
         }],
-      },
+        sizes: [{ size: "", stock: 0, price: 0 }]
+      }
     ]);
     setEditingProductId(null);
+    setCollapsedColors([]);
   };
 
   const handleEdit = (product: Product) => {
     setName(product.name);
     setDescription(product.description);
     setGender(product.gender);
-    setType(product.type);
     
-    // Asegurar que todas las imágenes tengan los campos de Cloudinary
-    const updatedVariants = product.variants.map(variant => ({
-      ...variant,
-      images: variant.images.map(img => ({
-        ...img,
-        thumbnailUrl: img.thumbnailUrl || img.imageUrl,
-        mediumUrl: img.mediumUrl || img.imageUrl,
-        largeUrl: img.largeUrl || img.imageUrl
-      }))
-    }));
+    // Agrupar variantes por color
+    const colorsMap = new Map<string, ColorVariant>();
     
-    setVariants(updatedVariants);
+    product.variants.forEach(variant => {
+      if (!colorsMap.has(variant.color)) {
+        colorsMap.set(variant.color, {
+          color: variant.color,
+          images: variant.images && variant.images.length > 0 
+            ? variant.images.map(img => ({
+                ...img,
+                thumbnailUrl: img.thumbnailUrl || img.imageUrl,
+                mediumUrl: img.mediumUrl || img.imageUrl,
+                largeUrl: img.largeUrl || img.imageUrl
+              }))
+            : [{ 
+                fileName: "", 
+                imageUrl: "", 
+                thumbnailUrl: "", 
+                mediumUrl: "", 
+                largeUrl: "" 
+              }],
+          sizes: []
+        });
+      }
+      
+      const colorData = colorsMap.get(variant.color)!;
+      colorData.sizes.push({
+        size: variant.size,
+        stock: variant.stock,
+        price: variant.price
+      });
+    });
+    
+    const groupedColors = Array.from(colorsMap.values());
+    setColorVariants(groupedColors);
     setEditingProductId(product.id || null);
     
-    // Scroll to form
+    // Colapsar todos los colores excepto el primero
+    setCollapsedColors(groupedColors.map((_, i) => i > 0 ? i : -1).filter(i => i >= 0));
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -355,12 +436,7 @@ const Admin = () => {
     const product = products.find(p => p.id === id);
     if (!product) return;
 
-    const confirmDelete = window.confirm(
-      `¿Estás seguro de que quieres eliminar el producto "${product.name}"?\n\n` +
-      `Esta acción eliminará automáticamente cualquier referencia en carritos de compra.`
-    );
-
-    if (!confirmDelete) return;
+    if (!window.confirm(`¿Eliminar "${product.name}"?`)) return;
 
     setIsDeleting(id);
 
@@ -377,48 +453,25 @@ const Admin = () => {
       const result: ApiResponse = await response.json();
       
       if (response.ok) {
-        console.log("✅ Producto eliminado:", result);
-        alert(result.message || "Producto eliminado exitosamente");
+        alert("Producto eliminado");
         fetchProducts();
-      } else {
-        console.error("❌ Error al eliminar el producto:", result);
-        
-        if (response.status === 409) {
-          // CONFLICT - Producto en uso, ofrecer eliminación forzada
-          const forceDelete = window.confirm(
-            `${result.message || "El producto está en carritos de compra."}\n\n` +
-            `¿Deseas eliminar forzadamente el producto?\n` +
-            `(Esto eliminará las referencias de los carritos)`
-          );
-          
-          if (forceDelete) {
-            await handleDeleteForce(id);
-          }
-        } else {
-          alert(`Error: ${result.message || "No se pudo eliminar el producto"}`);
+      } else if (response.status === 409) {
+        if (window.confirm("Producto en carritos. ¿Eliminar forzadamente?")) {
+          await handleDeleteForce(id);
         }
+      } else {
+        alert(`Error: ${result.message}`);
       }
     } catch (error) {
-      console.error("Error en la solicitud:", error);
-      alert("Error de conexión. Por favor, inténtalo de nuevo.");
+      console.error("Error:", error);
+      alert("Error de conexión");
     } finally {
       setIsDeleting(null);
     }
   };
 
   const handleDeleteForce = async (id: number) => {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-
-    const confirmForceDelete = window.confirm(
-      `⚠️ ADVERTENCIA: Eliminación Forzada\n\n` +
-      `¿Estás seguro de que quieres ELIMINAR FORZADAMENTE el producto "${product.name}"?\n\n` +
-      `Esta acción eliminará el producto y todas sus referencias en carritos de compra.\n` +
-      `Los usuarios perderán estos productos de sus carritos.\n\n` +
-      `¿Continuar?`
-    );
-
-    if (!confirmForceDelete) return;
+    if (!window.confirm("⚠️ ¿Eliminar forzadamente?")) return;
 
     setIsDeleting(id);
 
@@ -435,16 +488,14 @@ const Admin = () => {
       const result: ApiResponse = await response.json();
       
       if (response.ok) {
-        console.log("✅ Producto eliminado forzadamente:", result);
-        alert(result.message || "Producto eliminado forzadamente exitosamente");
+        alert("Producto eliminado forzadamente");
         fetchProducts();
       } else {
-        console.error("❌ Error al eliminar forzadamente:", result);
-        alert(`Error: ${result.message || "No se pudo eliminar el producto forzadamente"}`);
+        alert(`Error: ${result.message}`);
       }
     } catch (error) {
-      console.error("Error en la solicitud:", error);
-      alert("Error de conexión. Por favor, inténtalo de nuevo.");
+      console.error("Error:", error);
+      alert("Error de conexión");
     } finally {
       setIsDeleting(null);
     }
@@ -452,15 +503,15 @@ const Admin = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-      .then(() => alert("URL copiada al portapapeles!"))
-      .catch(err => console.error("Error al copiar:", err));
+      .then(() => alert("URL copiada!"))
+      .catch(err => console.error("Error:", err));
   };
 
   if (role !== "ROLE_ADMIN") {
     return (
       <div className={styles.container}>
         <h2 className={styles.title}>Acceso Denegado</h2>
-        <p>No tienes permisos para acceder a esta página.</p>
+        <p>No tienes permisos para acceder.</p>
       </div>
     );
   }
@@ -472,6 +523,7 @@ const Admin = () => {
       </h2>
       
       <form className={styles.form} onSubmit={handleSubmit}>
+        {/* Sección compacta de información general */}
         <div className={styles.formGrid}>
           <div className={styles.formGroup}>
             <label className={styles.label}>Nombre:</label>
@@ -495,7 +547,7 @@ const Admin = () => {
               required
               disabled={isLoading}
             >
-              <option value="">Seleccionar Género</option>
+              <option value="">Seleccionar</option>
               <option value="NIÑOS">NIÑOS</option>
               <option value="NIÑAS">NIÑAS</option>
               <option value="UNISEX">UNISEX</option>
@@ -511,241 +563,193 @@ const Admin = () => {
             onChange={(e) => setDescription(e.target.value)}
             required
             disabled={isLoading}
-            rows={4}
-            placeholder="Describe el producto detalladamente..."
+            rows={3}
+            placeholder="Describe el producto..."
           />
         </div>
 
-        <div className={styles.formGroup}>
-          <label className={styles.label}>Tipo:</label>
-          <div className={styles.typeInfo}>
-            <span className={styles.typeBadge}>👕 SUPERIOR (Predeterminado)</span>
-            <span className={styles.typeNote}>
-              Todos los productos serán registrados como SUPERIOR según los requerimientos.
-            </span>
-          </div>
+        <div className={styles.typeInfo}>
+          <span className={styles.typeBadge}>👕 SUPERIOR</span>
+          <span className={styles.typeNote}>Todos los productos son SUPERIOR</span>
         </div>
 
         <hr className={styles.divider} />
         
-        <h3 className={styles.sectionTitle}>
-          <span className={styles.sectionIcon}>🎨</span>
-          Variantes del Producto
-        </h3>
-        
-        {variants.map((variant, index) => (
-          <div key={index} className={styles.variantBox}>
-            <div className={styles.variantHeader}>
-              <h4>
-                <span className={styles.variantNumber}>Variante {index + 1}</span>
-              </h4>
-              {variants.length > 1 && (
-                <button
-                  type="button"
-                  className={styles.removeButton}
-                  onClick={() => handleRemoveVariant(index)}
-                  disabled={isLoading}
-                >
-                  🗑️ Eliminar Variante
-                </button>
-              )}
-            </div>
-
-            <div className={styles.variantFields}>
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Color:</label>
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={variant.color}
-                  onChange={(e) => handleVariantChange(index, "color", e.target.value)}
-                  required
-                  disabled={isLoading}
-                  placeholder="Ej: Negro, Azul, Rojo"
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Talla:</label>
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={variant.size}
-                  onChange={(e) => handleVariantChange(index, "size", e.target.value)}
-                  required
-                  disabled={isLoading}
-                  placeholder="Ej: S, M, L, XL"
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Stock:</label>
-                <input
-                  className={`${styles.input} ${styles.stockInput}`}
-                  type="number"
-                  min="0"
-                  value={variant.stock}
-                  onChange={(e) => handleVariantChange(index, "stock", Number(e.target.value))}
-                  required
-                  disabled={isLoading}
-                  placeholder="0"
-                />
-              </div>
-
-              <div className={styles.formGroup}>
-                <label className={styles.label}>Precio ($):</label>
-                <input
-                  className={`${styles.input} ${styles.priceInput}`}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={variant.price}
-                  onChange={(e) => handleVariantChange(index, "price", parseFloat(e.target.value))}
-                  required
-                  disabled={isLoading}
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            <label className={styles.label}>
-              <span className={styles.imageIcon}>🖼️</span>
-              Imágenes de esta variante:
-            </label>
-            
-            {variant.images.map((img, imgIndex) => (
-              <div key={imgIndex} className={styles.imageSection}>
-                <div className={styles.uploaderContainer}>
-                  <ImageUploader
-  onUploadSuccess={(imageData, varIndex, imgIndex) => {
-    // Asegurar que los índices no sean undefined
-    if (varIndex !== undefined && imgIndex !== undefined) {
-      handleImageUploaded(imageData, varIndex, imgIndex);
-    }
-  }}
-  variantIndex={index}
-  imageIndex={imgIndex}
-/>
-                </div>
-                
-                {/* Mostrar datos de la imagen subida */}
-                {img.imageUrl && (
-                  <div className={styles.imagePreview}>
-                    <div className={styles.imagePreviewHeader}>
-                      <span className={styles.previewTitle}>Imagen Subida</span>
-                      {variant.images.length > 1 && (
-                        <button
-                          type="button"
-                          className={styles.removeSmallButton}
-                          onClick={() => handleRemoveImage(index, imgIndex)}
-                          disabled={isLoading}
-                        >
-                          ✕ Eliminar
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className={styles.previewContent}>
-                      <div className={styles.imageThumbnail}>
-                        <img 
-                          src={img.thumbnailUrl || img.imageUrl} 
-                          alt="Preview" 
-                          className={styles.thumbnailImage}
-                          onError={(e) => {
-                            e.currentTarget.src = "https://via.placeholder.com/150?text=Error+Imagen";
-                          }}
-                        />
-                      </div>
-                      
-                      <div className={styles.imageInfo}>
-                        <div className={styles.infoField}>
-                          <label>Nombre del archivo:</label>
-                          <input
-                            type="text"
-                            value={img.fileName}
-                            onChange={(e) =>
-                              handleImageChange(index, imgIndex, "fileName", e.target.value)
-                            }
-                            placeholder="Ej: camiseta-negra-frontal"
-                            disabled={isLoading}
-                            className={styles.input}
-                          />
-                        </div>
-                        
-                        <div className={styles.infoField}>
-                          <label>URL Principal (Cloudinary):</label>
-                          <div className={styles.urlContainer}>
-                            <input
-                              type="text"
-                              value={img.imageUrl}
-                              readOnly
-                              className={styles.urlInput}
-                              placeholder="URL generada automáticamente"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(img.imageUrl)}
-                              className={styles.copyButton}
-                              disabled={isLoading}
-                            >
-                              📋 Copiar
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {/* Mostrar diferentes tamaños disponibles */}
-                        {img.thumbnailUrl && (
-                          <div className={styles.sizesInfo}>
-                            <span className={styles.sizesLabel}>Tamaños disponibles:</span>
-                            <div className={styles.sizeBadges}>
-                              <span className={styles.sizeBadge} title="Miniatura (150x150)">
-                                <img src={img.thumbnailUrl} alt="Thumb" />
-                                <span>Miniatura</span>
-                              </span>
-                              <span className={styles.sizeBadge} title="Mediano (600x600)">
-                                <img src={img.mediumUrl || img.imageUrl} alt="Medium" />
-                                <span>Mediano</span>
-                              </span>
-                              <span className={styles.sizeBadge} title="Grande (1200x1200)">
-                                <img src={img.largeUrl || img.imageUrl} alt="Large" />
-                                <span>Grande</span>
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className={styles.cloudinaryBadge}>
-                      <span>☁️ Alojada en Cloudinary</span>
-                      <span>⚡ Optimizada automáticamente</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-            
+        {/* Sección compacta de colores */}
+        <div className={styles.colorsSection}>
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>🎨 Colores y Variantes</h3>
             <button
               type="button"
-              className={styles.addImageButton}
-              onClick={() => handleAddImage(index)}
+              className={styles.addButton}
+              onClick={handleAddColor}
               disabled={isLoading}
             >
-              ➕ Agregar otra imagen a esta variante
+              ➕ Agregar Color
             </button>
-            
-            <hr className={styles.divider} />
           </div>
-        ))}
-        
-        <button
-          type="button"
-          className={styles.addVariantButton}
-          onClick={handleAddVariant}
-          disabled={isLoading}
-        >
-          ➕ Agregar otra variante (color/talla diferente)
-        </button>
+          
+          {colorVariants.map((colorVariant, colorIndex) => (
+            <div key={colorIndex} className={styles.colorBox}>
+              <div className={styles.colorHeader}>
+                <button
+                  type="button"
+                  className={styles.collapseButton}
+                  onClick={() => toggleColorCollapse(colorIndex)}
+                >
+                  {collapsedColors.includes(colorIndex) ? "▶" : "▼"}
+                </button>
+                
+                <div className={styles.colorNameSection}>
+                  <input
+                    className={styles.colorInput}
+                    type="text"
+                    value={colorVariant.color}
+                    onChange={(e) => handleColorChange(colorIndex, e.target.value)}
+                    required
+                    disabled={isLoading}
+                    placeholder="Nombre del color"
+                  />
+                  <span className={styles.colorCount}>
+                    {colorVariant.sizes.length} talla{colorVariant.sizes.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                
+                {colorVariants.length > 1 && (
+                  <button
+                    type="button"
+                    className={styles.removeSmallButton}
+                    onClick={() => handleRemoveColor(colorIndex)}
+                    disabled={isLoading}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              
+              {!collapsedColors.includes(colorIndex) && (
+                <div className={styles.colorContent}>
+                  {/* Imágenes del color */}
+                  <div className={styles.imagesSection}>
+                    <label className={styles.subLabel}>Imágenes de este color:</label>
+                    <div className={styles.imagesGrid}>
+                      {colorVariant.images.map((img, imgIndex) => (
+                        <div key={imgIndex} className={styles.imageCard}>
+                          <div className={styles.uploaderWrapper}>
+                            <ImageUploader
+                              onUploadSuccess={(imageData) => 
+                                handleImageUploaded(imageData, colorIndex, imgIndex)
+                              }
+                              variantIndex={colorIndex}
+                              imageIndex={imgIndex}
+                              disabled={isLoading}
+                            />
+                          </div>
+                          
+                          {img.imageUrl && img.imageUrl.trim() !== "" && (
+                            <div className={styles.imagePreviewCompact}>
+                              <img 
+                                src={img.thumbnailUrl || img.imageUrl} 
+                                alt="Preview" 
+                                className={styles.thumbnailCompact}
+                                onError={(e) => {
+                                  e.currentTarget.src = "https://via.placeholder.com/40?text=Error";
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className={styles.copySmallButton}
+                                onClick={() => copyToClipboard(img.imageUrl)}
+                              >
+                                📋
+                              </button>
+                              {colorVariant.images.length > 1 && (
+                                <button
+                                  type="button"
+                                  className={styles.removeTinyButton}
+                                  onClick={() => handleRemoveImage(colorIndex, imgIndex)}
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.addImageButtonCompact}
+                      onClick={() => handleAddImage(colorIndex)}
+                      disabled={isLoading}
+                    >
+                      ➕ Agregar otra imagen
+                    </button>
+                  </div>
+                  
+                  {/* Tallas del color */}
+                  <div className={styles.sizesSection}>
+                    <label className={styles.subLabel}>Tallas y precios:</label>
+                    <div className={styles.sizesGrid}>
+                      {colorVariant.sizes.map((size, sizeIndex) => (
+                        <div key={sizeIndex} className={styles.sizeCard}>
+                          <input
+                            className={styles.sizeInput}
+                            type="text"
+                            value={size.size}
+                            onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'size', e.target.value)}
+                            placeholder="Talla"
+                            required
+                            disabled={isLoading}
+                          />
+                          <input
+                            className={styles.stockInput}
+                            type="number"
+                            value={size.stock}
+                            onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'stock', e.target.value)}
+                            min="0"
+                            placeholder="Stock"
+                            required
+                            disabled={isLoading}
+                          />
+                          <input
+                            className={styles.priceInput}
+                            type="number"
+                            value={size.price}
+                            onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'price', e.target.value)}
+                            min="0"
+                            step="0.01"
+                            placeholder="Precio"
+                            required
+                            disabled={isLoading}
+                          />
+                          {colorVariant.sizes.length > 1 && (
+                            <button
+                              type="button"
+                              className={styles.removeTinyButton}
+                              onClick={() => handleRemoveSize(colorIndex, sizeIndex)}
+                              disabled={isLoading}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className={styles.addSizeButton}
+                      onClick={() => handleAddSize(colorIndex)}
+                      disabled={isLoading}
+                    >
+                      ➕ Agregar otra talla
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
 
         <div className={styles.formActions}>
           <button 
@@ -759,9 +763,9 @@ const Admin = () => {
                 Procesando...
               </>
             ) : editingProductId ? (
-              '💾 Actualizar Producto'
+              '💾 Actualizar'
             ) : (
-              '🚀 Guardar Producto'
+              '🚀 Guardar'
             )}
           </button>
 
@@ -772,128 +776,100 @@ const Admin = () => {
               onClick={resetForm}
               disabled={isLoading}
             >
-              ↩️ Cancelar Edición
+              ↩️ Cancelar
             </button>
           )}
         </div>
       </form>
 
-      <h2 className={styles.title}>
-        📦 Lista de Productos ({products.length})
-        <button 
-          onClick={fetchProducts} 
-          className={styles.refreshButton}
-          disabled={isLoading}
-        >
-          🔄 Actualizar
-        </button>
-      </h2>
+      {/* Lista de productos compacta */}
+      <div className={styles.productsHeader}>
+        <h2 className={styles.title}>
+          📦 Productos ({products.length})
+          <button 
+            onClick={fetchProducts} 
+            className={styles.refreshButton}
+            disabled={isLoading}
+          >
+            🔄
+          </button>
+        </h2>
+      </div>
       
       {products.length === 0 ? (
         <div className={styles.emptyState}>
           <span className={styles.emptyIcon}>📭</span>
-          <p className={styles.emptyMessage}>No hay productos registrados.</p>
-          <p className={styles.emptySubtext}>Comienza agregando tu primer producto usando el formulario arriba.</p>
+          <p>No hay productos registrados.</p>
         </div>
       ) : (
-        <div className={styles.productGrid}>
-          {products.map((product) => (
-            <div key={product.id} className={styles.productCard}>
-              <div className={styles.productHeader}>
-                <h3 className={styles.productName}>{product.name}</h3>
-                <div className={styles.productBadges}>
-                  <span className={`${styles.badge} ${styles.genderBadge}`}>
-                    {product.gender === 'NIÑAS' ? '👧' : 
-                     product.gender === 'NIÑOS' ? '👦' : '👥'} {product.gender}
-                  </span>
-                  <span className={`${styles.badge} ${styles.typeBadge}`}>
-                    👕 {product.type}
-                  </span>
-                </div>
-              </div>
-              
-              <p className={styles.productDescription}>{product.description}</p>
-              
-              {/* Mostrar imagen principal del producto si existe */}
-              {product.variants[0]?.images[0]?.imageUrl && (
-                <div className={styles.productImageContainer}>
-                  <img 
-                    src={product.variants[0].images[0].thumbnailUrl || product.variants[0].images[0].imageUrl} 
-                    alt={product.name}
-                    className={styles.productImage}
-                    onError={(e) => {
-                      e.currentTarget.src = "https://via.placeholder.com/300x200?text=Sin+Imagen";
-                    }}
-                  />
-                  <span className={styles.cloudinaryIndicator}>☁️ Cloudinary</span>
-                </div>
-              )}
-              
-              <div className={styles.productInfo}>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Variantes:</span>
-                  <span className={styles.infoValue}>{product.variants.length}</span>
-                </div>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Stock Total:</span>
-                  <span className={styles.infoValue}>
-                    {product.variants.reduce((sum, v) => sum + v.stock, 0)}
-                  </span>
-                </div>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Imágenes:</span>
-                  <span className={styles.infoValue}>
-                    {product.variants.reduce((sum, v) => sum + v.images.length, 0)}
-                  </span>
-                </div>
-              </div>
-              
-              {product.variants.length > 0 && (
-                <div className={styles.variantsPreview}>
-                  <strong className={styles.variantsTitle}>Variantes disponibles:</strong>
-                  <ul className={styles.variantsList}>
-                    {product.variants.slice(0, 3).map((variant, idx) => (
-                      <li key={idx} className={styles.variantItem}>
-                        <span className={styles.variantColor} style={{backgroundColor: variant.color.toLowerCase()}}></span>
-                        {variant.color} - {variant.size} 
-                        <span className={styles.variantStock}>(Stock: {variant.stock})</span>
-                      </li>
-                    ))}
-                    {product.variants.length > 3 && (
-                      <li className={styles.moreVariants}>
-                        ... y {product.variants.length - 3} más
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
-              
-              <div className={styles.productActions}>
-                <button 
-                  className={styles.editButton}
-                  onClick={() => handleEdit(product)}
-                  disabled={isLoading || isDeleting === product.id}
-                >
-                  ✏️ Editar
-                </button>
-                
-                <button 
-                  className={styles.deleteButton}
-                  onClick={() => handleDelete(product.id!)}
-                  disabled={isLoading || isDeleting === product.id}
-                >
-                  {isDeleting === product.id ? (
-                    <>
-                      <span className={styles.smallSpinner}></span>
-                      Eliminando...
-                    </>
-                  ) : (
-                    '🗑️ Eliminar'
-                  )}
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className={styles.productsTable}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Género</th>
+                <th>Variantes</th>
+                <th>Stock Total</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((product) => (
+                <tr key={product.id}>
+                  <td>
+                    <div className={styles.productCell}>
+                      <strong>{product.name}</strong>
+                      <small>{product.description.substring(0, 50)}...</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`${styles.badge} ${styles.genderBadge}`}>
+                      {product.gender === 'NIÑAS' ? '👧' : 
+                       product.gender === 'NIÑOS' ? '👦' : '👥'} {product.gender}
+                    </span>
+                  </td>
+                  <td>
+                    <div className={styles.variantsInfo}>
+                      {Array.from(new Set(product.variants.map(v => v.color))).slice(0, 2).map(color => (
+                        <span key={color} className={styles.colorTag}>{color}</span>
+                      ))}
+                      {Array.from(new Set(product.variants.map(v => v.color))).length > 2 && (
+                        <span className={styles.moreTag}>+{Array.from(new Set(product.variants.map(v => v.color))).length - 2}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={styles.stockNumber}>
+                      {product.variants.reduce((sum, v) => sum + v.stock, 0)}
+                    </span>
+                  </td>
+                  <td>
+                    <div className={styles.actionButtons}>
+                      <button 
+                        className={styles.editButtonSmall}
+                        onClick={() => handleEdit(product)}
+                        disabled={isLoading || isDeleting === product.id}
+                      >
+                        ✏️
+                      </button>
+                      
+                      <button 
+                        className={styles.deleteButtonSmall}
+                        onClick={() => handleDelete(product.id!)}
+                        disabled={isLoading || isDeleting === product.id}
+                      >
+                        {isDeleting === product.id ? (
+                          <span className={styles.smallSpinner}></span>
+                        ) : (
+                          '🗑️'
+                        )}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
