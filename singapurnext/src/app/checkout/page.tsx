@@ -15,7 +15,50 @@ const CheckoutPage: React.FC = () => {
       try {
         console.log('🛒 Verificando carrito antes de checkout...');
         
-        // Intentar obtener el carrito del backend (con cookies)
+        // Primero verificar localStorage como indicador rápido
+        const pendingCart = localStorage.getItem('pendingCartItem');
+        
+        // Obtener token para determinar si está autenticado
+        const token = localStorage.getItem('token');
+        
+        if (token) {
+          // Usuario autenticado - verificar carrito del backend
+          const res = await fetch('http://localhost:8080/api/cart', {
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            }
+          });
+          
+          console.log('🛒 Respuesta del carrito (autenticado):', res.status);
+          
+          if (res.ok) {
+            const cartData = await res.json();
+            console.log('🛒 Carrito backend:', cartData);
+            
+            if (!cartData || cartData.length === 0) {
+              // Carrito vacío en backend pero podría tener pendingCart
+              if (pendingCart) {
+                console.log('🛒 Usando pendingCart como fallback');
+                setHasCartItems(true);
+                setIsLoading(false);
+                return;
+              }
+              console.log('🛒 Carrito vacío, redirigiendo...');
+              router.push('/');
+              return;
+            }
+            
+            // ¡Tenemos items en el backend!
+            console.log('✅ Carrito válido (autenticado), mostrando checkout...');
+            setHasCartItems(true);
+            setIsLoading(false);
+            return;
+          }
+        }
+        
+        // Si no está autenticado o falló la verificación del backend
         const res = await fetch('http://localhost:8080/api/cart', {
           credentials: 'include',
           headers: {
@@ -23,10 +66,16 @@ const CheckoutPage: React.FC = () => {
           }
         });
         
-        console.log('🛒 Respuesta del carrito:', res.status);
+        console.log('🛒 Respuesta del carrito (no autenticado):', res.status);
         
         if (res.status === 404 || res.status === 204) {
           // Carrito vacío en el backend
+          if (pendingCart) {
+            console.log('🛒 Usando pendingCart como fallback (404)');
+            setHasCartItems(true);
+            setIsLoading(false);
+            return;
+          }
           console.log('🛒 Carrito vacío, redirigiendo al inicio...');
           router.push('/');
           return;
@@ -35,8 +84,7 @@ const CheckoutPage: React.FC = () => {
         if (!res.ok) {
           console.error('🛑 Error del servidor:', res.status);
           
-          // Como fallback, verificar localStorage
-          const pendingCart = localStorage.getItem('pendingCartItem');
+          // Fallback a localStorage
           if (pendingCart) {
             try {
               const parsed = JSON.parse(pendingCart);
@@ -60,6 +108,12 @@ const CheckoutPage: React.FC = () => {
         
         if (!cartData || cartData.length === 0) {
           // Carrito vacío
+          if (pendingCart) {
+            console.log('🛒 Usando pendingCart como fallback (vacio)');
+            setHasCartItems(true);
+            setIsLoading(false);
+            return;
+          }
           router.push('/');
           return;
         }

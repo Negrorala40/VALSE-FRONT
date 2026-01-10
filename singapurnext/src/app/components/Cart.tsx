@@ -1,7 +1,7 @@
 'use client';
 
 import { CART } from '../utils/Api';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import './Cart.css';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -42,17 +42,18 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const cartRef = useRef<HTMLDivElement | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
+  const [isFetching, setIsFetching] = useState(false);
 
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
       onClose();
       setIsClosing(false);
     }, 400);
-  };
+  }, [onClose]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -70,116 +71,116 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       document.removeEventListener('mousedown', handleClickOutside);
       document.body.style.overflow = 'auto';
     };
-  }, [isOpen]);
+  }, [isOpen, handleClose]);
 
-  // CORREGIDO: Solo depende de isOpen
-  useEffect(() => {
-    const fetchCart = async () => {
-      const token = localStorage.getItem('token');
-      const userId = localStorage.getItem('userId');
+  const fetchCart = useCallback(async () => {
+    if (isFetching) return;
+    
+    setIsFetching(true);
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
 
-      console.log('🛒 Fetching cart - Token:', !!token, 'UserId:', userId);
+    console.log('🛒 Fetching cart - Token:', !!token, 'UserId:', userId);
 
+    try {
       if (token && userId) {
         // Usuario autenticado
-        try {
-          const res = await fetch(`${CART}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include', // IMPORTANTE: Incluir cookies
-          });
+        const res = await fetch(`${CART}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
 
-          if (!res.ok) throw new Error('Error al obtener el carrito');
-          const data: ApiCartItem[] = await res.json();
+        if (!res.ok) throw new Error('Error al obtener el carrito');
+        const data: ApiCartItem[] = await res.json();
 
-          console.log('🛒 Carrito obtenido (autenticado):', data);
+        console.log('🛒 Carrito obtenido (autenticado):', data);
 
-          const transformedItems: CartItem[] = data.map((item) => ({
-            id: item.id.toString(),
-            image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
-            name: item.productName?.trim() || 'Producto sin nombre',
-            price: item.price,
-            size: item.size,
-            color: item.color,
-            quantity: item.quantity,
-            stock: item.stock || 100,
-          }));
+        const transformedItems: CartItem[] = data.map((item) => ({
+          id: item.id.toString(),
+          image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
+          name: item.productName?.trim() || 'Producto sin nombre',
+          price: item.price,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          stock: item.stock || 100,
+        }));
 
-          setCartItems(transformedItems);
-        } catch (err) {
-          console.error('🛑 Error al cargar el carrito (autenticado):', err);
-        }
+        setCartItems(transformedItems);
       } else {
         // Usuario NO autenticado - usar cookies automáticamente
-        try {
-          const res = await fetch(`${CART}`, {
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include', // CRÍTICO: Esto envía las cookies automáticamente
-          });
+        const res = await fetch(`${CART}`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
 
-          console.log('🛒 Response status:', res.status);
-          
-          if (!res.ok) {
-            if (res.status === 404) {
-              console.log('🛒 Carrito vacío (404)');
-              setCartItems([]);
-              return;
-            }
-            throw new Error(`Error ${res.status} al obtener el carrito`);
-          }
-          
-          const data: ApiCartItem[] = await res.json();
-          console.log('🛒 Carrito obtenido (no autenticado):', data);
-
-          const transformedItems: CartItem[] = data.map((item) => ({
-            id: item.id.toString(),
-            image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
-            name: item.productName?.trim() || 'Producto sin nombre',
-            price: item.price,
-            size: item.size,
-            color: item.color,
-            quantity: item.quantity,
-            stock: item.stock || 100,
-          }));
-
-          setCartItems(transformedItems);
-        } catch (err) {
-          console.error('🛑 Error al cargar el carrito (no autenticado):', err);
-          // Fallback a localStorage
-          const pending = localStorage.getItem('pendingCartItem');
-          if (pending) {
-            try {
-              const parsed = JSON.parse(pending);
-              const validatedItem: CartItem = {
-                id: parsed.id?.toString() || `pending-${Date.now()}`,
-                image: parsed.imageUrl?.trim() || parsed.image?.trim() || '/images/placeholder.png',
-                name: parsed.productName?.trim() || parsed.name?.trim() || 'Producto sin nombre',
-                price: parsed.price || 0,
-                size: parsed.size || '',
-                color: parsed.color || '',
-                quantity: parsed.quantity || 1,
-                stock: parsed.stock || 100,
-              };
-              setCartItems([validatedItem]);
-            } catch {
-              console.error('Error al parsear pendingCartItem');
-              setCartItems([]);
-            }
-          } else {
+        console.log('🛒 Response status:', res.status);
+        
+        if (!res.ok) {
+          if (res.status === 404) {
+            console.log('🛒 Carrito vacío (404)');
             setCartItems([]);
+            return;
           }
+          throw new Error(`Error ${res.status} al obtener el carrito`);
         }
-      }
-    };
+        
+        const data: ApiCartItem[] = await res.json();
+        console.log('🛒 Carrito obtenido (no autenticado):', data);
 
-    if (isOpen) {
+        const transformedItems: CartItem[] = data.map((item) => ({
+          id: item.id.toString(),
+          image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
+          name: item.productName?.trim() || 'Producto sin nombre',
+          price: item.price,
+          size: item.size,
+          color: item.color,
+          quantity: item.quantity,
+          stock: item.stock || 100,
+        }));
+
+        setCartItems(transformedItems);
+      }
+    } catch (err) {
+      console.error('🛑 Error al cargar el carrito:', err);
+      // Fallback a localStorage
+      const pending = localStorage.getItem('pendingCartItem');
+      if (pending) {
+        try {
+          const parsed = JSON.parse(pending);
+          const validatedItem: CartItem = {
+            id: parsed.id?.toString() || `pending-${Date.now()}`,
+            image: parsed.imageUrl?.trim() || parsed.image?.trim() || '/images/placeholder.png',
+            name: parsed.productName?.trim() || parsed.name?.trim() || 'Producto sin nombre',
+            price: parsed.price || 0,
+            size: parsed.size || '',
+            color: parsed.color || '',
+            quantity: parsed.quantity || 1,
+            stock: parsed.stock || 100,
+          };
+          setCartItems([validatedItem]);
+        } catch {
+          console.error('Error al parsear pendingCartItem');
+          setCartItems([]);
+        }
+      } else {
+        setCartItems([]);
+      }
+    } finally {
+      setIsFetching(false);
+    }
+  }, [setCartItems]);
+
+  useEffect(() => {
+    if (isOpen && !isFetching) {
       fetchCart();
     }
-  }, [isOpen]); // SOLO isOpen
+  }, [isOpen, fetchCart, isFetching]);
 
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -215,7 +216,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include', // Envía cookies automáticamente
+          credentials: 'include',
         });
 
         if (!res.ok) throw new Error('Error actualizando cantidad');
@@ -256,7 +257,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include', // Envía cookies automáticamente
+          credentials: 'include',
         });
 
         if (!res.ok) throw new Error('Error eliminando el producto');
@@ -300,6 +301,102 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     }
     return name.trim();
   };
+
+  const getColorStyle = (color: string): { background: string; border?: string } => {
+  const colorLower = color.toLowerCase().trim();
+  
+  switch(colorLower) {
+    case 'azul':
+      return { background: '#103359' };
+    case 'verde':
+      return { background: '#3DB28A' };
+    case 'rosa':
+      return { background: '#E9566D' };
+    case 'morado':
+    case 'lila':
+    case 'violeta':
+      return { background: '#806FF7' };
+    case 'amarillo':
+      return { 
+        background: '#FFD449',
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+    case 'negro':
+      return { 
+        background: '#000000',
+        border: '1px solid rgba(255,255,255,0.3)'
+      };
+    case 'blanco':
+      return { 
+        background: '#FFFFFF',
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+    case 'rojo':
+      return { background: '#FF0000' };
+    case 'naranja':
+      return { background: '#F47B47' };
+    case 'beige':
+    case 'beis':
+      return { 
+        background: '#F5F5DC',
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+    case 'gris':
+      return { background: '#808080' };
+    case 'celeste':
+      return { background: '#87CEEB' };
+    case 'turquesa':
+      return { background: '#40E0D0' };
+    case 'fucsia':
+      return { background: '#FF00FF' };
+    case 'coral':
+      return { background: '#FF7F50' };
+    case 'marron':
+    case 'café':
+      return { background: '#8B4513' };
+    case 'dorado':
+      return { 
+        background: '#FFD700',
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+    case 'plateado':
+      return { 
+        background: '#C0C0C0',
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+    case 'lavanda':
+      return { background: '#E6E6FA' };
+    case 'menta':
+      return { background: '#98FF98' };
+    case 'melon':
+      return { background: '#FDBCB4' };
+    case 'ocre':
+      return { background: '#CC7722' };
+    case 'mostaza':
+      return { 
+        background: '#FFDB58',
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+    case 'salmon':
+      return { background: '#FA8072' };
+    case 'vino':
+      return { background: '#722F37' };
+    case 'oliva':
+      return { background: '#808000' };
+    default:
+      // Si no reconoce el color, intenta usar un hash para generar uno consistente
+      const colors = [
+        '#103359', '#3DB28A', '#E9566D', '#806FF7', '#F47B47', 
+        '#FFD449', '#000000', '#FFFFFF', '#F5F5DC', '#808080',
+        '#87CEEB', '#40E0D0', '#FF00FF', '#FF7F50', '#8B4513'
+      ];
+      const hash = colorLower.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      return { 
+        background: colors[hash % colors.length],
+        border: '1px solid rgba(0,0,0,0.1)'
+      };
+  }
+};
 
   return (
     <>
@@ -386,6 +483,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                 {cartItems.map((item, index) => {
                   const safeImage = getSafeImageUrl(item.image);
                   const safeName = getSafeName(item.name);
+                  const colorStyle = getColorStyle(item.color);
                   
                   return (
                     <li key={`${item.id}-${index}`} className="cart-item">
@@ -398,7 +496,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                           loading="lazy"
                           style={{ objectFit: 'cover' }}
                           onError={(e) => {
-                            const target = e.target as HTMLImageElement;
+                            const target = e.currentTarget as HTMLImageElement;
                             target.src = '/images/placeholder.png';
                           }}
                         />
@@ -428,14 +526,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                           <span className="item-tag tag-color">
                             <span
                               className="color-dot"
-                              style={{
-                                background:
-                                  item.color === 'Azul' ? '#103359' : 
-                                  item.color === 'Verde' ? '#3DB28A' : 
-                                  item.color === 'Rosa' ? '#E9566D' :
-                                  item.color === 'Morado' ? '#806FF7' :
-                                  '#FFD449',
-                              }}
+                              style={colorStyle}
                             ></span>
                             {item.color || 'N/A'}
                           </span>
