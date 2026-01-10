@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './BlogComments.module.css';
 
 interface Comment {
@@ -33,6 +33,7 @@ export default function BlogComments({
   const [comments, setComments] = useState<Comment[]>(initialComments || []);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [formData, setFormData] = useState({
@@ -40,6 +41,37 @@ export default function BlogComments({
     userEmail: '',
     content: ''
   });
+
+  // 🔄 Función para obtener comentarios del servidor
+  const fetchComments = async () => {
+    try {
+      setLoadingComments(true);
+      const response = await fetch(
+        `${API_URL}/api/blog/${postId}/comments?page=0&size=50&sort=createdAt,desc`,
+        {
+          method: 'GET',
+          headers: { 
+            'Content-Type': 'application/json' 
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        const commentsData = data.content || data || [];
+        setComments(commentsData);
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  // 🔄 Obtener comentarios al cargar el componente y cuando postId cambie
+  useEffect(() => {
+    fetchComments();
+  }, [postId]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -102,13 +134,13 @@ export default function BlogComments({
       
       const newComment = await response.json();
       
-      // Actualizar lista de comentarios
-      setComments([newComment, ...comments]);
+      // 🔄 OBTENER TODOS LOS COMENTARIOS NUEVAMENTE DEL SERVIDOR
+      await fetchComments();
       
       // Limpiar formulario
       setFormData({ userName: '', userEmail: '', content: '' });
       setShowForm(false);
-      setSuccess('¡Comentario enviado con éxito! Será visible después de ser moderado.');
+      setSuccess('¡Comentario enviado con éxito! Ya está visible.'); // ✅ CAMBIA ESTE MENSAJE
       
       // Notificar al componente padre
       if (onCommentAdded) {
@@ -144,8 +176,8 @@ export default function BlogComments({
         throw new Error(errorText || 'Error al eliminar comentario');
       }
       
-      // Filtrar comentario eliminado
-      setComments(comments.filter(c => c.id !== commentId));
+      // 🔄 OBTENER COMENTARIOS ACTUALIZADOS DEL SERVIDOR
+      await fetchComments();
       setSuccess('Comentario eliminado correctamente');
       
     } catch (err: any) {
@@ -170,13 +202,8 @@ export default function BlogComments({
         throw new Error(errorText || 'Error al aprobar comentario');
       }
       
-      // Actualizar comentario aprobado
-      setComments(comments.map(comment => 
-        comment.id === commentId 
-          ? { ...comment, approved: true } 
-          : comment
-      ));
-      
+      // 🔄 OBTENER COMENTARIOS ACTUALIZADOS DEL SERVIDOR
+      await fetchComments();
       setSuccess('Comentario aprobado correctamente');
       
     } catch (err: any) {
@@ -232,6 +259,14 @@ export default function BlogComments({
           >
             <i className="fas fa-times"></i>
           </button>
+        </div>
+      )}
+
+      {/* Loading de comentarios */}
+      {loadingComments && (
+        <div className={styles.loadingComments}>
+          <div className={styles.spinner}></div>
+          <p>Cargando comentarios...</p>
         </div>
       )}
 
@@ -316,7 +351,7 @@ export default function BlogComments({
             
             <div className={styles.formNote}>
               <i className="fas fa-info-circle"></i>
-              <small>Tu comentario será moderado antes de publicarse.</small>
+              <small>Tu comentario será publicado inmediatamente.</small> {/* ✅ CAMBIA ESTE TEXTO */}
             </div>
           </div>
         </form>
@@ -324,7 +359,7 @@ export default function BlogComments({
 
       {/* Lista de comentarios */}
       <div className={styles.commentsList}>
-        {displayComments.length > 0 ? (
+        {!loadingComments && displayComments.length > 0 ? (
           displayComments.map((comment) => (
             <div 
               key={comment.id} 
@@ -381,7 +416,7 @@ export default function BlogComments({
               </div>
             </div>
           ))
-        ) : (
+        ) : !loadingComments ? (
           <div className={styles.emptyComments}>
             <i className="far fa-comment-dots"></i>
             <p>Sé el primero en comentar</p>
@@ -395,7 +430,7 @@ export default function BlogComments({
               </button>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
