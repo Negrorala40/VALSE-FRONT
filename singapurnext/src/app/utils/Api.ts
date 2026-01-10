@@ -25,9 +25,9 @@ export const GET_CART_COUNT = `${API_BASE_URL}/api/cart/count`;
 
 // Órdenes
 export const ORDERS = `${API_BASE_URL}/api/orders`;
-export const CHECKOUT_ANONYMOUS = `${API_BASE_URL}/api/orders/checkout/anonymous`; // Nuevo
-export const CHECKOUT_AUTHENTICATED = `${API_BASE_URL}/api/orders/checkout/authenticated`; // Nuevo
-export const MIGRATE_ORDERS = `${API_BASE_URL}/api/orders/migrate`; // Nuevo
+export const CHECKOUT_ANONYMOUS = `${API_BASE_URL}/api/orders/checkout/anonymous`;
+export const CHECKOUT_AUTHENTICATED = `${API_BASE_URL}/api/orders/checkout/authenticated`;
+export const MIGRATE_ORDERS = `${API_BASE_URL}/api/orders/migrate`;
 
 // Bold Payments
 export const BOLD_SIGNATURE = `${API_BASE_URL}/api/bold/signature`;
@@ -36,3 +36,13 @@ export const BOLD_SIGNATURE = `${API_BASE_URL}/api/bold/signature`;
 export const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
 export const MERCADOPAGO_STATUS = `${API_BASE_URL}/api/payments/status`;
 export const MERCADOPAGO_SIMULATE = `${API_BASE_URL}/api/payments/simulate-payment`;
+
+// ======================= BLOG ENDPOINTS =======================
+export const BLOG_POSTS = `${API_BASE_URL}/api/blog`;
+export const BLOG_POST_DETAIL = (id: string | number) => `${API_BASE_URL}/api/blog/${id}`;
+export const BLOG_ADMIN_POSTS = `${API_BASE_URL}/api/blog/admin/posts`;
+export const BLOG_ADMIN_POSTS_PAGINATED = (page: number = 0, size: number = 100) => 
+  `${API_BASE_URL}/api/blog/admin/posts?page=${page}&size=${size}`;
+export const BLOG_CREATE = `${API_BASE_URL}/api/blog`;
+export const BLOG_UPDATE = (id: number) => `${API_BASE_URL}/api/blog/${id}`;
+export const BLOG_DELETE = (id: number) => `${API_BASE_URL}/api/blog/${id}`;

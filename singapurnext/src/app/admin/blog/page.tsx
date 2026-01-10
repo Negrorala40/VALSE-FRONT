@@ -6,6 +6,13 @@ import Image from 'next/image';
 import BlogContent from '@/app/components/BlogContent/BlogContent';
 import styles from './AdminBlogPage.module.css';
 import ImageUploader from '@/app/components/ImageUploader';
+import {
+  BLOG_ADMIN_POSTS_PAGINATED,
+  BLOG_CREATE,
+  BLOG_UPDATE,
+  BLOG_DELETE,
+  API_BASE_URL
+} from '@/app/utils/Api';
 
 // TIPOS COMPATIBLES con BlogContent
 interface BlogImage {
@@ -73,8 +80,6 @@ interface ApiResponse {
   message?: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
 export default function AdminBlogPage() {
   const router = useRouter();
   const [role, setRole] = useState<string | null>(null);
@@ -108,7 +113,9 @@ export default function AdminBlogPage() {
       setLoading(true);
       setError('');
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/blog/admin/posts?page=0&size=100`, {
+      
+      // USAR CONSTANTE DE Api.ts
+      const response = await fetch(BLOG_ADMIN_POSTS_PAGINATED(0, 100), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -306,9 +313,11 @@ export default function AdminBlogPage() {
     try {
       const postData = preparePostDataForBackend();
       const token = localStorage.getItem('token');
+      
+      // USAR CONSTANTES DE Api.ts
       const url = editingPost?.id 
-        ? `${API_URL}/api/blog/${editingPost.id}`
-        : `${API_URL}/api/blog`;
+        ? BLOG_UPDATE(editingPost.id)
+        : BLOG_CREATE;
       
       const method = editingPost?.id ? 'PUT' : 'POST';
 
@@ -408,7 +417,9 @@ export default function AdminBlogPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/blog/${id}`, {
+      
+      // USAR CONSTANTE DE Api.ts
+      const response = await fetch(BLOG_DELETE(id), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -477,6 +488,7 @@ export default function AdminBlogPage() {
           <h1 className={styles.title}>
             📝 Administrador de Blog 
             <span className={styles.subtitle}> ({posts.length} posts)</span>
+            <span className={styles.apiInfo}>API: {API_BASE_URL}</span>
           </h1>
           <div className={styles.headerActions}>
             <button 
