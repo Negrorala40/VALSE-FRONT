@@ -252,9 +252,19 @@
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  line-clamp: 3; /* Propiedad estándar añadida */
   overflow: hidden;
   margin: 0;
   font-size: 0.95rem;
+  /* Propiedades estándar para navegadores modernos */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Usar line-clamp cuando esté disponible */
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  max-height: calc(1.6em * 3); /* Altura máxima basada en line-height */
 }
 
 /* Meta información */

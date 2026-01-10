@@ -50,11 +50,11 @@ interface Comment {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 interface BlogDetailProps {
+  slug: string;
   postId?: number;
-  slug?: string;
 }
 
-export default function BlogDetail({ postId, slug }: BlogDetailProps) {
+export default function BlogDetail({ slug, postId }: BlogDetailProps) {
   const router = useRouter();
   const [post, setPost] = useState<BlogPost | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -64,10 +64,10 @@ export default function BlogDetail({ postId, slug }: BlogDetailProps) {
   const [relatedPosts, setRelatedPosts] = useState<BlogPost[]>([]);
 
   useEffect(() => {
-    if (postId || slug) {
+    if (slug || postId) {
       fetchBlogPost();
     }
-  }, [postId, slug]);
+  }, [slug, postId]);
 
   useEffect(() => {
     if (post?.id && post?.tags) {
@@ -263,7 +263,7 @@ export default function BlogDetail({ postId, slug }: BlogDetailProps) {
       // Actualizar contador de comentarios localmente
       setPost({
         ...post,
-        commentCount: post.commentCount + 1
+        commentCount: (post.commentCount || 0) + 1
       });
     }
   };
@@ -555,8 +555,11 @@ export default function BlogDetail({ postId, slug }: BlogDetailProps) {
                 <div className={styles.relatedContent}>
                   <h4 className={styles.relatedPostTitle}>{relatedPost.title}</h4>
                   <p className={styles.relatedExcerpt}>
-                    {relatedPost.excerpt || relatedPost.content.substring(0, 100)}...
-                  </p>
+                    {relatedPost.excerpt || 
+                    (relatedPost.content 
+                        ? `${relatedPost.content.substring(0, 100).replace(/<[^>]*>/g, '')}...`
+                        : 'Sin contenido disponible')}
+                    </p>
                   <div className={styles.relatedMeta}>
                     <span className={styles.relatedDate}>
                       {formatDate(relatedPost.publicationDate)}

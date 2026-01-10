@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import BlogContent from '@/app/components/BlogContent/BlogContent';
 import styles from './AdminBlogPage.module.css';
 import ImageUploader from '@/app/components/ImageUploader';
@@ -42,6 +43,36 @@ interface ImageData {
   largeUrl?: string;
 }
 
+interface ApiBlogPost {
+  id?: number;
+  title: string;
+  content: string;
+  excerpt: string;
+  featuredImageUrl?: string;
+  tags: string;
+  authorName: string;
+  published: boolean;
+  slug?: string;
+  viewCount?: number;
+  commentCount?: number;
+  metaTitle?: string;
+  metaDescription?: string;
+  images?: {
+    id?: number;
+    imageUrl: string;
+    altText?: string;
+    caption?: string;
+    displayOrder?: number;
+    isFeatured?: boolean;
+  }[];
+}
+
+interface ApiResponse {
+  content?: ApiBlogPost[];
+  success?: boolean;
+  message?: string;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export default function AdminBlogPage() {
@@ -50,7 +81,6 @@ export default function AdminBlogPage() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
@@ -73,17 +103,7 @@ export default function AdminBlogPage() {
   }]);
   const [featuredImageUrl, setFeaturedImageUrl] = useState('');
 
-  useEffect(() => {
-    const storedRole = localStorage.getItem('role');
-    if (storedRole !== 'ROLE_ADMIN') {
-      router.push('/');
-    } else {
-      setRole(storedRole);
-      fetchPosts();
-    }
-  }, [router]);
-
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -106,25 +126,26 @@ export default function AdminBlogPage() {
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json();
-      const postsData = data.content || data || [];
+      const data: ApiResponse = await response.json();
+      const postsData = data.content || [];
       const formattedPosts = postsData.map(formatPostFromAPI);
       setPosts(formattedPosts);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar posts');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar posts';
+      setError(errorMessage);
       console.error('Error fetching posts:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
-  const formatPostFromAPI = (post: any): BlogPost => ({
+  const formatPostFromAPI = (post: ApiBlogPost): BlogPost => ({
     id: post.id || 0,
     title: post.title || '',
     content: post.content || '',
     excerpt: post.excerpt || '',
     featuredImageUrl: post.featuredImageUrl || '',
-    publicationDate: post.publicationDate || new Date().toISOString(),
+    publicationDate: new Date().toISOString(),
     tags: post.tags || '',
     authorName: post.authorName || 'Admin',
     published: post.published ?? true,
@@ -133,7 +154,7 @@ export default function AdminBlogPage() {
     commentCount: post.commentCount || 0,
     metaTitle: post.metaTitle || '',
     metaDescription: post.metaDescription || '',
-    images: post.images?.map((img: any) => ({
+    images: post.images?.map((img) => ({
       id: img.id,
       imageUrl: img.imageUrl || '',
       altText: img.altText || '',
@@ -142,6 +163,16 @@ export default function AdminBlogPage() {
       isFeatured: img.isFeatured || false
     })) || []
   });
+
+  useEffect(() => {
+    const storedRole = localStorage.getItem('role');
+    if (storedRole !== 'ROLE_ADMIN') {
+      router.push('/');
+    } else {
+      setRole(storedRole);
+      fetchPosts();
+    }
+  }, [router, fetchPosts]);
 
   const handleImageUploaded = (imageData: ImageData, imageIndex?: number) => {
     if (imageIndex === undefined) return;
@@ -241,8 +272,8 @@ export default function AdminBlogPage() {
     return true;
   };
 
-  const preparePostDataForBackend = () => {
-    const postData = {
+  const preparePostDataForBackend = (): ApiBlogPost => {
+    const postData: ApiBlogPost = {
       title: title.trim(),
       content: content.trim(),
       excerpt: excerpt.trim(),
@@ -298,11 +329,12 @@ export default function AdminBlogPage() {
       alert(editingPost?.id ? '✅ Post actualizado correctamente' : '✅ Post creado correctamente');
       fetchPosts();
       resetForm();
-    } catch (error: any) {
-      console.error('Error:', error);
-      const errorMsg = error.message.includes('JSON') 
+    } catch (err: unknown) {
+      console.error('Error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error del servidor';
+      const errorMsg = errorMessage.includes('JSON') 
         ? 'Error del servidor. Intente nuevamente.' 
-        : error.message;
+        : errorMessage;
       setError(errorMsg);
       alert(`❌ Error: ${errorMsg}`);
     } finally {
@@ -374,9 +406,6 @@ export default function AdminBlogPage() {
       return;
     }
 
-    setIsDeleting(id);
-    setError('');
-
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/api/blog/${id}`, {
@@ -394,11 +423,10 @@ export default function AdminBlogPage() {
         const errorText = await response.text();
         throw new Error(`Error ${response.status}: ${errorText}`);
       }
-    } catch (error: any) {
-      setError(error.message || 'Error de conexión');
-      alert(`❌ Error: ${error.message || 'Error de conexión'}`);
-    } finally {
-      setIsDeleting(null);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error de conexión';
+      setError(errorMessage);
+      alert(`❌ Error: ${errorMessage}`);
     }
   };
 
@@ -406,6 +434,14 @@ export default function AdminBlogPage() {
     navigator.clipboard.writeText(text)
       .then(() => alert('✅ URL copiada al portapapeles'))
       .catch(err => console.error('Error copiando:', err));
+  };
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = 'https://via.placeholder.com/80?text=Error';
+  };
+
+  const handleFeaturedImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = 'https://via.placeholder.com/100?text=Error';
   };
 
   if (role !== 'ROLE_ADMIN') {
@@ -437,25 +473,66 @@ export default function AdminBlogPage() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>
-          {editingPost ? '✏️ Editar Post' : '📝 Administración del Blog'}
-        </h1>
-        <button 
-          className={styles.newBtn}
-          onClick={() => {
-            if (showForm) {
-              resetForm();
-            } else {
-              setShowForm(true);
-              setEditingPost(null);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-          }}
-          type="button"
-          disabled={isSubmitting}
-        >
-          {showForm ? '↩️ Cancelar' : '➕ Nuevo Post'}
-        </button>
+        <div className={styles.headerTop}>
+          <h1 className={styles.title}>
+            📝 Administrador de Blog 
+            <span className={styles.subtitle}> ({posts.length} posts)</span>
+          </h1>
+          <div className={styles.headerActions}>
+            <button 
+              onClick={fetchPosts} 
+              className={styles.refreshButton}
+              disabled={loading || isSubmitting}
+              title="Actualizar lista de posts"
+            >
+              <i className="fas fa-sync-alt"></i> Actualizar
+            </button>
+            
+            <button 
+              className={styles.primaryActionBtn}
+              onClick={() => {
+                if (showForm) {
+                  resetForm();
+                } else {
+                  setShowForm(true);
+                  setEditingPost(null);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+              type="button"
+              disabled={isSubmitting}
+            >
+              {showForm ? (
+                <>
+                  <i className="fas fa-times"></i> Cancelar Creación
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-plus-circle"></i> Crear Nuevo Post
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+        
+        <div className={styles.statsBar}>
+          <div className={styles.stat}>
+            <span className={styles.statNumber}>{posts.length}</span>
+            <span className={styles.statLabel}>Posts Totales</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statNumber}>
+              {posts.filter(p => p.published).length}
+            </span>
+            <span className={styles.statLabel}>Publicados</span>
+          </div>
+          <div className={styles.stat}>
+            <span className={styles.statNumber}>
+              {posts.filter(p => !p.published).length}
+            </span>
+            <span className={styles.statLabel}>Borradores</span>
+          </div>
+        </div>
       </div>
 
       {error && (
@@ -468,376 +545,448 @@ export default function AdminBlogPage() {
       )}
 
       {showForm && (
-        <form className={styles.form} onSubmit={handleSubmit}>
-          <div className={styles.formGrid}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Título * <span className={styles.help}>(3-200 caracteres)</span>
-              </label>
-              <input
-                className={styles.input}
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                disabled={isSubmitting}
-                placeholder="Ej: Las últimas tendencias de moda 2024"
-                maxLength={200}
-              />
-              <div className={styles.validation}>
-                {title.length < 3 && title.length > 0 && '❌ Muy corto'}
-                {title.length >= 3 && title.length <= 200 && '✅ Correcto'}
-                {title.length > 200 && '❌ Demasiado largo'}
-              </div>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Autor <span className={styles.optional}>(Opcional)</span>
-              </label>
-              <input
-                className={styles.input}
-                type="text"
-                value={authorName}
-                onChange={(e) => setAuthorName(e.target.value)}
-                disabled={isSubmitting}
-                placeholder="Ej: María García"
-              />
-            </div>
-          </div>
-
-          <div className={styles.formGrid}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Meta Título (SEO) <span className={styles.optional}>(Recomendado)</span>
-              </label>
-              <input
-                className={styles.input}
-                type="text"
-                value={metaTitle}
-                onChange={(e) => setMetaTitle(e.target.value)}
-                disabled={isSubmitting}
-                placeholder="Ej: Tendencias Moda 2024 | Singapur Next"
-                maxLength={60}
-              />
-              <div className={styles.validation}>
-                {metaTitle.length}/60 caracteres
-                <span className={styles.tip}>Aparece en Google y pestañas</span>
-              </div>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Meta Descripción (SEO) <span className={styles.optional}>(Recomendado)</span>
-              </label>
-              <textarea
-                className={styles.textarea}
-                value={metaDescription}
-                onChange={(e) => setMetaDescription(e.target.value)}
-                disabled={isSubmitting}
-                rows={2}
-                placeholder="Ej: Descubre las últimas tendencias de moda para 2024. Colección exclusiva..."
-                maxLength={160}
-              />
-              <div className={styles.validation}>
-                {metaDescription.length}/160 caracteres
-                <span className={styles.tip}>Texto debajo del título en Google</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={styles.label}>
-              Contenido * <span className={styles.help}>(Mínimo 100 caracteres)</span>
-            </label>
-            <textarea
-              className={styles.textarea}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              required
-              disabled={isSubmitting}
-              rows={10}
-              placeholder="Escribe el contenido principal del post..."
-            />
-            <div className={styles.validation}>
-              <span className={content.length >= 100 ? styles.valid : styles.invalid}>
-                {content.length} caracteres {content.length < 100 ? '(muy corto)' : ''}
-              </span>
-              <span className={styles.tip}>Recomendado: 800-1500 caracteres para SEO</span>
-            </div>
-          </div>
-
-          <div className={styles.formGrid}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Resumen <span className={styles.optional}>(Opcional)</span>
-              </label>
-              <textarea
-                className={styles.textarea}
-                value={excerpt}
-                onChange={(e) => setExcerpt(e.target.value)}
-                disabled={isSubmitting}
-                rows={2}
-                placeholder="Breve descripción que aparece en la lista de posts"
-                maxLength={500}
-              />
-              <div className={styles.validation}>
-                {excerpt.length}/500 caracteres
-              </div>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Etiquetas <span className={styles.optional}>(Opcional)</span>
-              </label>
-              <input
-                className={styles.input}
-                type="text"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                disabled={isSubmitting}
-                placeholder="Ej: moda, tendencias, vestidos, 2024"
-              />
-              <div className={styles.tip}>Separar con comas. Ej: moda,tendencias,novias</div>
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={styles.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={published}
-                onChange={(e) => setPublished(e.target.checked)}
-                disabled={isSubmitting}
-                className={styles.checkbox}
-              />
-              <span>Publicar inmediatamente</span>
-              <span className={styles.tip}>Desmarcar para guardar como borrador</span>
-            </label>
-          </div>
-
-          <div className={styles.imagesSection}>
-            <div className={styles.sectionHeader}>
-              <h3 className={styles.sectionTitle}>
-                <i className="fas fa-images"></i> Imágenes del Post *
-                <span className={styles.requiredNote}>(Al menos 1 imagen requerida)</span>
-              </h3>
-              <button
-                type="button"
-                className={styles.addButton}
-                onClick={handleAddImage}
-                disabled={isSubmitting}
-              >
-                <i className="fas fa-plus"></i> Agregar Imagen
-              </button>
-            </div>
-            
-            <div className={styles.imagesGrid}>
-              {images.map((image, imageIndex) => (
-                <div key={imageIndex} className={styles.imageCard}>
-                  <div className={styles.imageHeader}>
-                    <span className={styles.imageNumber}>Imagen {imageIndex + 1}</span>
-                    {images.length > 1 && (
-                      <button
-                        type="button"
-                        className={styles.removeSmallButton}
-                        onClick={() => handleRemoveImage(imageIndex)}
-                        disabled={isSubmitting}
-                        title="Eliminar imagen"
-                      >
-                        <i className="fas fa-times"></i>
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className={styles.uploaderWrapper}>
-                    <ImageUploader
-                      onUploadSuccess={(imageData) => handleImageUploaded(imageData, imageIndex)}
-                      variantIndex={imageIndex}
-                      imageIndex={imageIndex}
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  
-                  {image.imageUrl && image.imageUrl.trim() !== '' && (
-                    <div className={styles.imagePreview}>
-                      <div className={styles.previewRow}>
-                        <img 
-                          src={image.imageUrl} 
-                          alt="Preview" 
-                          className={styles.thumbnail}
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://via.placeholder.com/80?text=Error';
-                          }}
-                        />
-                        <div className={styles.imageActions}>
-                          <button
-                            type="button"
-                            className={styles.copyButton}
-                            onClick={() => copyToClipboard(image.imageUrl)}
-                            title="Copiar URL"
-                          >
-                            <i className="fas fa-copy"></i> Copiar URL
-                          </button>
-                          <label className={styles.featuredLabel}>
-                            <input
-                              type="checkbox"
-                              checked={image.isFeatured || false}
-                              onChange={(e) => handleSetFeaturedImage(imageIndex)}
-                              disabled={isSubmitting}
-                              className={styles.smallCheckbox}
-                            />
-                            Destacada
-                          </label>
-                        </div>
-                      </div>
-                      
-                      <div className={styles.imageFields}>
-                        <div className={styles.fieldGroup}>
-                          <label className={styles.smallLabel}>
-                            Texto alternativo <span className={styles.optional}>(SEO)</span>
-                          </label>
-                          <input
-                            className={styles.smallInput}
-                            type="text"
-                            value={image.altText || ''}
-                            onChange={(e) => handleImageFieldChange(imageIndex, 'altText', e.target.value)}
-                            disabled={isSubmitting}
-                            placeholder="Descripción para Google"
-                          />
-                        </div>
-                        
-                        <div className={styles.fieldGroup}>
-                          <label className={styles.smallLabel}>
-                            Pie de foto <span className={styles.optional}>(Opcional)</span>
-                          </label>
-                          <input
-                            className={styles.smallInput}
-                            type="text"
-                            value={image.caption || ''}
-                            onChange={(e) => handleImageFieldChange(imageIndex, 'caption', e.target.value)}
-                            disabled={isSubmitting}
-                            placeholder="Texto debajo de la imagen"
-                          />
-                        </div>
-                        
-                        <div className={styles.fieldGroup}>
-                          <label className={styles.smallLabel}>
-                            Orden de aparición
-                          </label>
-                          <input
-                            type="number"
-                            value={image.displayOrder || 0}
-                            onChange={(e) => handleImageFieldChange(imageIndex, 'displayOrder', parseInt(e.target.value) || 0)}
-                            disabled={isSubmitting}
-                            min="0"
-                            className={styles.numberInput}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            
-            {featuredImageUrl && (
-              <div className={styles.featuredImageSection}>
-                <label className={styles.subLabel}>
-                  <i className="fas fa-star"></i> Imagen destacada seleccionada
-                </label>
-                <div className={styles.featuredPreview}>
-                  <img 
-                    src={featuredImageUrl} 
-                    alt="Imagen destacada"
-                    className={styles.featuredThumbnail}
-                    onError={(e) => {
-                      e.currentTarget.src = 'https://via.placeholder.com/100?text=Error';
-                    }}
-                  />
-                  <div className={styles.urlContainer}>
-                    <label className={styles.urlLabel}>URL de la imagen destacada:</label>
-                    <input
-                      className={styles.urlInput}
-                      type="text"
-                      value={featuredImageUrl}
-                      onChange={(e) => setFeaturedImageUrl(e.target.value)}
-                      disabled={isSubmitting}
-                      placeholder="URL de imagen destacada"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className={styles.formActions}>
-            <button 
-              className={`${styles.button} ${styles.primaryButton}`} 
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
+        <div className={styles.formContainer}>
+          <div className={styles.formHeader}>
+            <h2 className={styles.formTitle}>
+              {editingPost ? (
                 <>
-                  <span className={styles.loadingSpinner}></span>
-                  Procesando...
-                </>
-              ) : editingPost ? (
-                <>
-                  <i className="fas fa-save"></i> Actualizar Post
+                  <i className="fas fa-edit"></i> Editando: "{editingPost.title.substring(0, 50)}..."
                 </>
               ) : (
                 <>
-                  <i className="fas fa-rocket"></i> Crear Post
+                  <i className="fas fa-plus-circle"></i> Crear Nuevo Post
                 </>
               )}
-            </button>
-
+            </h2>
             <button
               type="button"
-              className={`${styles.button} ${styles.secondaryButton}`}
-              onClick={resetForm}
+              className={styles.closeFormBtn}
+              onClick={() => {
+                if (window.confirm('¿Cancelar edición? Los cambios no guardados se perderán.')) {
+                  resetForm();
+                }
+              }}
               disabled={isSubmitting}
             >
-              <i className="fas fa-times"></i> Cancelar
+              <i className="fas fa-times"></i> Cerrar
             </button>
           </div>
-        </form>
+          
+          <form className={styles.form} onSubmit={handleSubmit}>
+            <div className={styles.formGrid}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Título * <span className={styles.help}>(3-200 caracteres)</span>
+                </label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  placeholder="Ej: Las últimas tendencias de moda 2024"
+                  maxLength={200}
+                />
+                <div className={styles.validation}>
+                  {title.length < 3 && title.length > 0 && '❌ Muy corto'}
+                  {title.length >= 3 && title.length <= 200 && '✅ Correcto'}
+                  {title.length > 200 && '❌ Demasiado largo'}
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Autor <span className={styles.optional}>(Opcional)</span>
+                </label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={authorName}
+                  onChange={(e) => setAuthorName(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Ej: María García"
+                />
+              </div>
+            </div>
+
+            <div className={styles.formGrid}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Meta Título (SEO) <span className={styles.optional}>(Recomendado)</span>
+                </label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={metaTitle}
+                  onChange={(e) => setMetaTitle(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Ej: Tendencias Moda 2024 | Singapur Next"
+                  maxLength={60}
+                />
+                <div className={styles.validation}>
+                  {metaTitle.length}/60 caracteres
+                  <span className={styles.tip}>Aparece en Google y pestañas</span>
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Meta Descripción (SEO) <span className={styles.optional}>(Recomendado)</span>
+                </label>
+                <textarea
+                  className={styles.textarea}
+                  value={metaDescription}
+                  onChange={(e) => setMetaDescription(e.target.value)}
+                  disabled={isSubmitting}
+                  rows={2}
+                  placeholder="Ej: Descubre las últimas tendencias de moda para 2024. Colección exclusiva..."
+                  maxLength={160}
+                />
+                <div className={styles.validation}>
+                  {metaDescription.length}/160 caracteres
+                  <span className={styles.tip}>Texto debajo del título en Google</span>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.label}>
+                Contenido * <span className={styles.help}>(Mínimo 100 caracteres)</span>
+              </label>
+              <textarea
+                className={styles.textarea}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                required
+                disabled={isSubmitting}
+                rows={10}
+                placeholder="Escribe el contenido principal del post..."
+              />
+              <div className={styles.validation}>
+                <span className={content.length >= 100 ? styles.valid : styles.invalid}>
+                  {content.length} caracteres {content.length < 100 ? '(muy corto)' : ''}
+                </span>
+                <span className={styles.tip}>Recomendado: 800-1500 caracteres para SEO</span>
+              </div>
+            </div>
+
+            <div className={styles.formGrid}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Resumen <span className={styles.optional}>(Opcional)</span>
+                </label>
+                <textarea
+                  className={styles.textarea}
+                  value={excerpt}
+                  onChange={(e) => setExcerpt(e.target.value)}
+                  disabled={isSubmitting}
+                  rows={2}
+                  placeholder="Breve descripción que aparece en la lista de posts"
+                  maxLength={500}
+                />
+                <div className={styles.validation}>
+                  {excerpt.length}/500 caracteres
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Etiquetas <span className={styles.optional}>(Opcional)</span>
+                </label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Ej: moda, tendencias, vestidos, 2024"
+                />
+                <div className={styles.tip}>Separar con comas. Ej: moda,tendencias,novias</div>
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={published}
+                  onChange={(e) => setPublished(e.target.checked)}
+                  disabled={isSubmitting}
+                  className={styles.checkbox}
+                />
+                <span>Publicar inmediatamente</span>
+                <span className={styles.tip}>Desmarcar para guardar como borrador</span>
+              </label>
+            </div>
+
+            <div className={styles.imagesSection}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>
+                  <i className="fas fa-images"></i> Imágenes del Post *
+                  <span className={styles.requiredNote}>(Al menos 1 imagen requerida)</span>
+                </h3>
+                <button
+                  type="button"
+                  className={styles.addButton}
+                  onClick={handleAddImage}
+                  disabled={isSubmitting}
+                >
+                  <i className="fas fa-plus"></i> Agregar Imagen
+                </button>
+              </div>
+              
+              <div className={styles.imagesGrid}>
+                {images.map((image, imageIndex) => (
+                  <div key={imageIndex} className={styles.imageCard}>
+                    <div className={styles.imageHeader}>
+                      <span className={styles.imageNumber}>Imagen {imageIndex + 1}</span>
+                      {images.length > 1 && (
+                        <button
+                          type="button"
+                          className={styles.removeSmallButton}
+                          onClick={() => handleRemoveImage(imageIndex)}
+                          disabled={isSubmitting}
+                          title="Eliminar imagen"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className={styles.uploaderWrapper}>
+                      <ImageUploader
+                        onUploadSuccess={(imageData) => handleImageUploaded(imageData, imageIndex)}
+                        variantIndex={imageIndex}
+                        imageIndex={imageIndex}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                    
+                    {image.imageUrl && image.imageUrl.trim() !== '' && (
+                      <div className={styles.imagePreview}>
+                        <div className={styles.previewRow}>
+                          <Image 
+                            src={image.imageUrl} 
+                            alt="Preview" 
+                            width={80}
+                            height={80}
+                            className={styles.thumbnail}
+                            onError={handleImageError}
+                          />
+                          <div className={styles.imageActions}>
+                            <button
+                              type="button"
+                              className={styles.copyButton}
+                              onClick={() => copyToClipboard(image.imageUrl)}
+                              title="Copiar URL"
+                            >
+                              <i className="fas fa-copy"></i> Copiar URL
+                            </button>
+                            <label className={styles.featuredLabel}>
+                              <input
+                                type="checkbox"
+                                checked={image.isFeatured || false}
+                                onChange={() => handleSetFeaturedImage(imageIndex)}
+                                disabled={isSubmitting}
+                                className={styles.smallCheckbox}
+                              />
+                              Destacada
+                            </label>
+                          </div>
+                        </div>
+                        
+                        <div className={styles.imageFields}>
+                          <div className={styles.fieldGroup}>
+                            <label className={styles.smallLabel}>
+                              Texto alternativo <span className={styles.optional}>(SEO)</span>
+                            </label>
+                            <input
+                              className={styles.smallInput}
+                              type="text"
+                              value={image.altText || ''}
+                              onChange={(e) => handleImageFieldChange(imageIndex, 'altText', e.target.value)}
+                              disabled={isSubmitting}
+                              placeholder="Descripción para Google"
+                            />
+                          </div>
+                          
+                          <div className={styles.fieldGroup}>
+                            <label className={styles.smallLabel}>
+                              Pie de foto <span className={styles.optional}>(Opcional)</span>
+                            </label>
+                            <input
+                              className={styles.smallInput}
+                              type="text"
+                              value={image.caption || ''}
+                              onChange={(e) => handleImageFieldChange(imageIndex, 'caption', e.target.value)}
+                              disabled={isSubmitting}
+                              placeholder="Texto debajo de la imagen"
+                            />
+                          </div>
+                          
+                          <div className={styles.fieldGroup}>
+                            <label className={styles.smallLabel}>
+                              Orden de aparición
+                            </label>
+                            <input
+                              type="number"
+                              value={image.displayOrder || 0}
+                              onChange={(e) => handleImageFieldChange(imageIndex, 'displayOrder', parseInt(e.target.value) || 0)}
+                              disabled={isSubmitting}
+                              min="0"
+                              className={styles.numberInput}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {featuredImageUrl && (
+                <div className={styles.featuredImageSection}>
+                  <label className={styles.subLabel}>
+                    <i className="fas fa-star"></i> Imagen destacada seleccionada
+                  </label>
+                  <div className={styles.featuredPreview}>
+                    <Image 
+                      src={featuredImageUrl} 
+                      alt="Imagen destacada"
+                      width={100}
+                      height={100}
+                      className={styles.featuredThumbnail}
+                      onError={handleFeaturedImageError}
+                    />
+                    <div className={styles.urlContainer}>
+                      <label className={styles.urlLabel}>URL de la imagen destacada:</label>
+                      <input
+                        className={styles.urlInput}
+                        type="text"
+                        value={featuredImageUrl}
+                        onChange={(e) => setFeaturedImageUrl(e.target.value)}
+                        disabled={isSubmitting}
+                        placeholder="URL de imagen destacada"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className={styles.formActions}>
+              <button 
+                className={`${styles.button} ${styles.primaryButton}`} 
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className={styles.loadingSpinner}></span>
+                    Procesando...
+                  </>
+                ) : editingPost ? (
+                  <>
+                    <i className="fas fa-save"></i> Actualizar Post
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-rocket"></i> Crear Post
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className={`${styles.button} ${styles.secondaryButton}`}
+                onClick={resetForm}
+                disabled={isSubmitting}
+              >
+                <i className="fas fa-times"></i> Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
+      {/* Sección de lista de posts */}
       <div className={styles.postsSection}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>
-            <i className="fas fa-newspaper"></i> Posts ({posts.length})
-            <button 
-              onClick={fetchPosts} 
-              className={styles.refreshButton}
-              disabled={loading}
-              title="Actualizar lista"
-            >
-              <i className="fas fa-sync-alt"></i>
-            </button>
-          </h2>
+          <div className={styles.sectionTitleRow}>
+            <h2 className={styles.sectionTitle}>
+              <i className="fas fa-list"></i> Lista de Posts
+              <span className={styles.postsCount}> ({posts.length})</span>
+            </h2>
+            
+            {!showForm && (
+              <button 
+                className={styles.floatingCreateBtn}
+                onClick={() => setShowForm(true)}
+                title="Crear nuevo post"
+              >
+                <i className="fas fa-plus"></i> Nuevo Post
+              </button>
+            )}
+          </div>
+          
+          <div className={styles.searchFilters}>
+            <input
+              type="text"
+              placeholder="Buscar posts..."
+              className={styles.searchInput}
+            />
+            <div className={styles.filterButtons}>
+              <button className={styles.filterBtn} title="Mostrar todos">
+                Todos
+              </button>
+              <button className={styles.filterBtn} title="Mostrar publicados">
+                Publicados
+              </button>
+              <button className={styles.filterBtn} title="Mostrar borradores">
+                Borradores
+              </button>
+            </div>
+          </div>
         </div>
         
-        {posts.length === 0 ? (
+        {loading && posts.length === 0 ? (
+          <div className={styles.loading}>
+            <div className={styles.spinner}></div>
+            <p>Cargando posts...</p>
+          </div>
+        ) : posts.length === 0 ? (
           <div className={styles.emptyState}>
-            <i className="fas fa-newspaper"></i>
-            <p>No hay posts registrados.</p>
+            <div className={styles.emptyIllustration}>
+              <i className="fas fa-newspaper"></i>
+            </div>
+            <h3>¡No hay posts todavía!</h3>
+            <p>Crea tu primer post para empezar a compartir contenido.</p>
             <button 
-              className={styles.createButton}
+              className={styles.createFirstBtn}
               onClick={() => setShowForm(true)}
             >
               <i className="fas fa-plus"></i> Crear Primer Post
             </button>
           </div>
         ) : (
-          <BlogContent
-            posts={posts}
-            isAdmin={true}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-          />
+          <>
+            <BlogContent
+              posts={posts}
+              isAdmin={true}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+            />
+            
+            {/* Botón flotante adicional para móviles */}
+            <button 
+              className={styles.mobileCreateBtn}
+              onClick={() => setShowForm(true)}
+              title="Crear nuevo post"
+            >
+              <i className="fas fa-plus"></i>
+            </button>
+          </>
         )}
       </div>
     </div>

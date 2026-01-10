@@ -552,7 +552,10 @@
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
+  line-clamp: 3; /* ¡AQUÍ ESTÁ LA PROPIDAD QUE FALTABA! */
   overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: calc(1.5em * 3);
 }
 
 .relatedMeta {
