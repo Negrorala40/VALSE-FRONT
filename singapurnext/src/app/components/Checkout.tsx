@@ -9,6 +9,8 @@ import {
   ADDRESS, 
   CHECKOUT_ANONYMOUS,
   CHECKOUT_AUTHENTICATED,
+  MERCADOPAGO_CREATE_PREFERENCE,
+  MERCADOPAGO_STATUS,
   MERCADOPAGO_SIMULATE
 } from '../utils/Api';
 import { 
@@ -29,7 +31,8 @@ import {
   Wallet,
   User,
   Mail,
-  Phone
+  Phone,
+  AlertCircle
 } from 'lucide-react';
 
 interface CartItem {
@@ -85,6 +88,30 @@ interface AnonymousUserInfo {
   phone: string;
 }
 
+// Interface para respuesta de MercadoPago
+interface MercadoPagoResponse {
+  success: boolean;
+  preferenceId: string;
+  initPoint: string;
+  sandboxInitPoint: string;
+  publicKey: string;
+  orderId: string;
+  externalReference: string;
+}
+
+// Interface para estado de pago
+interface PaymentStatusResponse {
+  success: boolean;
+  orderId: number;
+  orderStatus: string;
+  mpStatus: string;
+  paymentId?: string;
+  paymentMethod?: string;
+  lastUpdated?: string;
+  hasPayment: boolean;
+  preferenceId?: string;
+}
+
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderId, setOrderId] = useState<string>('');
@@ -117,11 +144,14 @@ const CheckoutPage = () => {
 
   const [orderCreated, setOrderCreated] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [simulationInProgress, setSimulationInProgress] = useState(false);
+  const [mercadoPagoLoading, setMercadoPagoLoading] = useState(false);
+  const [mercadoPagoData, setMercadoPagoData] = useState<MercadoPagoResponse | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
   
   // Refs
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
+  const paymentStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Formateador de precio
   const formatPrice = useCallback((price: number) => {
@@ -138,7 +168,7 @@ const CheckoutPage = () => {
     setTotal(newTotal);
   }, []);
 
-  // Fetch carrito (funciona para ambos tipos de usuarios)
+  // Fetch carrito
   const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
     try {
       console.log('🛒 Fetching cart data...');
@@ -154,7 +184,7 @@ const CheckoutPage = () => {
       const res = await fetch(CART, {
         headers,
         signal,
-        credentials: 'include' // CRÍTICO: Esto envía las cookies automáticamente
+        credentials: 'include'
       });
       
       console.log('🛒 Response status:', res.status);
@@ -172,7 +202,6 @@ const CheckoutPage = () => {
       const data = await res.json();
       console.log('🛒 Datos del carrito recibidos:', data);
       
-      // Validar que la respuesta sea un array
       if (!Array.isArray(data)) {
         console.error('🛑 La respuesta no es un array:', data);
         setCartItems([]);
@@ -213,7 +242,6 @@ const CheckoutPage = () => {
       const err = error as Error;
       if (err.name !== 'AbortError') {
         console.error('🛑 Error fetching cart:', err);
-        // Si hay error, intentar cargar desde localStorage como fallback
         const pendingCart = localStorage.getItem('pendingCartItem');
         if (pendingCart && !token) {
           try {
@@ -254,7 +282,7 @@ const CheckoutPage = () => {
     }
   }, [calculateTotal]);
 
-  // Fetch usuario (solo autenticados)
+  // Fetch usuario
   const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       console.log('👤 Fetching user data...');
@@ -272,7 +300,6 @@ const CheckoutPage = () => {
       const user = await res.json() as UserData;
       console.log('👤 Datos de usuario recibidos:', user);
       
-      // Procesar direcciones
       if (user.addresses && Array.isArray(user.addresses)) {
         const uniqueAddresses = new Map();
         user.addresses.forEach((address: Address) => {
@@ -291,7 +318,6 @@ const CheckoutPage = () => {
         setSelectedAddress(user.addresses[0]);
       }
 
-      // Prellenar datos del usuario en el formulario anónimo
       setAnonymousUserInfo({
         email: user.email || '',
         firstName: user.firstName || '',
@@ -307,7 +333,7 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // Verificar autenticación y cargar datos
+  // Verificar autenticación
   useEffect(() => {
     const token = localStorage.getItem('token');
     const isAuth = !!token;
@@ -318,7 +344,13 @@ const CheckoutPage = () => {
     } else if (!isAuth && !hasFetchedRef.current) {
       loadAnonymousCart();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // Limpiar intervalos al desmontar
+    return () => {
+      if (paymentStatusIntervalRef.current) {
+        clearInterval(paymentStatusIntervalRef.current);
+      }
+    };
   }, []);
 
   const loadAuthenticatedData = useCallback(async (token: string) => {
@@ -353,7 +385,6 @@ const CheckoutPage = () => {
   const loadAnonymousCart = useCallback(async () => {
     setLoading(true);
     try {
-      // El carrito anónimo se carga sin token, con cookies
       await fetchCart(null);
     } catch (err: unknown) {
       const error = err as Error;
@@ -392,7 +423,7 @@ const CheckoutPage = () => {
       const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT',
         headers,
-        credentials: 'include' // IMPORTANTE: Envía cookies
+        credentials: 'include'
       });
       
       if (!res.ok) {
@@ -400,7 +431,6 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error actualizando cantidad'}`);
       }
       
-      // Actualizar UI localmente
       const updatedItems = cartItems.map((i) =>
         i.id === itemId ? { ...i, quantity: newQuantity } : i
       );
@@ -436,7 +466,7 @@ const CheckoutPage = () => {
       const res = await fetch(`${CART}/remove/${itemId}`, {
         method: 'DELETE',
         headers,
-        credentials: 'include' // IMPORTANTE: Envía cookies
+        credentials: 'include'
       });
       
       if (!res.ok) {
@@ -444,7 +474,6 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando producto'}`);
       }
       
-      // Actualizar UI localmente
       const updatedItems = cartItems.filter((i) => i.id !== itemId);
       setCartItems(updatedItems);
       calculateTotal(updatedItems);
@@ -458,7 +487,7 @@ const CheckoutPage = () => {
     }
   };
 
-  // Agregar dirección (solo autenticados)
+  // Agregar dirección
   const addAddress = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -530,7 +559,7 @@ const CheckoutPage = () => {
     }
   };
 
-  // Eliminar dirección (solo autenticados)
+  // Eliminar dirección
   const deleteAddress = async (addressId: number) => {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -587,27 +616,23 @@ const CheckoutPage = () => {
     }
     
     if (step === 2) {
-      // Validar según tipo de usuario
       if (isAuthenticated) {
         if (!selectedAddress) {
           setError('Selecciona una dirección de envío');
           return;
         }
       } else {
-        // Validar datos de usuario anónimo
         if (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone) {
           setError('Completa tus datos de contacto para continuar');
           return;
         }
         
-        // Validar email
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(anonymousUserInfo.email)) {
           setError('Ingresa un email válido');
           return;
         }
         
-        // Validar teléfono (al menos 8 dígitos)
         if (anonymousUserInfo.phone.replace(/\D/g, '').length < 8) {
           setError('Ingresa un número de teléfono válido');
           return;
@@ -618,7 +643,6 @@ const CheckoutPage = () => {
           return;
         }
         
-        // Validar campos de dirección
         if (!selectedAddress.address?.trim() || !selectedAddress.city?.trim() || 
             !selectedAddress.state?.trim() || !selectedAddress.country?.trim()) {
           setError('Completa todos los campos de la dirección');
@@ -636,16 +660,16 @@ const CheckoutPage = () => {
     setError('');
   };
 
-  // Crear orden y pago
-  const createOrderAndPayment = useCallback(async () => {
+  // Crear orden
+  const createOrder = useCallback(async (): Promise<OrderResponse | null> => {
     if (cartItems.length === 0) {
       setError('Carrito vacío');
-      return;
+      return null;
     }
     
     if (!selectedAddress) {
       setError('Selecciona una dirección');
-      return;
+      return null;
     }
 
     try {
@@ -658,7 +682,6 @@ const CheckoutPage = () => {
       let orderResponse: OrderResponse;
       
       if (isAuthenticated) {
-        // Checkout para usuario autenticado
         const token = localStorage.getItem('token');
         if (!token) throw new Error('Usuario no autenticado');
         
@@ -691,7 +714,6 @@ const CheckoutPage = () => {
         console.log('✅ Orden autenticada creada:', orderResponse);
         
       } else {
-        // Checkout para usuario anónimo
         if (!anonymousUserInfo.email) {
           throw new Error('Email requerido para usuarios anónimos');
         }
@@ -703,7 +725,7 @@ const CheckoutPage = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include', // CRÍTICO: Envía cookies con sessionId
+          credentials: 'include',
           body: JSON.stringify({
             customerEmail: anonymousUserInfo.email,
             customerFirstName: anonymousUserInfo.firstName,
@@ -738,22 +760,200 @@ const CheckoutPage = () => {
         throw new Error('No se pudo obtener el ID de la orden');
       }
 
-      const orderId = orderResponse.id.toString();
-      setOrderId(orderId);
+      setOrderId(orderResponse.id.toString());
       setOrderCreated(true);
-      setSuccessMessage(`✅ Orden #${orderId} creada exitosamente. Usa los botones de simulación.`);
+      setSuccessMessage(`✅ Orden #${orderResponse.id} creada exitosamente`);
+
+      return orderResponse;
 
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('🛑 Error en checkout:', error);
-      setError(`Error: ${error.message || 'Error desconocido'}`);
+      console.error('🛑 Error creando orden:', error);
+      setError(`Error al crear la orden: ${error.message || 'Error desconocido'}`);
       setOrderCreated(false);
+      return null;
     } finally {
       setIsProcessingPayment(false);
     }
   }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo]);
 
-  // Simular pago (PARA DESARROLLO LOCAL)
+  // Crear preferencia de MercadoPago
+  const createMercadoPagoPreference = async (orderId: string) => {
+    try {
+      setMercadoPagoLoading(true);
+      setError('');
+      
+      console.log('💳 Creando preferencia MercadoPago para orden:', orderId);
+      
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({
+          orderId: parseInt(orderId)
+        }),
+      });
+
+      console.log('💳 Response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText || 'Error creando preferencia'}`);
+      }
+
+      const data = await response.json() as MercadoPagoResponse;
+      console.log('✅ Preferencia MercadoPago creada:', data);
+      
+      if (!data.success) {
+        throw new Error('No se pudo crear la preferencia de pago');
+      }
+      
+      setMercadoPagoData(data);
+      setSuccessMessage(`✅ Preferencia de pago creada. Redirigiendo a MercadoPago...`);
+      
+      // Iniciar polling del estado del pago
+      startPaymentStatusPolling(orderId);
+      
+      // Redirigir a MercadoPago después de 1 segundo
+      setTimeout(() => {
+        redirectToMercadoPago(data);
+      }, 1000);
+      
+      return data;
+      
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error creando preferencia MercadoPago:', error);
+      setError(`Error al crear el pago: ${error.message || 'Error desconocido'}`);
+      return null;
+    } finally {
+      setMercadoPagoLoading(false);
+    }
+  };
+
+  // Redirigir a MercadoPago
+  const redirectToMercadoPago = (mpData: MercadoPagoResponse) => {
+    if (!mpData || !mpData.initPoint) {
+      setError('No se pudo obtener la URL de pago');
+      return;
+    }
+    
+    // Usar sandboxInitPoint para desarrollo, initPoint para producción
+    const mpUrl = process.env.NODE_ENV === 'development' 
+      ? mpData.sandboxInitPoint || mpData.initPoint
+      : mpData.initPoint;
+    
+    console.log('🌐 Redirigiendo a MercadoPago:', mpUrl);
+    window.location.href = mpUrl;
+  };
+
+  // Verificar estado del pago
+  const checkPaymentStatus = async (orderId: string): Promise<PaymentStatusResponse | null> => {
+    try {
+      console.log('🔄 Verificando estado del pago para orden:', orderId);
+      
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
+        method: 'GET',
+        headers,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        console.error('❌ Error verificando estado:', response.status);
+        return null;
+      }
+
+      const data = await response.json() as PaymentStatusResponse;
+      console.log('📊 Estado del pago:', data);
+      
+      setPaymentStatus(data);
+      
+      // Si el pago está aprobado, redirigir a éxito
+      if (data.orderStatus === 'APROBADO' || data.mpStatus === 'approved') {
+        handleSuccessfulPayment(orderId);
+        return data;
+      }
+      
+      // Si el pago está rechazado, mostrar error
+      if (data.orderStatus === 'RECHAZADO' || data.mpStatus === 'rejected') {
+        setError('El pago fue rechazado. Por favor intenta con otro método de pago.');
+        return data;
+      }
+      
+      return data;
+      
+    } catch (err: unknown) {
+      console.error('🛑 Error verificando estado del pago:', err);
+      return null;
+    }
+  };
+
+  // Iniciar polling del estado del pago
+  const startPaymentStatusPolling = (orderId: string) => {
+    // Limpiar intervalo anterior si existe
+    if (paymentStatusIntervalRef.current) {
+      clearInterval(paymentStatusIntervalRef.current);
+    }
+    
+    // Verificar inmediatamente
+    checkPaymentStatus(orderId);
+    
+    // Configurar polling cada 5 segundos
+    paymentStatusIntervalRef.current = setInterval(() => {
+      checkPaymentStatus(orderId);
+    }, 5000);
+    
+    // Detener después de 5 minutos (300 segundos)
+    setTimeout(() => {
+      if (paymentStatusIntervalRef.current) {
+        clearInterval(paymentStatusIntervalRef.current);
+        paymentStatusIntervalRef.current = null;
+        setError('Tiempo de espera agotado. Si realizaste el pago, contáctanos.');
+      }
+    }, 300000);
+  };
+
+  // Manejar pago exitoso
+  const handleSuccessfulPayment = (orderId: string) => {
+    // Detener polling
+    if (paymentStatusIntervalRef.current) {
+      clearInterval(paymentStatusIntervalRef.current);
+      paymentStatusIntervalRef.current = null;
+    }
+    
+    // Limpiar carrito
+    setCartItems([]);
+    setTotal(0);
+    localStorage.removeItem('pendingCartItem');
+    
+    // Mostrar mensaje de éxito
+    setSuccessMessage(`✅ ¡Pago exitoso! Tu orden #${orderId} ha sido confirmada.`);
+    
+    // Redirigir a página de éxito después de 3 segundos
+    setTimeout(() => {
+      window.location.href = `/checkout/success?orderId=${orderId}`;
+    }, 3000);
+  };
+
+  // Simular pago (para desarrollo/testing)
   const simulatePayment = async (status: 'approved' | 'rejected') => {
     if (!orderId) {
         setError('No hay orden creada');
@@ -761,7 +961,7 @@ const CheckoutPage = () => {
     }
 
     try {
-        setSimulationInProgress(true);
+        setMercadoPagoLoading(true);
         setError('');
         setSuccessMessage('');
         
@@ -780,7 +980,7 @@ const CheckoutPage = () => {
         const response = await fetch(MERCADOPAGO_SIMULATE, {
             method: 'POST',
             headers,
-            credentials: 'include', // Importante para enviar cookies (sessionId)
+            credentials: 'include',
             body: JSON.stringify({
                 orderId: parseInt(orderId),
                 status: status
@@ -797,19 +997,7 @@ const CheckoutPage = () => {
             console.log('✅ Resultado simulación:', result);
             
             if (status === 'approved') {
-                setSuccessMessage(`✅ Pago aprobado exitosamente! Orden #${orderId} confirmada.`);
-                
-                // Limpiar carrito localmente
-                setCartItems([]);
-                setTotal(0);
-                
-                // Limpiar localStorage de carrito pendiente
-                localStorage.removeItem('pendingCartItem');
-                
-                // Opcional: Redirigir a página de éxito después de 2 segundos
-                setTimeout(() => {
-                    window.location.href = `/checkout/success?orderId=${orderId}`;
-                }, 2000);
+                handleSuccessfulPayment(orderId);
             } else {
                 setError(`❌ Pago rechazado para orden #${orderId}.`);
                 
@@ -839,16 +1027,23 @@ const CheckoutPage = () => {
         // Mostrar mensaje de error por 5 segundos
         setTimeout(() => setError(''), 5000);
     } finally {
-        setSimulationInProgress(false);
+        setMercadoPagoLoading(false);
     }
 };
 
-  // Crear orden cuando llegamos al paso 3
+  // Crear orden y preferencia cuando llegamos al paso 3
   useEffect(() => {
-    if (step === 3 && !orderCreated && !isProcessingPayment) {
-      createOrderAndPayment();
-    }
-  }, [step, createOrderAndPayment, isProcessingPayment, orderCreated]);
+    const createOrderAndPreference = async () => {
+      if (step === 3 && !orderCreated && !isProcessingPayment && !mercadoPagoData) {
+        const order = await createOrder();
+        if (order) {
+          await createMercadoPagoPreference(order.id.toString());
+        }
+      }
+    };
+    
+    createOrderAndPreference();
+  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder]);
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -934,6 +1129,7 @@ const CheckoutPage = () => {
         {/* Messages */}
         {error && (
           <div className="checkout-error-message">
+            <AlertCircle className="checkout-icon" />
             <span>{error}</span>
             <button onClick={() => setError("")}>
               <X className="checkout-icon" />
@@ -1147,7 +1343,7 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {/* Direcciones (para ambos) */}
+                    {/* Direcciones */}
                     <div className="checkout-address-section">
                       <h3 className="checkout-address-section-title">
                         <MapPin className="checkout-icon" />
@@ -1204,7 +1400,7 @@ const CheckoutPage = () => {
                             </div>
                           ) : null}
 
-                          {/* Add New Address (solo autenticados) */}
+                          {/* Add New Address */}
                           {addingAddress ? (
                             <div className="checkout-add-address-form">
                               <h3 className="checkout-add-address-title">
@@ -1445,100 +1641,139 @@ const CheckoutPage = () => {
                     {isProcessingPayment && (
                       <div className="checkout-processing-payment">
                         <div className="checkout-spinner large"></div>
-                        <h4>Procesando tu pedido...</h4>
+                        <h4>Creando tu pedido...</h4>
                         <p>Estamos preparando todo para que puedas realizar el pago.</p>
                       </div>
                     )}
 
-                    {/* Simulation Section */}
-                    {orderCreated && !isProcessingPayment && (
-                      <div className="checkout-simulation-section">
-                        {/* Info para desarrollo */}
-                        <div className="checkout-dev-info">
-                          <div className="checkout-dev-header">
-                            <Wallet className="checkout-icon" />
-                            <h4>Modo Desarrollo - Simulación de Pago</h4>
-                          </div>
-                          <p className="checkout-dev-description">
-                            <strong>Orden #{orderId}</strong> creada exitosamente. 
-                            Como estás en modo desarrollo, puedes simular el proceso de pago.
-                          </p>
-                          <div className="checkout-dev-note">
-                            <small>
-                              ⚠️ <strong>Nota:</strong> En producción, esto redirigiría a MercadoPago real.
-                              Para activar el modo producción, necesitas configurar las claves de MercadoPago en el backend.
-                            </small>
-                          </div>
-                        </div>
+                    {mercadoPagoLoading && (
+                      <div className="checkout-processing-payment">
+                        <div className="checkout-spinner large purple"></div>
+                        <h4>Conectando con MercadoPago...</h4>
+                        <p>Te redireccionaremos en un momento al portal de pago seguro.</p>
+                      </div>
+                    )}
 
-                        {/* Botones de simulación */}
-                        <div className="checkout-simulation-buttons">
-                          <button
-                            onClick={() => simulatePayment('approved')}
-                            className="checkout-btn checkout-btn-success checkout-btn-lg"
-                            disabled={simulationInProgress}
-                          >
-                            {simulationInProgress ? (
-                              <>
-                                <Loader2 className="checkout-icon spinning" />
-                                Procesando...
-                              </>
-                            ) : (
-                              <>
-                                <Check className="checkout-icon" />
-                                Simular Pago Aprobado
-                              </>
-                            )}
-                          </button>
+                    {/* Payment Status */}
+                    {paymentStatus && (
+                      <div className="checkout-payment-status">
+                        <div className="checkout-payment-status-header">
+                          <Wallet className="checkout-icon" />
+                          <h4>Estado del Pago</h4>
+                        </div>
+                        <div className="checkout-payment-status-info">
+                          <div className="checkout-payment-status-row">
+                            <span>Orden:</span>
+                            <strong>#{paymentStatus.orderId}</strong>
+                          </div>
+                          <div className="checkout-payment-status-row">
+                            <span>Estado Orden:</span>
+                            <span className={`checkout-payment-status-badge ${paymentStatus.orderStatus === 'PENDIENTE' ? 'pending' : paymentStatus.orderStatus === 'APROBADO' ? 'approved' : 'rejected'}`}>
+                              {paymentStatus.orderStatus}
+                            </span>
+                          </div>
+                          <div className="checkout-payment-status-row">
+                            <span>Estado MercadoPago:</span>
+                            <span className={`checkout-payment-status-badge ${paymentStatus.mpStatus === 'pending' ? 'pending' : paymentStatus.mpStatus === 'approved' ? 'approved' : 'rejected'}`}>
+                              {paymentStatus.mpStatus || 'Pendiente'}
+                            </span>
+                          </div>
+                          {paymentStatus.paymentMethod && (
+                            <div className="checkout-payment-status-row">
+                              <span>Método:</span>
+                              <span>{paymentStatus.paymentMethod}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Payment Action Section */}
+                    {orderCreated && mercadoPagoData && !mercadoPagoLoading && (
+                      <div className="checkout-payment-action">
+                        <div className="checkout-payment-ready">
+                          <div className="checkout-payment-ready-header">
+                            <Check className="checkout-icon" />
+                            <h4>¡Listo para pagar!</h4>
+                          </div>
+                          <p>Tu orden ha sido creada y estamos listos para procesar el pago seguro.</p>
                           
-                          <button
-                            onClick={() => simulatePayment('rejected')}
-                            className="checkout-btn checkout-btn-danger checkout-btn-lg"
-                            disabled={simulationInProgress}
-                          >
-                            {simulationInProgress ? (
-                              <>
-                                <Loader2 className="checkout-icon spinning" />
-                                Procesando...
-                              </>
-                            ) : (
-                              <>
-                                <X className="checkout-icon" />
-                                Simular Pago Rechazado
-                              </>
+                          <div className="checkout-payment-buttons">
+                            <button
+                              onClick={() => redirectToMercadoPago(mercadoPagoData)}
+                              className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
+                              disabled={mercadoPagoLoading}
+                            >
+                              {mercadoPagoLoading ? (
+                                <>
+                                  <Loader2 className="checkout-icon spinning" />
+                                  Procesando...
+                                </>
+                              ) : (
+                                <>
+                                  <CreditCard className="checkout-icon" />
+                                  Pagar con MercadoPago
+                                </>
+                              )}
+                            </button>
+                            
+                            {/* Botón de simulación (solo para desarrollo) */}
+                            {process.env.NODE_ENV === 'development' && (
+                              <div className="checkout-simulation-section">
+                                <hr />
+                                <p className="checkout-dev-note">
+                                  <small>
+                                    ⚠️ <strong>Modo Desarrollo:</strong> Si quieres simular sin usar MercadoPago real:
+                                  </small>
+                                </p>
+                                <div className="checkout-simulation-buttons">
+                                  <button
+                                    onClick={() => simulatePayment('approved')}
+                                    className="checkout-btn checkout-btn-outline checkout-btn-sm"
+                                    disabled={mercadoPagoLoading}
+                                  >
+                                    Simular Pago Aprobado
+                                  </button>
+                                  <button
+                                    onClick={() => simulatePayment('rejected')}
+                                    className="checkout-btn checkout-btn-outline checkout-btn-sm"
+                                    disabled={mercadoPagoLoading}
+                                  >
+                                    Simular Pago Rechazado
+                                  </button>
+                                </div>
+                              </div>
                             )}
-                          </button>
-                        </div>
-
-                        {/* Instrucciones para producción */}
-                        <div className="checkout-production-info">
-                          <h5>Para activar MercadoPago real:</h5>
-                          <ol>
-                            <li>Crea una cuenta en MercadoPago Developers</li>
-                            <li>Obtén las claves ACCESS_TOKEN y PUBLIC_KEY</li>
-                            <li>Configúralas en el backend (application.properties)</li>
-                            <li>Descomenta el código marcado con 🚨 en el componente</li>
-                          </ol>
+                            
+                            <p className="checkout-payment-note">
+                              Serás redirigido a MercadoPago para completar el pago de forma segura.
+                              <br />
+                              <small>Si no eres redirigido automáticamente, haz clic en el botón arriba.</small>
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
 
                     {/* Order Created but processing error */}
-                    {orderCreated && !isProcessingPayment && error && (
+                    {orderCreated && !mercadoPagoData && !isProcessingPayment && !mercadoPagoLoading && error && (
                       <div className="checkout-payment-fallback">
-                        <h4>Orden creada exitosamente</h4>
-                        <p>Tu orden #{orderId} ha sido creada. Te contactaremos para completar el pago.</p>
+                        <AlertCircle className="checkout-icon" />
+                        <h4>Orden creada con error en el pago</h4>
+                        <p>Tu orden #{orderId} ha sido creada, pero hubo un error al configurar el pago.</p>
                         <button 
                           className="checkout-btn checkout-btn-primary"
-                          onClick={() => {
-                            if (isAuthenticated) {
-                              window.location.href = `/orders`;
-                            } else {
-                              window.location.href = `/`;
-                            }
-                          }}
+                          onClick={() => createMercadoPagoPreference(orderId)}
+                          disabled={mercadoPagoLoading}
                         >
-                          {isAuthenticated ? 'Ver mis órdenes' : 'Volver al inicio'}
+                          {mercadoPagoLoading ? (
+                            <>
+                              <Loader2 className="checkout-icon spinning" />
+                              Intentando nuevamente...
+                            </>
+                          ) : (
+                            'Intentar configurar pago nuevamente'
+                          )}
                         </button>
                       </div>
                     )}
@@ -1797,6 +2032,185 @@ const CheckoutPage = () => {
           color: var(--checkout-blue-dark);
         }
         
+        /* Payment Status Styles */
+        .checkout-payment-status {
+          margin: 1.5rem 0;
+          padding: 1.25rem;
+          background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
+          border-radius: var(--checkout-radius-lg);
+          border: 1px solid var(--checkout-border);
+        }
+        
+        .checkout-payment-status-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        
+        .checkout-payment-status-header h4 {
+          margin: 0;
+          color: var(--checkout-navy);
+        }
+        
+        .checkout-payment-status-header .checkout-icon {
+          width: 1.5rem;
+          height: 1.5rem;
+          color: var(--checkout-purple);
+        }
+        
+        .checkout-payment-status-info {
+          display: grid;
+          gap: 0.75rem;
+        }
+        
+        .checkout-payment-status-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        
+        .checkout-payment-status-row span:first-child {
+          color: var(--checkout-gray-dark);
+          font-size: 0.875rem;
+        }
+        
+        .checkout-payment-status-row span:last-child {
+          font-weight: 500;
+          color: var(--checkout-navy);
+        }
+        
+        .checkout-payment-status-badge {
+          padding: 0.25rem 0.75rem;
+          border-radius: var(--checkout-radius-full);
+          font-size: 0.75rem;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        
+        .checkout-payment-status-badge.pending {
+          background: rgba(255, 212, 73, 0.15);
+          color: #b8860b;
+          border: 1px solid rgba(255, 212, 73, 0.3);
+        }
+        
+        .checkout-payment-status-badge.approved {
+          background: rgba(61, 178, 138, 0.15);
+          color: var(--checkout-mint);
+          border: 1px solid rgba(61, 178, 138, 0.3);
+        }
+        
+        .checkout-payment-status-badge.rejected {
+          background: rgba(233, 86, 109, 0.15);
+          color: var(--checkout-coral);
+          border: 1px solid rgba(233, 86, 109, 0.3);
+        }
+        
+        /* Payment Action */
+        .checkout-payment-action {
+          margin-top: 1.5rem;
+        }
+        
+        .checkout-payment-ready {
+          text-align: center;
+          padding: 1.5rem;
+          background: linear-gradient(135deg, rgba(61, 178, 138, 0.05) 0%, rgba(61, 178, 138, 0.1) 100%);
+          border-radius: var(--checkout-radius-lg);
+          border: 2px solid rgba(61, 178, 138, 0.2);
+        }
+        
+        .checkout-payment-ready-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        
+        .checkout-payment-ready-header h4 {
+          margin: 0;
+          color: var(--checkout-navy);
+        }
+        
+        .checkout-payment-ready-header .checkout-icon {
+          width: 1.5rem;
+          height: 1.5rem;
+          color: var(--checkout-mint);
+        }
+        
+        .checkout-payment-ready p {
+          color: var(--checkout-gray-dark);
+          margin-bottom: 1.5rem;
+        }
+        
+        .checkout-payment-buttons {
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+        
+        .checkout-simulation-section {
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 1px solid var(--checkout-border);
+        }
+        
+        .checkout-dev-note {
+          font-size: 0.875rem;
+          color: var(--checkout-gray-dark);
+          margin-bottom: 0.75rem;
+          text-align: center;
+        }
+        
+        .checkout-simulation-buttons {
+          display: flex;
+          gap: 0.5rem;
+          justify-content: center;
+        }
+        
+        .checkout-btn-sm {
+          padding: 0.5rem 1rem;
+          font-size: 0.75rem;
+        }
+        
+        .checkout-payment-note {
+          font-size: 0.875rem;
+          color: var(--checkout-gray-dark);
+          margin-top: 0.75rem;
+          text-align: center;
+        }
+        
+        .checkout-payment-note small {
+          font-size: 0.75rem;
+          color: var(--checkout-gray);
+        }
+        
+        /* Error message update */
+        .checkout-error-message {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+        
+        .checkout-error-message .checkout-icon {
+          width: 1.25rem;
+          height: 1.25rem;
+          flex-shrink: 0;
+          color: var(--checkout-coral);
+        }
+        
+        .checkout-error-message span {
+          flex: 1;
+        }
+        
+        .checkout-error-message button {
+          background: none;
+          border: none;
+          color: var(--checkout-coral);
+          cursor: pointer;
+          padding: 0.25rem;
+        }
+        
         /* Animación para spinner */
         .checkout-icon.spinning {
           animation: spin 1s linear infinite;
@@ -1805,6 +2219,32 @@ const CheckoutPage = () => {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        
+        /* Checkout payment fallback */
+        .checkout-payment-fallback {
+          text-align: center;
+          padding: 2rem;
+          background: rgba(233, 86, 109, 0.05);
+          border-radius: var(--checkout-radius-lg);
+          border: 1px solid rgba(233, 86, 109, 0.2);
+        }
+        
+        .checkout-payment-fallback .checkout-icon {
+          width: 3rem;
+          height: 3rem;
+          color: var(--checkout-coral);
+          margin: 0 auto 1rem;
+        }
+        
+        .checkout-payment-fallback h4 {
+          color: var(--checkout-navy);
+          margin-bottom: 0.75rem;
+        }
+        
+        .checkout-payment-fallback p {
+          color: var(--checkout-gray-dark);
+          margin-bottom: 1.5rem;
         }
       `}</style>
     </div>

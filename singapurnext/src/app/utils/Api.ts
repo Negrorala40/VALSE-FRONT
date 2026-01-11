@@ -30,7 +30,7 @@ export const CHECKOUT_AUTHENTICATED = `${API_BASE_URL}/api/orders/checkout/authe
 export const MIGRATE_ORDERS = `${API_BASE_URL}/api/orders/migrate`;
 
 // Bold Payments
-export const BOLD_SIGNATURE = `${API_BASE_URL}/api/bold/signature`;
+// export const BOLD_SIGNATURE = `${API_BASE_URL}/api/bold/signature`;
 
 // Mercado Pago
 export const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
