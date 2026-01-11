@@ -1,30 +1,6 @@
 
 /* === Variables globales (para que paneles fuera del header las hereden) === */
-:root {
-  --am-primary: #103359;
-  --am-secondary: #3db28a;
-  --am-accent-purple: #806ff7;
-  --am-accent-pink: #e9566d;
-  --am-accent-orange: #f47b47;
-  --am-accent-yellow: #ffd449;
 
-  --am-white: #ffffff;
-  --am-gray-50: #f8fafc;
-  --am-gray-100: #f1f5f9;
-  --am-gray-200: #e2e8f0;
-  --am-gray-300: #cbd5e1;
-  --am-gray-400: #94a3b8;
-  --am-gray-500: #64748b;
-  --am-gray-600: #475569;
-
-  --am-header-height: 85px;
-  --am-header-height-mobile: 75px;
-
-  --am-transition: cubic-bezier(0.4, 0, 0.2, 1);
-  --am-shadow-sm: 0 1px 2px rgba(16, 51, 89, 0.05);
-  --am-shadow-md: 0 4px 12px rgba(16, 51, 89, 0.1);
-  --am-shadow-lg: 0 8px 30px rgba(16, 51, 89, 0.12);
-}
 
 /* === Variables locales (scoped al header) === */
 .header {

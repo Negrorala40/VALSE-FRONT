@@ -1,37 +1,7 @@
 /* A Marte - Checkout CSS Puro CON SCOPE */
 
 /* ========== Variables de Colores ========== */
-:root {
-  /* Primarios */
-  --checkout-navy: #103359;
-  --checkout-mint: #3db28a;
 
-  /* Secundarios */
-  --checkout-purple: #806ff7;
-  --checkout-coral: #e9566d;
-  --checkout-orange: #f47b47;
-  --checkout-yellow: #ffd449;
-
-  /* Neutrales */
-  --checkout-white: #ffffff;
-  --checkout-cream: #fdf9f6;
-  --checkout-gray-light: #f5f5f7;
-  --checkout-gray: #9ca3af;
-  --checkout-gray-dark: #6b7280;
-  --checkout-border: #e5e7eb;
-
-  /* Sombras */
-  --checkout-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --checkout-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --checkout-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-
-  /* Radios */
-  --checkout-radius-sm: 0.5rem;
-  --checkout-radius-md: 0.75rem;
-  --checkout-radius-lg: 1rem;
-  --checkout-radius-xl: 1.25rem;
-  --checkout-radius-full: 9999px;
-}
 
 /* ========== Reset y Base ========== */
 .checkout-page * {
@@ -441,6 +411,27 @@
 .checkout-empty-cart p {
   color: var(--checkout-gray-dark);
   margin-bottom: 1.5rem;
+}
+
+.checkout-empty-cart .checkout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  border-radius: var(--checkout-radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  text-decoration: none;
+  background-color: var(--checkout-mint);
+  color: var(--checkout-white);
+}
+
+.checkout-empty-cart .checkout-btn:hover {
+  background-color: #35a07b;
 }
 
 /* ========== Cart Items ========== */
@@ -1515,7 +1506,8 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-/* app/checkout/Checkout.css o en global.css */
+
+/* ========== Loading Screen ========== */
 .checkout-loading {
   display: flex;
   flex-direction: column;
@@ -1546,4 +1538,13 @@
   color: #103359;
   font-size: 1.1rem;
   font-weight: 500;
+}
+
+/* ========== Code Styling ========== */
+code {
+  font-family: 'Courier New', monospace;
+  background: rgba(16, 51, 89, 0.1);
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
 }

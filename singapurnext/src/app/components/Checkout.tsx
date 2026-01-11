@@ -1,1061 +1,289 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback, useRef } from 'react';
-import Image from 'next/image';
-import './Checkout.css';
-import { 
-  CART, 
-  PERFIL_ME, 
-  ADDRESS, 
-  CHECKOUT_ANONYMOUS,
-  CHECKOUT_AUTHENTICATED,
-  MERCADOPAGO_CREATE_PREFERENCE,
-  MERCADOPAGO_STATUS,
-  MERCADOPAGO_SIMULATE
-} from '../utils/Api';
-import { 
-  ShoppingBag, 
-  MapPin, 
-  CreditCard, 
-  Check, 
-  Plus, 
-  Minus, 
-  Trash2, 
-  ChevronLeft, 
-  ChevronRight, 
-  Package, 
-  Star, 
-  Sparkles,
-  X,
-  Loader2,
-  Wallet,
-  User,
-  Mail,
-  Phone,
-  AlertCircle
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import "./Checkout.css";
 
-interface CartItem {
+// Simulación de datos (en producción vendrían de API)
+const MOCK_CART_ITEMS = [
+  {
+    id: "1",
+    name: "Camiseta A Marte",
+    price: 29.99,
+    quantity: 2,
+    size: "M",
+    color: "Blanco",
+    image: "/placeholder-shirt.jpg",
+  },
+  {
+    id: "2",
+    name: "Gorra Espacial",
+    price: 19.99,
+    quantity: 1,
+    size: "Única",
+    color: "Negro",
+    image: "/placeholder-hat.jpg",
+  },
+];
+
+const MOCK_ADDRESSES = [
+  {
+    id: "1",
+    street: "Av. del Cosmos 123",
+    city: "Madrid",
+    postalCode: "28001",
+    country: "España",
+    isDefault: true,
+  },
+  {
+    id: "2",
+    street: "Calle Luna 456",
+    city: "Barcelona",
+    postalCode: "08001",
+    country: "España",
+    isDefault: false,
+  },
+];
+
+type CartItem = {
   id: string;
   name: string;
-  image: string;
   price: number;
+  quantity: number;
   size: string;
   color: string;
-  quantity: number;
-  stock?: number;
-  productVariantId?: string;
-}
+  image: string;
+};
 
-interface Address {
-  id: number;
-  address: string;
+type Address = {
+  id: string;
+  street: string;
   city: string;
-  state: string;
+  postalCode: string;
   country: string;
-}
+  isDefault: boolean;
+};
 
-interface UserData {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  addresses: Address[];
-}
-
-interface OrderResponse {
-  id: number;
-  orderDate: string;
-  status: string;
-  totalPrice: number;
-  userId: number;
-  shippingAddressId: number;
-  orderItems: Array<{
-    id: number;
-    quantity: number;
-    price: number;
-    orderId: number;
-    productVariantId: number;
-  }>;
-}
-
-// Interface para checkout anónimo
-interface AnonymousUserInfo {
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-}
-
-// Interface para respuesta de MercadoPago
-interface MercadoPagoResponse {
-  success: boolean;
-  preferenceId: string;
-  initPoint: string;
-  sandboxInitPoint: string;
-  publicKey: string;
-  orderId: string;
-  externalReference: string;
-}
-
-// Interface para estado de pago
-interface PaymentStatusResponse {
-  success: boolean;
-  orderId: number;
-  orderStatus: string;
-  mpStatus: string;
-  paymentId?: string;
-  paymentMethod?: string;
-  lastUpdated?: string;
-  hasPayment: boolean;
-  preferenceId?: string;
-}
-
-const CheckoutPage = () => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [orderId, setOrderId] = useState<string>('');
-  const [total, setTotal] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
-  const [successMessage, setSuccessMessage] = useState<string>('');
-
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-
-  const [step, setStep] = useState<number>(1);
-
-  const [addingAddress, setAddingAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState({
-    address: '',
-    city: '',
-    state: '',
-    country: '',
-  });
-
-  // Datos para usuario anónimo
-  const [anonymousUserInfo, setAnonymousUserInfo] = useState<AnonymousUserInfo>({
-    email: '',
-    firstName: '',
-    lastName: '',
-    phone: ''
-  });
-
-  const [orderCreated, setOrderCreated] = useState(false);
+export default function Checkout() {
+  const [currentStep, setCurrentStep] = useState(1);
+  const [cartItems, setCartItems] = useState<CartItem[]>(MOCK_CART_ITEMS);
+  const [addresses, setAddresses] = useState<Address[]>(MOCK_ADDRESSES);
+  const [selectedAddress, setSelectedAddress] = useState<string>("1");
+  const [isLoading, setIsLoading] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [mercadoPagoLoading, setMercadoPagoLoading] = useState(false);
-  const [mercadoPagoData, setMercadoPagoData] = useState<MercadoPagoResponse | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
-  
-  // Refs
-  const fetchControllerRef = useRef<AbortController | null>(null);
-  const hasFetchedRef = useRef(false);
-  const paymentStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [newAddress, setNewAddress] = useState({
+    street: "",
+    city: "",
+    postalCode: "",
+    country: "",
+  });
 
-  // Formateador de precio
-  const formatPrice = useCallback((price: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
-  }, []);
+  // Calcular totales
+  const subtotal = cartItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const shipping = subtotal > 50 ? 0 : 4.99;
+  const tax = subtotal * 0.21;
+  const total = subtotal + shipping + tax;
 
-  const calculateTotal = useCallback((items: CartItem[]) => {
-    const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    setTotal(newTotal);
-  }, []);
-
-  // Fetch carrito
-  const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
-    try {
-      console.log('🛒 Fetching cart data...');
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const res = await fetch(CART, {
-        headers,
-        signal,
-        credentials: 'include'
-      });
-      
-      console.log('🛒 Response status:', res.status);
-      
-      if (!res.ok) {
-        if (res.status === 404 || res.status === 204) {
-          console.log('🛒 Carrito vacío');
-          setCartItems([]);
-          calculateTotal([]);
-          return;
-        }
-        throw new Error(`Error ${res.status}: ${res.statusText}`);
-      }
-      
-      const data = await res.json();
-      console.log('🛒 Datos del carrito recibidos:', data);
-      
-      if (!Array.isArray(data)) {
-        console.error('🛑 La respuesta no es un array:', data);
-        setCartItems([]);
-        calculateTotal([]);
-        return;
-      }
-      
-      const items: CartItem[] = data.map(
-        (item: {
-          id?: number | string;
-          imageUrls?: string[];
-          imageUrl?: string;
-          productName?: string;
-          name?: string;
-          price?: number;
-          productVariant?: { price?: number; size?: string; color?: string; stock?: number };
-          size?: string;
-          color?: string;
-          quantity?: number;
-          stock?: number;
-          productVariantId?: number | string;
-        }) => ({
-          id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
-          image: item.imageUrls?.[0]?.trim() || item.imageUrl?.trim() || '/images/placeholder.png',
-          name: item.productName?.trim() || item.name?.trim() || 'Producto',
-          price: item.price || item.productVariant?.price || 0,
-          size: item.size || item.productVariant?.size || '',
-          color: item.color || item.productVariant?.color || '',
-          quantity: item.quantity || 1,
-          stock: item.stock || item.productVariant?.stock || 100,
-          productVariantId: item.productVariantId?.toString() || item.id?.toString(),
-        })
-      );
-      
-      setCartItems(items);
-      calculateTotal(items);
-    } catch (error: unknown) {
-      const err = error as Error;
-      if (err.name !== 'AbortError') {
-        console.error('🛑 Error fetching cart:', err);
-        const pendingCart = localStorage.getItem('pendingCartItem');
-        if (pendingCart && !token) {
-          try {
-            const parsed = JSON.parse(pendingCart) as {
-              id?: string | number;
-              image?: string;
-              imageUrl?: string;
-              name?: string;
-              productName?: string;
-              price?: number;
-              size?: string;
-              color?: string;
-              quantity?: number;
-              stock?: number;
-            };
-            const fallbackItem: CartItem = {
-              id: parsed.id?.toString() || `pending-${Date.now()}`,
-              image: parsed.image?.trim() || parsed.imageUrl?.trim() || '/images/placeholder.png',
-              name: parsed.name?.trim() || parsed.productName?.trim() || 'Producto',
-              price: parsed.price || 0,
-              size: parsed.size || '',
-              color: parsed.color || '',
-              quantity: parsed.quantity || 1,
-              stock: parsed.stock || 100,
-            };
-            setCartItems([fallbackItem]);
-            calculateTotal([fallbackItem]);
-          } catch {
-            setCartItems([]);
-            calculateTotal([]);
-          }
-        } else {
-          setCartItems([]);
-          calculateTotal([]);
-        }
-        throw err;
-      }
-    }
-  }, [calculateTotal]);
-
-  // Fetch usuario
-  const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
-    try {
-      console.log('👤 Fetching user data...');
-      const res = await fetch(PERFIL_ME, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        signal,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
-      
-      const user = await res.json() as UserData;
-      console.log('👤 Datos de usuario recibidos:', user);
-      
-      if (user.addresses && Array.isArray(user.addresses)) {
-        const uniqueAddresses = new Map();
-        user.addresses.forEach((address: Address) => {
-          if (!uniqueAddresses.has(address.id)) {
-            uniqueAddresses.set(address.id, address);
-          }
-        });
-        
-        user.addresses = Array.from(uniqueAddresses.values());
-      } else {
-        user.addresses = [];
-      }
-      
-      setUserData(user);
-      if (user.addresses && user.addresses.length > 0) {
-        setSelectedAddress(user.addresses[0]);
-      }
-
-      setAnonymousUserInfo({
-        email: user.email || '',
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        phone: user.phone || ''
-      });
-    } catch (error: unknown) {
-      const err = error as Error;
-      if (err.name !== 'AbortError') {
-        console.error('🛑 Error fetching user:', err);
-        throw err;
-      }
-    }
-  }, []);
-
-  // Verificar autenticación
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const isAuth = !!token;
-    setIsAuthenticated(isAuth);
-
-    if (isAuth && !hasFetchedRef.current) {
-      loadAuthenticatedData(token!);
-    } else if (!isAuth && !hasFetchedRef.current) {
-      loadAnonymousCart();
-    }
-
-    // Limpiar intervalos al desmontar
-    return () => {
-      if (paymentStatusIntervalRef.current) {
-        clearInterval(paymentStatusIntervalRef.current);
-      }
-    };
-  }, []);
-
-  const loadAuthenticatedData = useCallback(async (token: string) => {
-    setLoading(true);
-    
-    if (fetchControllerRef.current) {
-      fetchControllerRef.current.abort();
-    }
-    
-    fetchControllerRef.current = new AbortController();
-    const signal = fetchControllerRef.current.signal;
-    
-    try {
-      hasFetchedRef.current = true;
-      
-      await Promise.all([
-        fetchCart(token, signal),
-        fetchUser(token, signal)
-      ]);
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      if (error.name !== 'AbortError') {
-        console.error('Error loading authenticated data:', error);
-        setError('Error cargando los datos');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchCart, fetchUser]);
-
+  // Simulación de cargar datos del usuario
   const loadAnonymousCart = useCallback(async () => {
-    setLoading(true);
     try {
-      await fetchCart(null);
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Error loading anonymous cart:', error);
-      setError('Error cargando el carrito');
+      setIsLoading(true);
+      // En producción, aquí harías fetch a tu API
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setCartItems(MOCK_CART_ITEMS);
+    } catch {
+      setError("Error al cargar el carrito");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [fetchCart]);
+  }, []);
 
-  // Actualizar cantidad
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    
-    const item = cartItems.find((i) => i.id === itemId);
-    if (!item) return;
-    
-    if (item.stock && newQuantity > item.stock) {
-      setError(`No hay suficiente stock disponible (máximo ${item.stock})`);
-      return;
-    }
-
-    const token = localStorage.getItem('token');
-    
+  const loadAuthenticatedData = useCallback(async () => {
     try {
-      setLoading(true);
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
-        method: 'PUT',
-        headers,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error actualizando cantidad'}`);
-      }
-      
-      const updatedItems = cartItems.map((i) =>
-        i.id === itemId ? { ...i, quantity: newQuantity } : i
-      );
-      setCartItems(updatedItems);
-      calculateTotal(updatedItems);
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error updating quantity:', error);
-      setError(`Error actualizando la cantidad: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
+      // En producción, aquí cargarías datos del usuario autenticado
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      setAddresses(MOCK_ADDRESSES);
+      setSelectedAddress(MOCK_ADDRESSES.find((addr) => addr.isDefault)?.id || "");
+    } catch {
+      setError("Error al cargar datos del usuario");
     }
-  };
+  }, []);
 
-  // Eliminar item
-  const removeItem = async (itemId: string) => {
-    if (!confirm('¿Estás seguro de eliminar este producto del carrito?')) return;
+  useEffect(() => {
+    const initCheckout = async () => {
+      await loadAnonymousCart();
+      await loadAuthenticatedData();
+    };
+    initCheckout();
+  }, [loadAnonymousCart, loadAuthenticatedData]);
 
-    const token = localStorage.getItem('token');
-    
-    try {
-      setLoading(true);
-      
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const res = await fetch(`${CART}/remove/${itemId}`, {
-        method: 'DELETE',
-        headers,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando producto'}`);
-      }
-      
-      const updatedItems = cartItems.filter((i) => i.id !== itemId);
-      setCartItems(updatedItems);
-      calculateTotal(updatedItems);
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error removing item:', error);
-      setError(`Error eliminando el producto: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Agregar dirección
-  const addAddress = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Necesitas iniciar sesión para guardar direcciones');
-      return;
-    }
-
-    if (
-      !newAddress.address.trim() ||
-      !newAddress.city.trim() ||
-      !newAddress.state.trim() ||
-      !newAddress.country.trim()
-    ) {
-      setError('Completa todos los campos de la dirección');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await fetch(ADDRESS, {
-        method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${token}`, 
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify(newAddress),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error agregando dirección'}`);
-      }
-      
-      const createdAddress = await res.json() as Address;
-
-      setUserData(prevUserData => {
-        if (!prevUserData) return prevUserData;
-        
-        const existsById = prevUserData.addresses.some(addr => addr.id === createdAddress.id);
-        const existsByData = prevUserData.addresses.some(addr => 
-          addr.address === createdAddress.address &&
-          addr.city === createdAddress.city &&
-          addr.state === createdAddress.state &&
-          addr.country === createdAddress.country
-        );
-        
-        if (existsById || existsByData) {
-          console.log('La dirección ya existe, no se agregará duplicado');
-          return prevUserData;
-        }
-        
-        return {
-          ...prevUserData,
-          addresses: [createdAddress, ...prevUserData.addresses]
-        };
-      });
-      
-      setSelectedAddress(createdAddress);
-      setAddingAddress(false);
-      setNewAddress({ address: '', city: '', state: '', country: '' });
-      setError('');
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error adding address:', error);
-      setError(`No se pudo agregar la dirección: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Eliminar dirección
-  const deleteAddress = async (addressId: number) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('No autenticado');
-      return;
-    }
-    
-    if (!confirm('¿Seguro que quieres eliminar esta dirección?')) return;
-
-    try {
-      setLoading(true);
-      const res = await fetch(`${ADDRESS}/${addressId}`, {
-        method: 'DELETE',
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando dirección'}`);
-      }
-
-      setUserData(prevUserData => {
-        if (!prevUserData) return prevUserData;
-        
-        const updatedAddresses = prevUserData.addresses.filter((a) => a.id !== addressId);
-        
-        return {
-          ...prevUserData,
-          addresses: updatedAddresses
-        };
-      });
-
-      setSelectedAddress(prevSelected => 
-        prevSelected?.id === addressId ? null : prevSelected
-      );
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error deleting address:', error);
-      setError(`No se pudo eliminar la dirección: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Navegación entre pasos
-  const nextStep = () => {
-    if (step === 1 && cartItems.length === 0) {
-      setError('Tu carrito está vacío');
-      return;
-    }
-    
-    if (step === 2) {
-      if (isAuthenticated) {
-        if (!selectedAddress) {
-          setError('Selecciona una dirección de envío');
-          return;
-        }
-      } else {
-        if (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone) {
-          setError('Completa tus datos de contacto para continuar');
-          return;
-        }
-        
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(anonymousUserInfo.email)) {
-          setError('Ingresa un email válido');
-          return;
-        }
-        
-        if (anonymousUserInfo.phone.replace(/\D/g, '').length < 8) {
-          setError('Ingresa un número de teléfono válido');
-          return;
-        }
-        
-        if (!selectedAddress) {
-          setError('Debes agregar una dirección de envío');
-          return;
-        }
-        
-        if (!selectedAddress.address?.trim() || !selectedAddress.city?.trim() || 
-            !selectedAddress.state?.trim() || !selectedAddress.country?.trim()) {
-          setError('Completa todos los campos de la dirección');
-          return;
-        }
-      }
-    }
-    
-    setStep((prev) => Math.min(prev + 1, 3));
-    setError('');
-  };
-
-  const prevStep = () => {
-    setStep((prev) => Math.max(prev - 1, 1));
-    setError('');
-  };
-
-  // Crear orden
-  const createOrder = useCallback(async (): Promise<OrderResponse | null> => {
-    if (cartItems.length === 0) {
-      setError('Carrito vacío');
-      return null;
-    }
-    
+  const createMercadoPagoPreference = useCallback(async () => {
     if (!selectedAddress) {
-      setError('Selecciona una dirección');
+      setError("Por favor selecciona una dirección de envío");
       return null;
     }
 
     try {
       setIsProcessingPayment(true);
-      setError('');
-      setSuccessMessage('');
+      setError(null);
 
-      console.log('🚀 Creando orden...');
-      
-      let orderResponse: OrderResponse;
-      
-      if (isAuthenticated) {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('Usuario no autenticado');
-        
-        console.log('👤 Usuario autenticado, creando orden con shippingAddressId:', selectedAddress.id);
-        
-        const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            shippingAddressId: selectedAddress.id
-          }),
-        });
+      // Datos para crear la preferencia de MercadoPago
+      const preferenceData = {
+        items: cartItems.map((item) => ({
+          title: item.name,
+          unit_price: item.price,
+          quantity: item.quantity,
+          currency_id: "EUR",
+        })),
+        payer: {
+          name: "Cliente Ejemplo",
+          email: "cliente@example.com",
+        },
+        back_urls: {
+          success: `${window.location.origin}/checkout/success`,
+          failure: `${window.location.origin}/checkout/failure`,
+          pending: `${window.location.origin}/checkout/pending`,
+        },
+        auto_return: "approved",
+        statement_descriptor: "A Marte",
+        external_reference: `order_${Date.now()}`,
+      };
 
-        console.log('📦 Orden autenticada response:', orderRes.status);
-        
-        if (!orderRes.ok) {
-          let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
-          try {
-            const errorData = await orderRes.text();
-            errorMessage = errorData || errorMessage;
-          } catch {}
-          throw new Error(errorMessage);
-        }
+      // En producción: llamar a tu API para crear la preferencia
+      console.log("Creando preferencia de MercadoPago:", preferenceData);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden autenticada creada:', orderResponse);
-        
-      } else {
-        if (!anonymousUserInfo.email) {
-          throw new Error('Email requerido para usuarios anónimos');
-        }
-        
-        console.log('👤 Usuario anónimo, creando orden con email:', anonymousUserInfo.email);
-        
-        const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            customerEmail: anonymousUserInfo.email,
-            customerFirstName: anonymousUserInfo.firstName,
-            customerLastName: anonymousUserInfo.lastName,
-            customerPhone: anonymousUserInfo.phone,
-            shippingAddress: {
-              address: selectedAddress.address,
-              city: selectedAddress.city,
-              state: selectedAddress.state,
-              country: selectedAddress.country
-            }
-          }),
-        });
-
-        console.log('📦 Orden anónima response:', orderRes.status);
-        
-        if (!orderRes.ok) {
-          let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
-
-          try {
-            const errorData = await orderRes.text();
-            errorMessage = errorData || errorMessage;
-          } catch {}
-          throw new Error(errorMessage);
-        }
-
-        orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden anónima creada:', orderResponse);
-      }
-
-      if (!orderResponse.id) {
-        throw new Error('No se pudo obtener el ID de la orden');
-      }
-
-      setOrderId(orderResponse.id.toString());
-      setOrderCreated(true);
-      setSuccessMessage(`✅ Orden #${orderResponse.id} creada exitosamente`);
-
-      return orderResponse;
-
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error creando orden:', error);
-      setError(`Error al crear la orden: ${error.message || 'Error desconocido'}`);
-      setOrderCreated(false);
+      // Simular respuesta exitosa
+      return {
+        id: "mock_preference_id_" + Date.now(),
+        init_point: "https://www.mercadopago.com/checkout/mock",
+      };
+    } catch {
+      setError("Error al procesar el pago");
       return null;
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo]);
+  }, [cartItems, selectedAddress]);
 
-  // Crear preferencia de MercadoPago
-  const createMercadoPagoPreference = async (orderId: string) => {
-    try {
-      setMercadoPagoLoading(true);
-      setError('');
+  // Manejar el pago con MercadoPago
+  const handleMercadoPagoPayment = useCallback(async () => {
+    const preference = await createMercadoPagoPreference();
+    if (preference) {
+      // En producción, redirigir al init_point de MercadoPago
+      console.log("Redirigiendo a MercadoPago:", preference.init_point);
       
-      console.log('💳 Creando preferencia MercadoPago para orden:', orderId);
-      
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({
-          orderId: parseInt(orderId)
-        }),
-      });
-
-      console.log('💳 Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText || 'Error creando preferencia'}`);
-      }
-
-      const data = await response.json() as MercadoPagoResponse;
-      console.log('✅ Preferencia MercadoPago creada:', data);
-      
-      if (!data.success) {
-        throw new Error('No se pudo crear la preferencia de pago');
-      }
-      
-      setMercadoPagoData(data);
-      setSuccessMessage(`✅ Preferencia de pago creada. Redirigiendo a MercadoPago...`);
-      
-      // Iniciar polling del estado del pago
-      startPaymentStatusPolling(orderId);
-      
-      // Redirigir a MercadoPago después de 1 segundo
+      // Simulación de éxito después de 2 segundos
+      setIsProcessingPayment(true);
       setTimeout(() => {
-        redirectToMercadoPago(data);
-      }, 1000);
-      
-      return data;
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error creando preferencia MercadoPago:', error);
-      setError(`Error al crear el pago: ${error.message || 'Error desconocido'}`);
-      return null;
-    } finally {
-      setMercadoPagoLoading(false);
+        setIsProcessingPayment(false);
+        setOrderPlaced(true);
+        setCurrentStep(3);
+      }, 2000);
     }
+  }, [createMercadoPagoPreference]);
+
+  // Manejar la simulación de pago exitoso
+  const handleSimulateSuccess = async () => {
+    setIsProcessingPayment(true);
+    setError(null);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    setOrderPlaced(true);
+    setCurrentStep(3);
+    setIsProcessingPayment(false);
   };
 
-  // Redirigir a MercadoPago
-  const redirectToMercadoPago = (mpData: MercadoPagoResponse) => {
-    if (!mpData || !mpData.initPoint) {
-      setError('No se pudo obtener la URL de pago');
+  // Manejar la simulación de error de pago
+  const handleSimulateError = async () => {
+    setIsProcessingPayment(true);
+    setError(null);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setError("Pago rechazado: Simulación de error de tarjeta");
+    setIsProcessingPayment(false);
+  };
+
+  // Manejar cambio de cantidad
+  const handleQuantityChange = (itemId: string, newQuantity: number) => {
+    if (newQuantity < 1) {
+      setCartItems(cartItems.filter((item) => item.id !== itemId));
       return;
     }
-    
-    // Usar sandboxInitPoint para desarrollo, initPoint para producción
-    const mpUrl = process.env.NODE_ENV === 'development' 
-      ? mpData.sandboxInitPoint || mpData.initPoint
-      : mpData.initPoint;
-    
-    console.log('🌐 Redirigiendo a MercadoPago:', mpUrl);
-    window.location.href = mpUrl;
+    setCartItems(
+      cartItems.map((item) =>
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      )
+    );
   };
 
-  // Verificar estado del pago
-  const checkPaymentStatus = async (orderId: string): Promise<PaymentStatusResponse | null> => {
-    try {
-      console.log('🔄 Verificando estado del pago para orden:', orderId);
-      
-      const token = localStorage.getItem('token');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
-        method: 'GET',
-        headers,
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        console.error('❌ Error verificando estado:', response.status);
-        return null;
-      }
-
-      const data = await response.json() as PaymentStatusResponse;
-      console.log('📊 Estado del pago:', data);
-      
-      setPaymentStatus(data);
-      
-      // Si el pago está aprobado, redirigir a éxito
-      if (data.orderStatus === 'APROBADO' || data.mpStatus === 'approved') {
-        handleSuccessfulPayment(orderId);
-        return data;
-      }
-      
-      // Si el pago está rechazado, mostrar error
-      if (data.orderStatus === 'RECHAZADO' || data.mpStatus === 'rejected') {
-        setError('El pago fue rechazado. Por favor intenta con otro método de pago.');
-        return data;
-      }
-      
-      return data;
-      
-    } catch (err: unknown) {
-      console.error('🛑 Error verificando estado del pago:', err);
-      return null;
-    }
+  // Manejar eliminación de item
+  const handleRemoveItem = (itemId: string) => {
+    setCartItems(cartItems.filter((item) => item.id !== itemId));
   };
 
-  // Iniciar polling del estado del pago
-  const startPaymentStatusPolling = (orderId: string) => {
-    // Limpiar intervalo anterior si existe
-    if (paymentStatusIntervalRef.current) {
-      clearInterval(paymentStatusIntervalRef.current);
-    }
-    
-    // Verificar inmediatamente
-    checkPaymentStatus(orderId);
-    
-    // Configurar polling cada 5 segundos
-    paymentStatusIntervalRef.current = setInterval(() => {
-      checkPaymentStatus(orderId);
-    }, 5000);
-    
-    // Detener después de 5 minutos (300 segundos)
-    setTimeout(() => {
-      if (paymentStatusIntervalRef.current) {
-        clearInterval(paymentStatusIntervalRef.current);
-        paymentStatusIntervalRef.current = null;
-        setError('Tiempo de espera agotado. Si realizaste el pago, contáctanos.');
-      }
-    }, 300000);
-  };
-
-  // Manejar pago exitoso
-  const handleSuccessfulPayment = (orderId: string) => {
-    // Detener polling
-    if (paymentStatusIntervalRef.current) {
-      clearInterval(paymentStatusIntervalRef.current);
-      paymentStatusIntervalRef.current = null;
-    }
-    
-    // Limpiar carrito
-    setCartItems([]);
-    setTotal(0);
-    localStorage.removeItem('pendingCartItem');
-    
-    // Mostrar mensaje de éxito
-    setSuccessMessage(`✅ ¡Pago exitoso! Tu orden #${orderId} ha sido confirmada.`);
-    
-    // Redirigir a página de éxito después de 3 segundos
-    setTimeout(() => {
-      window.location.href = `/checkout/success?orderId=${orderId}`;
-    }, 3000);
-  };
-
-  // Simular pago (para desarrollo/testing)
-  const simulatePayment = async (status: 'approved' | 'rejected') => {
-    if (!orderId) {
-        setError('No hay orden creada');
-        return;
+  // Manejar agregar dirección
+  const handleAddAddress = () => {
+    if (!newAddress.street || !newAddress.city || !newAddress.postalCode || !newAddress.country) {
+      setError("Por favor completa todos los campos de la dirección");
+      return;
     }
 
-    try {
-        setMercadoPagoLoading(true);
-        setError('');
-        setSuccessMessage('');
-        
-        console.log('🎮 Simulando pago con status:', status, 'orderId:', orderId);
-        
-        // IMPORTANTE: Para usuarios autenticados, enviar el token
-        const token = localStorage.getItem('token');
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-        
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
-        
-        const response = await fetch(MERCADOPAGO_SIMULATE, {
-            method: 'POST',
-            headers,
-            credentials: 'include',
-            body: JSON.stringify({
-                orderId: parseInt(orderId),
-                status: status
-            }),
-        });
-
-        console.log('🎮 Simulación response:', response.status, response.statusText);
-        
-        const responseText = await response.text();
-        console.log('🎮 Response body:', responseText);
-        
-        if (response.ok) {
-            const result = JSON.parse(responseText);
-            console.log('✅ Resultado simulación:', result);
-            
-            if (status === 'approved') {
-                handleSuccessfulPayment(orderId);
-            } else {
-                setError(`❌ Pago rechazado para orden #${orderId}.`);
-                
-                // Opcional: Redirigir a página de error después de 2 segundos
-                setTimeout(() => {
-                    window.location.href = `/checkout/failure?orderId=${orderId}`;
-                }, 2000);
-            }
-        } else {
-            console.error('❌ Error en simulación:', responseText);
-            
-            try {
-                const errorJson = JSON.parse(responseText) as { error?: string };
-                setError(`❌ Error simulando pago: ${errorJson.error || responseText}`);
-            } catch {
-                setError(`❌ Error simulando pago: ${responseText}`);
-            }
-            
-            // Mostrar mensaje de error por 5 segundos
-            setTimeout(() => setError(''), 5000);
-        }
-    } catch (error: unknown) {
-        const err = error as Error;
-        console.error('🛑 Error de conexión al simular pago:', err);
-        setError(`❌ Error de conexión: ${err.message || 'Error desconocido'}`);
-        
-        // Mostrar mensaje de error por 5 segundos
-        setTimeout(() => setError(''), 5000);
-    } finally {
-        setMercadoPagoLoading(false);
-    }
-};
-
-  // Crear orden y preferencia cuando llegamos al paso 3
-  useEffect(() => {
-    const createOrderAndPreference = async () => {
-      if (step === 3 && !orderCreated && !isProcessingPayment && !mercadoPagoData) {
-        const order = await createOrder();
-        if (order) {
-          await createMercadoPagoPreference(order.id.toString());
-        }
-      }
+    const newAddressObj: Address = {
+      id: Date.now().toString(),
+      ...newAddress,
+      isDefault: false,
     };
-    
-    createOrderAndPreference();
-  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder]);
 
-  const steps = [
-    { number: 1, label: "Carrito", icon: ShoppingBag },
-    { number: 2, label: isAuthenticated ? "Envío" : "Datos", icon: isAuthenticated ? MapPin : User },
-    { number: 3, label: "Pago", icon: CreditCard },
-  ];
+    setAddresses([...addresses, newAddressObj]);
+    setSelectedAddress(newAddressObj.id);
+    setNewAddress({ street: "", city: "", postalCode: "", country: "" });
+    setShowAddressForm(false);
+    setError(null);
+  };
 
-  if (loading && step === 1) {
+  // Manejar eliminación de dirección
+  const handleDeleteAddress = (addressId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (addresses.length <= 1) {
+      setError("Debes tener al menos una dirección registrada");
+      return;
+    }
+    setAddresses(addresses.filter((addr) => addr.id !== addressId));
+    if (selectedAddress === addressId) {
+      setSelectedAddress(addresses[0]?.id || "");
+    }
+  };
+
+  // Navegar entre pasos
+  const goToNextStep = () => {
+    if (currentStep === 1 && cartItems.length === 0) {
+      setError("Tu carrito está vacío");
+      return;
+    }
+    if (currentStep === 2 && !selectedAddress) {
+      setError("Por favor selecciona una dirección de envío");
+      return;
+    }
+    setCurrentStep(currentStep + 1);
+    setError(null);
+  };
+
+  const goToPreviousStep = () => {
+    setCurrentStep(currentStep - 1);
+    setError(null);
+  };
+
+  if (isLoading) {
     return (
       <div className="checkout-page">
-        <div className="loading-state">
-          <div className="spinner"></div>
+        <div className="checkout-loading-state">
+          <div className="checkout-spinner"></div>
           <p>Cargando tu carrito...</p>
         </div>
       </div>
@@ -1064,178 +292,162 @@ const CheckoutPage = () => {
 
   return (
     <div className="checkout-page">
-      {/* Elementos decorativos */}
       <div className="checkout-decorative-elements">
         <div className="checkout-decorative-icon star">
-          <Star className="checkout-icon-sm" fill="currentColor" />
+          <svg className="checkout-icon-sm" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+          </svg>
         </div>
         <div className="checkout-decorative-icon moon">
-          <Star className="checkout-icon-md" />
+          <svg className="checkout-icon-md" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 01-4.4 2.26 5.403 5.403 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
+          </svg>
         </div>
         <div className="checkout-decorative-icon rocket">
-          <Star className="checkout-icon-lg" />
-        </div>
-        <div className="checkout-decorative-icon sparkles">
-          <Sparkles className="checkout-icon-sm" />
+          <svg className="checkout-icon-lg" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2.5l-4 4v2l-6 6v4h4v5l5 1 5-1v-5h4v-4l-6-6v-2l-4-4zm-2 4.83l6.27 6.27-2.12 2.12-3.54-3.54-3.54 3.54-2.12-2.12L10 7.33z" />
+          </svg>
         </div>
       </div>
 
-      {/* Info de usuario */}
-      {!isAuthenticated && step > 1 && (
-        <div className="checkout-user-info-banner">
-          <User className="checkout-icon" />
-          <span>Comprando como invitado</span>
-          <button 
-            onClick={() => window.location.href = '/auth/login?redirect=/checkout'}
-            className="checkout-login-prompt-btn"
-          >
-            Iniciar sesión
-          </button>
-        </div>
-      )}
-
       {/* Progress Steps */}
-      <div className="checkout-progress-section">
+      <section className="checkout-progress-section">
         <div className="checkout-progress-container">
           <div className="checkout-progress-steps">
             <div className="checkout-progress-line">
-              <div className="checkout-progress-line-fill" style={{ width: `${((step - 1) / 2) * 100}%` }} />
+              <div
+                className="checkout-progress-line-fill"
+                style={{ width: `${((currentStep - 1) / 2) * 100}%` }}
+              ></div>
             </div>
 
-            {steps.map((s) => {
-              const Icon = s.icon;
-              const isActive = step >= s.number;
-              const isCurrent = step === s.number;
-
-              return (
-                <div key={s.number} className={`checkout-step ${isActive ? "active" : ""} ${isCurrent ? "current" : ""}`}>
-                  <div className="checkout-step-circle">
-                    {isActive && step > s.number ? (
-                      <Check className="checkout-icon" strokeWidth={3} />
-                    ) : (
-                      <Icon className="checkout-icon" />
-                    )}
-                  </div>
-                  <span className="checkout-step-label">{s.label}</span>
+            {[
+              { number: 1, label: "Carrito", icon: "🛒" },
+              { number: 2, label: "Envío", icon: "📍" },
+              { number: 3, label: "Pago", icon: "💳" },
+            ].map((step) => (
+              <div
+                key={step.number}
+                className={`checkout-step ${step.number < currentStep ? "active" : ""} ${step.number === currentStep ? "current" : ""}`}
+              >
+                <div className="checkout-step-circle">
+                  {step.icon}
                 </div>
-              );
-            })}
+                <span className="checkout-step-label">{step.label}</span>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Main Content */}
       <main className="checkout-main">
-        {/* Messages */}
         {error && (
           <div className="checkout-error-message">
-            <AlertCircle className="checkout-icon" />
             <span>{error}</span>
-            <button onClick={() => setError("")}>
-              <X className="checkout-icon" />
+            <button onClick={() => setError(null)}>
+              <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
             </button>
           </div>
         )}
 
-        {successMessage && (
-          <div className="checkout-success-message">
-            <Check className="checkout-icon" />
-            <span>{successMessage}</span>
-          </div>
-        )}
-
         <div className="checkout-main-grid">
-          {/* Main Section */}
-          <div className="checkout-main-content">
+          {/* Left Column - Steps Content */}
+          <div className="checkout-steps-content">
             {/* Step 1: Cart */}
-            {step === 1 && (
+            {currentStep === 1 && (
               <div className="checkout-animate-in">
                 <div className="checkout-section-header">
                   <div className="checkout-section-icon cart">
-                    <ShoppingBag className="checkout-icon" />
+                    <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z" />
+                    </svg>
                   </div>
                   <div>
                     <h2 className="checkout-section-title">Tu Carrito</h2>
-                    <p className="checkout-section-subtitle">{cartItems.length} producto(s)</p>
-                    {!isAuthenticated && (
-                      <p className="checkout-guest-notice">
-                        <User className="checkout-icon" size={16} />
-                        Estás comprando como invitado
-                      </p>
-                    )}
+                    <p className="checkout-section-subtitle">
+                      {cartItems.length} {cartItems.length === 1 ? "producto" : "productos"} en tu carrito
+                    </p>
                   </div>
                 </div>
 
                 {cartItems.length === 0 ? (
                   <div className="checkout-empty-cart">
                     <div className="checkout-empty-cart-icon">
-                      <ShoppingBag className="checkout-icon" />
+                      <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.73 22.73L2.77 2.77 2 2l-.73-.73L0 2.54l4.39 4.39 2.21 4.66-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h7.46l1.38 1.38c-.5.36-.83.95-.83 1.62 0 1.1.89 2 1.99 2 .67 0 1.26-.33 1.62-.84L21.46 24l1.27-1.27zM7.42 15c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h2.36l2 2H7.42zm8.13-2c.75 0 1.41-.41 1.75-1.03l3.58-6.49c.08-.14.12-.31.12-.48 0-.55-.45-1-1-1H6.54l9.01 9zM7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2z" />
+                      </svg>
                     </div>
                     <h3>Tu carrito está vacío</h3>
-                    <p>¡Explora nuestra colección de pijamas espaciales!</p>
-                    <button className="checkout-btn checkout-btn-secondary" onClick={() => (window.location.href = "/")}>
-                      Seguir Comprando
-                    </button>
+                    <p>Agrega productos para continuar con tu compra</p>
+                    <Link href="/products" className="checkout-btn checkout-btn-primary">
+                      Ir a Productos
+                    </Link>
                   </div>
                 ) : (
                   <div className="checkout-cart-items">
                     {cartItems.map((item) => (
-                      <div key={`cart-${item.id}`} className="checkout-cart-item">
+                      <div key={item.id} className="checkout-cart-item">
                         <div className="checkout-cart-item-inner">
                           <div className="checkout-cart-item-image">
                             <Image
                               src={item.image}
                               alt={item.name}
                               fill
+                              sizes="(max-width: 640px) 100vw, 200px"
                               style={{ objectFit: "cover" }}
-                              sizes="(max-width: 640px) 100vw, 9rem"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = '/images/placeholder.png';
-                              }}
                             />
-                            <span className="checkout-cart-item-size-badge">{item.size}</span>
+                            <span className="checkout-cart-item-size-badge">
+                              {item.size}
+                            </span>
                           </div>
-
                           <div className="checkout-cart-item-content">
-                            <div>
-                              <h3 className="checkout-cart-item-name">{item.name}</h3>
-                              <div className="checkout-cart-item-badges">
-                                <span className="checkout-badge checkout-badge-outline checkout-badge-purple">{item.color}</span>
-                                <span className="checkout-badge checkout-badge-outline checkout-badge-mint">Stock: {item.stock || 'Disponible'}</span>
-                              </div>
-                              <p className="checkout-cart-item-price">{formatPrice(item.price)}</p>
+                            <h3 className="checkout-cart-item-name">{item.name}</h3>
+                            <div className="checkout-cart-item-badges">
+                              <span className="checkout-badge checkout-badge-outline checkout-badge-purple">
+                                Color: {item.color}
+                              </span>
+                              <span className="checkout-badge checkout-badge-outline checkout-badge-mint">
+                                Talla: {item.size}
+                              </span>
                             </div>
-
+                            <div className="checkout-cart-item-price">
+                              ${item.price.toFixed(2)}
+                            </div>
                             <div className="checkout-cart-item-actions">
                               <div className="checkout-quantity-controls">
                                 <button
                                   className="checkout-quantity-btn"
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                  disabled={loading || item.quantity <= 1}
+                                  onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                                  disabled={item.quantity <= 1}
                                 >
-                                  <Minus className="checkout-icon" />
+                                  <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 13H5v-2h14v2z" />
+                                  </svg>
                                 </button>
                                 <span className="checkout-quantity-value">{item.quantity}</span>
                                 <button
                                   className="checkout-quantity-btn"
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                  disabled={loading || Boolean(item.stock && item.quantity >= item.stock)}
+                                  onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
                                 >
-                                  <Plus className="checkout-icon" />
+                                  <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                                  </svg>
                                 </button>
                               </div>
-
                               <div className="checkout-cart-item-subtotal">
-                                <p className="checkout-subtotal-text">
-                                  Subtotal: <span>{formatPrice(item.price * item.quantity)}</span>
-                                </p>
-                                <button 
-                                  className="checkout-delete-btn" 
-                                  onClick={() => removeItem(item.id)}
-                                  disabled={loading}
+                                <span className="checkout-subtotal-text">
+                                  Subtotal: <span>${(item.price * item.quantity).toFixed(2)}</span>
+                                </span>
+                                <button
+                                  className="checkout-delete-btn"
+                                  onClick={() => handleRemoveItem(item.id)}
                                 >
-                                  <Trash2 className="checkout-icon" />
+                                  <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                                  </svg>
                                 </button>
                               </div>
                             </div>
@@ -1248,560 +460,323 @@ const CheckoutPage = () => {
               </div>
             )}
 
-            {/* Step 2: Address & User Info */}
-            {step === 2 && (
-              <div className="checkout-animate-in-right">
+            {/* Step 2: Shipping Address */}
+            {currentStep === 2 && (
+              <div className="checkout-animate-in">
                 <div className="checkout-section-header">
                   <div className="checkout-section-icon address">
-                    {isAuthenticated ? <MapPin className="checkout-icon" /> : <User className="checkout-icon" />}
+                    <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" />
+                    </svg>
                   </div>
                   <div>
-                    <h2 className="checkout-section-title">
-                      {isAuthenticated ? 'Dirección de Envío' : 'Tus Datos de Contacto'}
-                    </h2>
+                    <h2 className="checkout-section-title">Dirección de Envío</h2>
                     <p className="checkout-section-subtitle">
-                      {isAuthenticated ? '¿A dónde enviamos tus pijamas?' : 'Necesitamos algunos datos para tu pedido'}
+                      Selecciona o agrega una dirección para el envío
                     </p>
                   </div>
                 </div>
 
                 <div className="checkout-card">
+                  <div className="checkout-card-header navy">
+                    <h3 className="checkout-card-header-title">
+                      <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+                      </svg>
+                      Tus Direcciones
+                    </h3>
+                  </div>
                   <div className="checkout-card-content">
-                    {/* User Info Form (para anónimos) */}
-                    {!isAuthenticated && (
-                      <div className="checkout-user-info-form">
-                        <h3 className="checkout-user-info-title">
-                          <User className="checkout-icon" />
-                          Información de Contacto
-                        </h3>
+                    <div className="checkout-address-list">
+                      {addresses.map((address) => (
+                        <div
+                          key={address.id}
+                          className={`checkout-address-card ${selectedAddress === address.id ? "selected" : ""}`}
+                          onClick={() => setSelectedAddress(address.id)}
+                        >
+                          <div className="checkout-address-card-inner">
+                            <div className="checkout-address-radio">
+                              {selectedAddress === address.id && (
+                                <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="checkout-address-details">
+                              <p>{address.street}</p>
+                              <p>
+                                {address.city}, {address.postalCode}
+                              </p>
+                              <p>{address.country}</p>
+                            </div>
+                            <button
+                              className="checkout-address-delete-btn"
+                              onClick={(e) => handleDeleteAddress(address.id, e)}
+                            >
+                              <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {showAddressForm ? (
+                      <div className="checkout-add-address-form">
+                        <h4 className="checkout-add-address-title">
+                          <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                          </svg>
+                          Nueva Dirección
+                        </h4>
                         <div className="checkout-form-grid">
                           <div className="checkout-form-group">
-                            <label htmlFor="email">
-                              <Mail className="checkout-icon" size={16} />
-                              Email *
-                            </label>
+                            <label htmlFor="street">Calle y Número</label>
                             <input
-                              id="email"
-                              type="email"
+                              type="text"
+                              id="street"
                               className="checkout-form-input"
-                              placeholder="tu@email.com"
-                              value={anonymousUserInfo.email}
-                              onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, email: e.target.value})}
-                              required
+                              value={newAddress.street}
+                              onChange={(e) => setNewAddress({ ...newAddress, street: e.target.value })}
+                              placeholder="Av. del Cosmos 123"
                             />
                           </div>
-                          
                           <div className="checkout-form-grid-2">
                             <div className="checkout-form-group">
-                              <label htmlFor="firstName">Nombre *</label>
+                              <label htmlFor="city">Ciudad</label>
                               <input
-                                id="firstName"
                                 type="text"
+                                id="city"
                                 className="checkout-form-input"
-                                placeholder="Tu nombre"
-                                value={anonymousUserInfo.firstName}
-                                onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, firstName: e.target.value})}
-                                required
+                                value={newAddress.city}
+                                onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                                placeholder="Madrid"
                               />
                             </div>
                             <div className="checkout-form-group">
-                              <label htmlFor="lastName">Apellido</label>
+                              <label htmlFor="postalCode">Código Postal</label>
                               <input
-                                id="lastName"
                                 type="text"
+                                id="postalCode"
                                 className="checkout-form-input"
-                                placeholder="Tu apellido"
-                                value={anonymousUserInfo.lastName}
-                                onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, lastName: e.target.value})}
+                                value={newAddress.postalCode}
+                                onChange={(e) => setNewAddress({ ...newAddress, postalCode: e.target.value })}
+                                placeholder="28001"
                               />
                             </div>
                           </div>
-                          
                           <div className="checkout-form-group">
-                            <label htmlFor="phone">
-                              <Phone className="checkout-icon" size={16} />
-                              Teléfono *
-                            </label>
+                            <label htmlFor="country">País</label>
                             <input
-                              id="phone"
-                              type="tel"
+                              type="text"
+                              id="country"
                               className="checkout-form-input"
-                              placeholder="+57 300 123 4567"
-                              value={anonymousUserInfo.phone}
-                              onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, phone: e.target.value})}
-                              required
+                              value={newAddress.country}
+                              onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                              placeholder="España"
                             />
                           </div>
-                        </div>
-                        
-                        <div className="checkout-guest-notice">
-                          <small>
-                            ⚠️ Como invitado, tu pedido se vinculará a tu email. 
-                            Puedes registrarte después para ver el historial de tus órdenes.
-                          </small>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Direcciones */}
-                    <div className="checkout-address-section">
-                      <h3 className="checkout-address-section-title">
-                        <MapPin className="checkout-icon" />
-                        Dirección de Envío
-                      </h3>
-
-                      {isAuthenticated ? (
-                        // Usuario autenticado - direcciones guardadas
-                        <>
-                          {loading ? (
-                            <div className="checkout-loading-state">
-                              <div className="checkout-spinner"></div>
-                              <p>Cargando tus direcciones...</p>
-                            </div>
-                          ) : userData && userData.addresses.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: "2rem 0" }}>
-                              <MapPin className="checkout-icon" style={{ width: "3rem", height: "3rem", color: "var(--checkout-gray-dark)", margin: "0 auto 1rem" }} />
-                              <p style={{ color: "var(--checkout-gray-dark)", marginBottom: "1rem" }}>
-                                No tienes direcciones guardadas
-                              </p>
-                            </div>
-                          ) : userData ? (
-                            <div className="checkout-address-list">
-                              {userData.addresses.map((address) => (
-                                <div
-                                  key={address.id}
-                                  onClick={() => setSelectedAddress(address)}
-                                  className={`checkout-address-card ${selectedAddress?.id === address.id ? "selected" : ""}`}
-                                >
-                                  <div className="checkout-address-card-inner">
-                                    <div className="checkout-address-radio">
-                                      {selectedAddress?.id === address.id && <Check className="checkout-icon" strokeWidth={3} />}
-                                    </div>
-                                    <div className="checkout-address-details">
-                                      <p>{address.address}</p>
-                                      <p>
-                                        {address.city}, {address.state}
-                                      </p>
-                                      <p>{address.country}</p>
-                                    </div>
-                                    <button
-                                      className="checkout-address-delete-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteAddress(address.id);
-                                      }}
-                                      disabled={loading}
-                                    >
-                                      <Trash2 className="checkout-icon" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {/* Add New Address */}
-                          {addingAddress ? (
-                            <div className="checkout-add-address-form">
-                              <h3 className="checkout-add-address-title">
-                                <Plus className="checkout-icon" />
-                                Nueva Dirección
-                              </h3>
-                              <div className="checkout-form-grid">
-                                <div className="checkout-form-group">
-                                  <label htmlFor="address">Dirección Completa</label>
-                                  <input
-                                    id="address"
-                                    type="text"
-                                    className="checkout-form-input"
-                                    placeholder="Calle 123 #45-67, Apto 301"
-                                    value={newAddress.address}
-                                    onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-                                  />
-                                </div>
-                                <div className="checkout-form-grid-2">
-                                  <div className="checkout-form-group">
-                                    <label htmlFor="city">Ciudad</label>
-                                    <input
-                                      id="city"
-                                      type="text"
-                                      className="checkout-form-input"
-                                      placeholder="Bogotá"
-                                      value={newAddress.city}
-                                      onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                                    />
-                                  </div>
-                                  <div className="checkout-form-group">
-                                    <label htmlFor="state">Departamento</label>
-                                    <input
-                                      id="state"
-                                      type="text"
-                                      className="checkout-form-input"
-                                      placeholder="Cundinamarca"
-                                      value={newAddress.state}
-                                      onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="checkout-form-group">
-                                  <label htmlFor="country">País</label>
-                                  <input
-                                    id="country"
-                                    type="text"
-                                    className="checkout-form-input"
-                                    placeholder="Colombia"
-                                    value={newAddress.country}
-                                    onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
-                                  />
-                                </div>
-                                <div className="checkout-form-actions">
-                                  <button onClick={addAddress} className="checkout-btn checkout-btn-primary" disabled={loading}>
-                                    <Check className="checkout-icon" />
-                                    {loading ? 'Guardando...' : 'Guardar'}
-                                  </button>
-                                  <button onClick={() => setAddingAddress(false)} className="checkout-btn checkout-btn-outline">
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <button 
-                              className="checkout-add-address-btn" 
-                              onClick={() => setAddingAddress(true)}
-                              disabled={loading}
+                          <div className="checkout-form-actions">
+                            <button
+                              className="checkout-btn checkout-btn-primary"
+                              onClick={handleAddAddress}
                             >
-                              <Plus className="checkout-icon" />
-                              Agregar Nueva Dirección
+                              Guardar Dirección
                             </button>
-                          )}
-                        </>
-                      ) : (
-                        // Usuario anónimo - formulario simple de dirección
-                        <div className="checkout-anonymous-address-form">
-                          <div className="checkout-form-grid">
-                            <div className="checkout-form-group">
-                              <label htmlFor="anon-address">Dirección Completa *</label>
-                              <input
-                                id="anon-address"
-                                type="text"
-                                className="checkout-form-input"
-                                placeholder="Calle 123 #45-67, Apto 301"
-                                value={selectedAddress?.address || ''}
-                                onChange={(e) => setSelectedAddress({
-                                  ...selectedAddress || {id: Date.now(), city: '', state: '', country: ''},
-                                  address: e.target.value
-                                })}
-                                required
-                              />
-                            </div>
-                            <div className="checkout-form-grid-2">
-                              <div className="checkout-form-group">
-                                <label htmlFor="anon-city">Ciudad *</label>
-                                <input
-                                  id="anon-city"
-                                  type="text"
-                                  className="checkout-form-input"
-                                  placeholder="Bogotá"
-                                  value={selectedAddress?.city || ''}
-                                  onChange={(e) => setSelectedAddress({
-                                    ...selectedAddress || {id: Date.now(), address: '', state: '', country: ''},
-                                    city: e.target.value
-                                  })}
-                                  required
-                                />
-                              </div>
-                              <div className="checkout-form-group">
-                                <label htmlFor="anon-state">Departamento *</label>
-                                <input
-                                  id="anon-state"
-                                  type="text"
-                                  className="checkout-form-input"
-                                  placeholder="Cundinamarca"
-                                  value={selectedAddress?.state || ''}
-                                  onChange={(e) => setSelectedAddress({
-                                    ...selectedAddress || {id: Date.now(), address: '', city: '', country: ''},
-                                    state: e.target.value
-                                  })}
-                                  required
-                                />
-                              </div>
-                            </div>
-                            <div className="checkout-form-group">
-                              <label htmlFor="anon-country">País *</label>
-                              <input
-                                id="anon-country"
-                                type="text"
-                                className="checkout-form-input"
-                                placeholder="Colombia"
-                                value={selectedAddress?.country || ''}
-                                onChange={(e) => setSelectedAddress({
-                                  ...selectedAddress || {id: Date.now(), address: '', city: '', state: ''},
-                                  country: e.target.value
-                                })}
-                                required
-                              />
-                            </div>
+                            <button
+                              className="checkout-btn checkout-btn-outline"
+                              onClick={() => setShowAddressForm(false)}
+                            >
+                              Cancelar
+                            </button>
                           </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <button
+                        className="checkout-add-address-btn"
+                        onClick={() => setShowAddressForm(true)}
+                      >
+                        <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                        </svg>
+                        Agregar Nueva Dirección
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             )}
 
             {/* Step 3: Payment */}
-            {step === 3 && (
-              <div className="checkout-animate-in-right">
+            {currentStep === 3 && (
+              <div className="checkout-animate-in">
                 <div className="checkout-section-header">
                   <div className="checkout-section-icon payment">
-                    <CreditCard className="checkout-icon" />
+                    <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
+                    </svg>
                   </div>
                   <div>
-                    <h2 className="checkout-section-title">Confirmar y Pagar</h2>
-                    <p className="checkout-section-subtitle">Un paso más y tus pijamas van a Marte</p>
-                    {!isAuthenticated && (
-                      <p className="checkout-guest-notice">
-                        <User className="checkout-icon" size={16} />
-                        Pedido como: {anonymousUserInfo.email}
-                      </p>
-                    )}
+                    <h2 className="checkout-section-title">Método de Pago</h2>
+                    <p className="checkout-section-subtitle">
+                      Completa tu compra con un método de pago seguro
+                    </p>
                   </div>
                 </div>
 
-                <div className="checkout-card">
-                  <div className="checkout-card-content">
-                    {/* User & Shipping Summary */}
-                    <div className="checkout-summary-section">
-                      {/* User Info */}
-                      <div className="checkout-user-summary">
-                        <div className="checkout-user-summary-header">
-                          <User className="checkout-icon" />
-                          <span>Datos del cliente:</span>
+                {orderPlaced ? (
+                  <div className="checkout-order-success">
+                    <div className="checkout-success-card">
+                      <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                      <p>¡Pedido Confirmado!</p>
+                      <p>Tu pedido ha sido procesado exitosamente</p>
+                    </div>
+                    <div className="checkout-payment-container">
+                      <Link href="/orders" className="checkout-btn checkout-btn-primary checkout-btn-lg">
+                        Ver Mis Pedidos
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="checkout-card">
+                    <div className="checkout-card-content">
+                      <div className="checkout-shipping-summary">
+                        <div className="checkout-shipping-summary-header">
+                          <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+                          </svg>
+                          <span>Envío a:</span>
                         </div>
                         <p>
-                          {isAuthenticated 
-                            ? `${userData?.firstName || ''} ${userData?.lastName || ''} (${userData?.email || ''})`
-                            : `${anonymousUserInfo.firstName} ${anonymousUserInfo.lastName} (${anonymousUserInfo.email})`
-                          }
-                          <br />
-                          Tel: {isAuthenticated ? userData?.phone || '' : anonymousUserInfo.phone}
+                          {addresses.find((a) => a.id === selectedAddress)?.street},{" "}
+                          {addresses.find((a) => a.id === selectedAddress)?.city}
                         </p>
                       </div>
 
-                      {/* Shipping Address */}
-                      {selectedAddress && (
-                        <div className="checkout-shipping-summary">
-                          <div className="checkout-shipping-summary-header">
-                            <MapPin className="checkout-icon" />
-                            <span>Envío a:</span>
-                          </div>
-                          <p>
-                            {selectedAddress.address}
-                            <br />
-                            {selectedAddress.city}, {selectedAddress.state}
-                            <br />
-                            {selectedAddress.country}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Order Items Preview */}
-                    <div className="checkout-order-items-preview">
-                      <h4>Resumen de Productos</h4>
-                      {cartItems.map((item) => (
-                        <div key={item.id} className="checkout-order-item-preview">
-                          <div className="checkout-order-item-preview-image">
-                            <Image
-                              src={item.image}
-                              alt={item.name}
-                              fill
-                              style={{ objectFit: "cover" }}
-                              sizes="3.5rem"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = '/images/placeholder.png';
-                              }}
-                            />
-                          </div>
-                          <div className="checkout-order-item-preview-details">
-                            <p className="checkout-order-item-preview-name">{item.name}</p>
-                            <p className="checkout-order-item-preview-meta">
-                              {item.size} • {item.color} • x{item.quantity}
-                            </p>
-                          </div>
-                          <span className="checkout-order-item-preview-price">{formatPrice(item.price * item.quantity)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Processing States */}
-                    {isProcessingPayment && (
-                      <div className="checkout-processing-payment">
-                        <div className="checkout-spinner large"></div>
-                        <h4>Creando tu pedido...</h4>
-                        <p>Estamos preparando todo para que puedas realizar el pago.</p>
-                      </div>
-                    )}
-
-                    {mercadoPagoLoading && (
-                      <div className="checkout-processing-payment">
-                        <div className="checkout-spinner large purple"></div>
-                        <h4>Conectando con MercadoPago...</h4>
-                        <p>Te redireccionaremos en un momento al portal de pago seguro.</p>
-                      </div>
-                    )}
-
-                    {/* Payment Status */}
-                    {paymentStatus && (
-                      <div className="checkout-payment-status">
-                        <div className="checkout-payment-status-header">
-                          <Wallet className="checkout-icon" />
-                          <h4>Estado del Pago</h4>
-                        </div>
-                        <div className="checkout-payment-status-info">
-                          <div className="checkout-payment-status-row">
-                            <span>Orden:</span>
-                            <strong>#{paymentStatus.orderId}</strong>
-                          </div>
-                          <div className="checkout-payment-status-row">
-                            <span>Estado Orden:</span>
-                            <span className={`checkout-payment-status-badge ${paymentStatus.orderStatus === 'PENDIENTE' ? 'pending' : paymentStatus.orderStatus === 'APROBADO' ? 'approved' : 'rejected'}`}>
-                              {paymentStatus.orderStatus}
-                            </span>
-                          </div>
-                          <div className="checkout-payment-status-row">
-                            <span>Estado MercadoPago:</span>
-                            <span className={`checkout-payment-status-badge ${paymentStatus.mpStatus === 'pending' ? 'pending' : paymentStatus.mpStatus === 'approved' ? 'approved' : 'rejected'}`}>
-                              {paymentStatus.mpStatus || 'Pendiente'}
-                            </span>
-                          </div>
-                          {paymentStatus.paymentMethod && (
-                            <div className="checkout-payment-status-row">
-                              <span>Método:</span>
-                              <span>{paymentStatus.paymentMethod}</span>
+                      <div className="checkout-order-items-preview">
+                        <h4>Resumen del Pedido</h4>
+                        {cartItems.map((item) => (
+                          <div key={item.id} className="checkout-order-item-preview">
+                            <div className="checkout-order-item-preview-image">
+                              <Image
+                                src={item.image}
+                                alt={item.name}
+                                fill
+                                sizes="56px"
+                                style={{ objectFit: "cover" }}
+                              />
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Payment Action Section */}
-                    {orderCreated && mercadoPagoData && !mercadoPagoLoading && (
-                      <div className="checkout-payment-action">
-                        <div className="checkout-payment-ready">
-                          <div className="checkout-payment-ready-header">
-                            <Check className="checkout-icon" />
-                            <h4>¡Listo para pagar!</h4>
+                            <div className="checkout-order-item-preview-details">
+                              <p className="checkout-order-item-preview-name">{item.name}</p>
+                              <p className="checkout-order-item-preview-meta">
+                                {item.quantity} x ${item.price.toFixed(2)}
+                              </p>
+                            </div>
+                            <div className="checkout-order-item-preview-price">
+                              ${(item.price * item.quantity).toFixed(2)}
+                            </div>
                           </div>
-                          <p>Tu orden ha sido creada y estamos listos para procesar el pago seguro.</p>
-                          
-                          <div className="checkout-payment-buttons">
+                        ))}
+                      </div>
+
+                      <div className="checkout-payment-container">
+                        {isProcessingPayment ? (
+                          <div className="checkout-loading-state">
+                            <div className="checkout-spinner purple"></div>
+                            <p>Procesando pago...</p>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Botón real de MercadoPago */}
                             <button
-                              onClick={() => redirectToMercadoPago(mercadoPagoData)}
-                              className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
-                              disabled={mercadoPagoLoading}
+                              onClick={handleMercadoPagoPayment}
+                              className="checkout-btn checkout-btn-primary checkout-btn-payment"
+                              disabled={isProcessingPayment}
                             >
-                              {mercadoPagoLoading ? (
-                                <>
-                                  <Loader2 className="checkout-icon spinning" />
-                                  Procesando...
-                                </>
-                              ) : (
-                                <>
-                                  <CreditCard className="checkout-icon" />
-                                  Pagar con MercadoPago
-                                </>
-                              )}
+                              <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                              </svg>
+                              Pagar con MercadoPago
                             </button>
-                            
-                            {/* Botón de simulación (solo para desarrollo) */}
-                            {process.env.NODE_ENV === 'development' && (
-                              <div className="checkout-simulation-section">
-                                <hr />
-                                <p className="checkout-dev-note">
-                                  <small>
-                                    ⚠️ <strong>Modo Desarrollo:</strong> Si quieres simular sin usar MercadoPago real:
-                                  </small>
+
+                            {/* Solo para desarrollo: Simulaciones */}
+                            <div className="checkout-simulation-section">
+                              <div className="checkout-dev-info">
+                                <div className="checkout-dev-header">
+                                  <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 15 6.7 12H5c0 3.42 2.72 6.23 6 6.72V22h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
+                                  </svg>
+                                  <h4>Simulaciones de Desarrollo</h4>
+                                </div>
+                                <p className="checkout-dev-description">
+                                  <strong>Para probar sin procesar pagos reales:</strong> Usa estos botones para simular diferentes escenarios de pago.
                                 </p>
                                 <div className="checkout-simulation-buttons">
                                   <button
-                                    onClick={() => simulatePayment('approved')}
-                                    className="checkout-btn checkout-btn-outline checkout-btn-sm"
-                                    disabled={mercadoPagoLoading}
+                                    onClick={handleSimulateSuccess}
+                                    className="checkout-btn checkout-btn-success"
+                                    disabled={isProcessingPayment}
                                   >
-                                    Simular Pago Aprobado
+                                    Simular Pago Exitoso
                                   </button>
                                   <button
-                                    onClick={() => simulatePayment('rejected')}
-                                    className="checkout-btn checkout-btn-outline checkout-btn-sm"
-                                    disabled={mercadoPagoLoading}
+                                    onClick={handleSimulateError}
+                                    className="checkout-btn checkout-btn-danger"
+                                    disabled={isProcessingPayment}
                                   >
-                                    Simular Pago Rechazado
+                                    Simular Error de Pago
                                   </button>
                                 </div>
+                                <div className="checkout-dev-note">
+                                  En producción, el botón de arriba redirigirá a MercadoPago para procesar el pago real.
+                                </div>
                               </div>
-                            )}
-                            
-                            <p className="checkout-payment-note">
-                              Serás redirigido a MercadoPago para completar el pago de forma segura.
-                              <br />
-                              <small>Si no eres redirigido automáticamente, haz clic en el botón arriba.</small>
-                            </p>
-                          </div>
-                        </div>
+                              <div className="checkout-production-info">
+                                <h5>Para producción real con MercadoPago:</h5>
+                                <ol>
+                                  <li>Obtén credenciales de MercadoPago (Public Key y Access Token)</li>
+                                  <li>Crea un endpoint en tu backend para generar preferencias</li>
+                                  <li>Reemplaza la función <code>createMercadoPagoPreference</code> con una llamada real a tu API</li>
+                                  <li>Configura las URLs de retorno en el dashboard de MercadoPago</li>
+                                </ol>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    )}
-
-                    {/* Order Created but processing error */}
-                    {orderCreated && !mercadoPagoData && !isProcessingPayment && !mercadoPagoLoading && error && (
-                      <div className="checkout-payment-fallback">
-                        <AlertCircle className="checkout-icon" />
-                        <h4>Orden creada con error en el pago</h4>
-                        <p>Tu orden #{orderId} ha sido creada, pero hubo un error al configurar el pago.</p>
-                        <button 
-                          className="checkout-btn checkout-btn-primary"
-                          onClick={() => createMercadoPagoPreference(orderId)}
-                          disabled={mercadoPagoLoading}
-                        >
-                          {mercadoPagoLoading ? (
-                            <>
-                              <Loader2 className="checkout-icon spinning" />
-                              Intentando nuevamente...
-                            </>
-                          ) : (
-                            'Intentar configurar pago nuevamente'
-                          )}
-                        </button>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Sidebar - Order Summary */}
+          {/* Right Column - Order Summary */}
           <div className="checkout-sidebar">
             <div className="checkout-sidebar-sticky">
               <div className="checkout-card">
                 <div className="checkout-card-header navy">
                   <h3 className="checkout-card-header-title">
-                    <Package className="checkout-icon" />
-                    Resumen de Compra
+                    <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z" />
+                    </svg>
+                    Resumen del Pedido
                   </h3>
                 </div>
                 <div className="checkout-card-content">
-                  {/* Items Summary */}
                   <div className="checkout-summary-items">
                     {cartItems.map((item) => (
                       <div key={item.id} className="checkout-summary-item">
                         <span className="checkout-summary-item-name">
-                          {item.name.length > 20 ? item.name.substring(0, 20) + "..." : item.name} x{item.quantity}
+                          {item.name} x{item.quantity}
                         </span>
-                        <span className="checkout-summary-item-price">{formatPrice(item.price * item.quantity)}</span>
+                        <span className="checkout-summary-item-price">
+                          ${(item.price * item.quantity).toFixed(2)}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -1809,80 +784,81 @@ const CheckoutPage = () => {
                   <div className="checkout-summary-divider">
                     <div className="checkout-summary-row">
                       <span>Subtotal</span>
-                      <span>{formatPrice(total)}</span>
+                      <span>${subtotal.toFixed(2)}</span>
                     </div>
                     <div className="checkout-summary-row">
                       <span>Envío</span>
-                      <span className="free">Gratis</span>
+                      <span className={shipping === 0 ? "free" : ""}>
+                        {shipping === 0 ? "Gratis" : `$${shipping.toFixed(2)}`}
+                      </span>
+                    </div>
+                    <div className="checkout-summary-row">
+                      <span>IVA (21%)</span>
+                      <span>${tax.toFixed(2)}</span>
                     </div>
                   </div>
 
                   <div className="checkout-summary-total">
                     <span className="checkout-summary-total-label">Total</span>
-                    <span className="checkout-summary-total-value">{formatPrice(total)}</span>
+                    <span className="checkout-summary-total-value">${total.toFixed(2)}</span>
                   </div>
-                  <p className="checkout-summary-iva">Incluye IVA</p>
+                  <div className="checkout-summary-iva">
+                    IVA incluido: ${tax.toFixed(2)}
+                  </div>
 
-                  {/* Trust Badges */}
                   <div className="checkout-trust-badges">
                     <div className="checkout-trust-badges-grid">
                       <div className="checkout-trust-badge">
                         <div className="checkout-trust-badge-icon mint">
-                          <Check className="checkout-icon" />
+                          <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+                          </svg>
                         </div>
                         <span>Pago Seguro</span>
                       </div>
                       <div className="checkout-trust-badge">
                         <div className="checkout-trust-badge-icon purple">
-                          <Package className="checkout-icon" />
+                          <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20 4H4v2h16V4zm1 10v-2l-1-5H4l-1 5v2h1v6h10v-6h4v6h2v-6h1zm-9 4H6v-4h6v4z" />
+                          </svg>
                         </div>
-                        <span>Envío Gratis</span>
+                        <span>Envío Rápido</span>
                       </div>
                       <div className="checkout-trust-badge">
                         <div className="checkout-trust-badge-icon orange">
-                          <Star className="checkout-icon" />
+                          <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                          </svg>
                         </div>
-                        <span>Entrega Rápida</span>
+                        <span>Garantía</span>
                       </div>
                       <div className="checkout-trust-badge">
                         <div className="checkout-trust-badge-icon coral">
-                          <Star className="checkout-icon" />
+                          <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+                          </svg>
                         </div>
-                        <span>100% Garantía</span>
+                        <span>Soporte 24/7</span>
                       </div>
                     </div>
                   </div>
-
-                  {/* Login Prompt for Guests */}
-                  {!isAuthenticated && (
-                    <div className="checkout-login-prompt">
-                      <User className="checkout-icon" size={16} />
-                      <p>
-                        <strong>¿Quieres guardar tus datos?</strong>
-                        <br />
-                        <small>
-                          <a href="/auth/login" className="checkout-login-link">
-                            Inicia sesión o regístrate
-                          </a>{' '}
-                          para guardar direcciones y ver tu historial de pedidos.
-                        </small>
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Promo Card */}
               <div className="checkout-promo-card">
                 <div className="checkout-promo-card-content">
                   <div className="checkout-promo-sparkles">
-                    <Sparkles className="checkout-icon" />
+                    <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zm4.24 16L12 15.45 7.77 18l1.12-4.81-3.73-3.23 4.92-.42L12 5l1.92 4.53 4.92.42-3.73 3.23L16.23 18z" />
+                    </svg>
                   </div>
                   <h4>
-                    <Star className="checkout-icon" fill="currentColor" />
-                    Dulces Sueños Garantizados
+                    <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                    </svg>
+                    Envío Gratis
                   </h4>
-                  <p>Nuestros pijamas están hechos con amor para que tus pequeños viajen a las estrellas cada noche.</p>
+                  <p>En pedidos superiores a $50</p>
                 </div>
               </div>
             </div>
@@ -1890,365 +866,34 @@ const CheckoutPage = () => {
         </div>
 
         {/* Navigation Buttons */}
-        <div className="checkout-navigation-buttons">
-          {step > 1 && (
-            <button className="checkout-btn checkout-btn-outline checkout-btn-lg" onClick={prevStep} disabled={loading || isProcessingPayment}>
-              <ChevronLeft className="checkout-icon" />
-              Anterior
-            </button>
-          )}
-
-          {step === 1 && cartItems.length > 0 && (
-            <button className="checkout-btn checkout-btn-outline checkout-btn-lg" onClick={() => (window.location.href = "/")}>
-              <ChevronLeft className="checkout-icon" />
-              Seguir Comprando
-            </button>
-          )}
-
-          {step < 3 && cartItems.length > 0 && (
-            <button 
-              className="checkout-btn checkout-btn-primary checkout-btn-lg" 
-              onClick={nextStep} 
-              disabled={
-                (step === 2 && (
-                  (isAuthenticated && !selectedAddress) || 
-                  (!isAuthenticated && (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone || !selectedAddress))
-                )) || 
-                loading || 
-                isProcessingPayment
-              }
-            >
-              Continuar
-              <ChevronRight className="checkout-icon" />
-            </button>
-          )}
-        </div>
+        {!orderPlaced && cartItems.length > 0 && (
+          <div className="checkout-navigation-buttons">
+            {currentStep > 1 && (
+              <button
+                onClick={goToPreviousStep}
+                className="checkout-btn checkout-btn-outline checkout-btn-lg"
+              >
+                <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+                </svg>
+                Volver
+              </button>
+            )}
+            {currentStep < 3 && (
+              <button
+                onClick={goToNextStep}
+                className="checkout-btn checkout-btn-primary checkout-btn-lg"
+                style={{ marginLeft: "auto" }}
+              >
+                Continuar
+                <svg className="checkout-icon" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </main>
-
-      {/* CSS adicional */}
-      <style jsx>{`
-        .checkout-user-info-banner {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem 1rem;
-          background: linear-gradient(135deg, var(--checkout-purple-light) 0%, rgba(128, 111, 247, 0.1) 100%);
-          border-radius: 0.5rem;
-          margin-bottom: 1.5rem;
-          border: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-user-info-banner .checkout-icon {
-          color: var(--checkout-purple);
-        }
-        
-        .checkout-login-prompt-btn {
-          margin-left: auto;
-          background: var(--checkout-purple);
-          color: white;
-          border: none;
-          padding: 0.25rem 0.75rem;
-          border-radius: 0.25rem;
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-        
-        .checkout-login-prompt-btn:hover {
-          background: var(--checkout-purple-dark);
-          transform: translateY(-1px);
-        }
-        
-        .checkout-guest-notice {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          color: var(--checkout-gray-dark);
-          font-size: 0.875rem;
-          margin-top: 0.25rem;
-        }
-        
-        .checkout-user-info-form {
-          margin-bottom: 2rem;
-          padding-bottom: 1.5rem;
-          border-bottom: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-user-info-title {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 1rem;
-          color: var(--checkout-navy);
-        }
-        
-        .checkout-summary-section {
-          display: grid;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
-        }
-        
-        .checkout-user-summary,
-        .checkout-shipping-summary {
-          background: var(--checkout-bg-light);
-          padding: 1rem;
-          border-radius: 0.5rem;
-          border: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-user-summary-header,
-        .checkout-shipping-summary-header {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          margin-bottom: 0.5rem;
-          font-weight: 600;
-          color: var(--checkout-navy);
-        }
-        
-        .checkout-login-prompt {
-          display: flex;
-          align-items: flex-start;
-          gap: 0.75rem;
-          padding: 1rem;
-          background: linear-gradient(135deg, var(--checkout-bg-light) 0%, #f0f7ff 100%);
-          border-radius: 0.5rem;
-          margin-top: 1rem;
-          border: 1px dashed var(--checkout-blue);
-        }
-        
-        .checkout-login-prompt .checkout-icon {
-          color: var(--checkout-blue);
-          margin-top: 0.125rem;
-        }
-        
-        .checkout-login-link {
-          color: var(--checkout-blue);
-          text-decoration: underline;
-          font-weight: 600;
-        }
-        
-        .checkout-login-link:hover {
-          color: var(--checkout-blue-dark);
-        }
-        
-        /* Payment Status Styles */
-        .checkout-payment-status {
-          margin: 1.5rem 0;
-          padding: 1.25rem;
-          background: linear-gradient(135deg, #f8f9ff 0%, #eef2ff 100%);
-          border-radius: var(--checkout-radius-lg);
-          border: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-payment-status-header {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
-        }
-        
-        .checkout-payment-status-header h4 {
-          margin: 0;
-          color: var(--checkout-navy);
-        }
-        
-        .checkout-payment-status-header .checkout-icon {
-          width: 1.5rem;
-          height: 1.5rem;
-          color: var(--checkout-purple);
-        }
-        
-        .checkout-payment-status-info {
-          display: grid;
-          gap: 0.75rem;
-        }
-        
-        .checkout-payment-status-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        
-        .checkout-payment-status-row span:first-child {
-          color: var(--checkout-gray-dark);
-          font-size: 0.875rem;
-        }
-        
-        .checkout-payment-status-row span:last-child {
-          font-weight: 500;
-          color: var(--checkout-navy);
-        }
-        
-        .checkout-payment-status-badge {
-          padding: 0.25rem 0.75rem;
-          border-radius: var(--checkout-radius-full);
-          font-size: 0.75rem;
-          font-weight: 600;
-          text-transform: uppercase;
-        }
-        
-        .checkout-payment-status-badge.pending {
-          background: rgba(255, 212, 73, 0.15);
-          color: #b8860b;
-          border: 1px solid rgba(255, 212, 73, 0.3);
-        }
-        
-        .checkout-payment-status-badge.approved {
-          background: rgba(61, 178, 138, 0.15);
-          color: var(--checkout-mint);
-          border: 1px solid rgba(61, 178, 138, 0.3);
-        }
-        
-        .checkout-payment-status-badge.rejected {
-          background: rgba(233, 86, 109, 0.15);
-          color: var(--checkout-coral);
-          border: 1px solid rgba(233, 86, 109, 0.3);
-        }
-        
-        /* Payment Action */
-        .checkout-payment-action {
-          margin-top: 1.5rem;
-        }
-        
-        .checkout-payment-ready {
-          text-align: center;
-          padding: 1.5rem;
-          background: linear-gradient(135deg, rgba(61, 178, 138, 0.05) 0%, rgba(61, 178, 138, 0.1) 100%);
-          border-radius: var(--checkout-radius-lg);
-          border: 2px solid rgba(61, 178, 138, 0.2);
-        }
-        
-        .checkout-payment-ready-header {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
-        }
-        
-        .checkout-payment-ready-header h4 {
-          margin: 0;
-          color: var(--checkout-navy);
-        }
-        
-        .checkout-payment-ready-header .checkout-icon {
-          width: 1.5rem;
-          height: 1.5rem;
-          color: var(--checkout-mint);
-        }
-        
-        .checkout-payment-ready p {
-          color: var(--checkout-gray-dark);
-          margin-bottom: 1.5rem;
-        }
-        
-        .checkout-payment-buttons {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-        
-        .checkout-simulation-section {
-          margin-top: 1rem;
-          padding-top: 1rem;
-          border-top: 1px solid var(--checkout-border);
-        }
-        
-        .checkout-dev-note {
-          font-size: 0.875rem;
-          color: var(--checkout-gray-dark);
-          margin-bottom: 0.75rem;
-          text-align: center;
-        }
-        
-        .checkout-simulation-buttons {
-          display: flex;
-          gap: 0.5rem;
-          justify-content: center;
-        }
-        
-        .checkout-btn-sm {
-          padding: 0.5rem 1rem;
-          font-size: 0.75rem;
-        }
-        
-        .checkout-payment-note {
-          font-size: 0.875rem;
-          color: var(--checkout-gray-dark);
-          margin-top: 0.75rem;
-          text-align: center;
-        }
-        
-        .checkout-payment-note small {
-          font-size: 0.75rem;
-          color: var(--checkout-gray);
-        }
-        
-        /* Error message update */
-        .checkout-error-message {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        
-        .checkout-error-message .checkout-icon {
-          width: 1.25rem;
-          height: 1.25rem;
-          flex-shrink: 0;
-          color: var(--checkout-coral);
-        }
-        
-        .checkout-error-message span {
-          flex: 1;
-        }
-        
-        .checkout-error-message button {
-          background: none;
-          border: none;
-          color: var(--checkout-coral);
-          cursor: pointer;
-          padding: 0.25rem;
-        }
-        
-        /* Animación para spinner */
-        .checkout-icon.spinning {
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        
-        /* Checkout payment fallback */
-        .checkout-payment-fallback {
-          text-align: center;
-          padding: 2rem;
-          background: rgba(233, 86, 109, 0.05);
-          border-radius: var(--checkout-radius-lg);
-          border: 1px solid rgba(233, 86, 109, 0.2);
-        }
-        
-        .checkout-payment-fallback .checkout-icon {
-          width: 3rem;
-          height: 3rem;
-          color: var(--checkout-coral);
-          margin: 0 auto 1rem;
-        }
-        
-        .checkout-payment-fallback h4 {
-          color: var(--checkout-navy);
-          margin-bottom: 0.75rem;
-        }
-        
-        .checkout-payment-fallback p {
-          color: var(--checkout-gray-dark);
-          margin-bottom: 1.5rem;
-        }
-      `}</style>
     </div>
   );
-};
-
-export default CheckoutPage;
+}

@@ -1,6 +1,6 @@
-@tailwind base;
+/* @tailwind base;
 @tailwind components;
-@tailwind utilities;
+@tailwind utilities; */
 
 :root {
   --foreground-rgb: 16, 51, 89; /* #103359 */
@@ -37,4 +37,59 @@ html {
 img {
   max-width: 100%;
   height: auto;
+}
+
+:root {
+  --am-primary: #103359;
+  --am-secondary: #3db28a;
+  --am-accent-purple: #806ff7;
+  --am-accent-pink: #e9566d;
+  --am-accent-orange: #f47b47;
+  --am-accent-yellow: #ffd449;
+
+  --am-white: #ffffff;
+  --am-gray-50: #f8fafc;
+  --am-gray-100: #f1f5f9;
+  --am-gray-200: #e2e8f0;
+  --am-gray-300: #cbd5e1;
+  --am-gray-400: #94a3b8;
+  --am-gray-500: #64748b;
+  --am-gray-600: #475569;
+
+  --am-header-height: 85px;
+  --am-header-height-mobile: 75px;
+
+  --am-transition: cubic-bezier(0.4, 0, 0.2, 1);
+  --am-shadow-sm: 0 1px 2px rgba(16, 51, 89, 0.05);
+  --am-shadow-md: 0 4px 12px rgba(16, 51, 89, 0.1);
+  --am-shadow-lg: 0 8px 30px rgba(16, 51, 89, 0.12);
+
+  --checkout-navy: #103359;
+  --checkout-mint: #3db28a;
+
+  /* Secundarios */
+  --checkout-purple: #806ff7;
+  --checkout-coral: #e9566d;
+  --checkout-orange: #f47b47;
+  --checkout-yellow: #ffd449;
+
+  /* Neutrales */
+  --checkout-white: #ffffff;
+  --checkout-cream: #fdf9f6;
+  --checkout-gray-light: #f5f5f7;
+  --checkout-gray: #9ca3af;
+  --checkout-gray-dark: #6b7280;
+  --checkout-border: #e5e7eb;
+
+  /* Sombras */
+  --checkout-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --checkout-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --checkout-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+
+  /* Radios */
+  --checkout-radius-sm: 0.5rem;
+  --checkout-radius-md: 0.75rem;
+  --checkout-radius-lg: 1rem;
+  --checkout-radius-xl: 1.25rem;
+  --checkout-radius-full: 9999px;
 }
