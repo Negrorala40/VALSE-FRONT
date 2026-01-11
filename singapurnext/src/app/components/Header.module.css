@@ -1,6 +1,6 @@
 
-/* === Variables locales (evita error de pureza) === */
-.header {
+/* === Variables globales (para que paneles fuera del header las hereden) === */
+:root {
   --am-primary: #103359;
   --am-secondary: #3db28a;
   --am-accent-purple: #806ff7;
@@ -17,7 +17,6 @@
   --am-gray-500: #64748b;
   --am-gray-600: #475569;
 
-  /* MODIFICADO: Aumentado el espacio vertical del header */
   --am-header-height: 85px;
   --am-header-height-mobile: 75px;
 
@@ -25,6 +24,13 @@
   --am-shadow-sm: 0 1px 2px rgba(16, 51, 89, 0.05);
   --am-shadow-md: 0 4px 12px rgba(16, 51, 89, 0.1);
   --am-shadow-lg: 0 8px 30px rgba(16, 51, 89, 0.12);
+}
+
+/* === Variables locales (scoped al header) === */
+.header {
+  /* Mantener variables locales si es necesario */
+  --am-header-height: 85px;
+  --am-header-height-mobile: 75px;
 }
 
 /* === Asegurar que no haya transparencia heredada === */
@@ -358,7 +364,12 @@
   box-shadow: -8px 0 40px rgba(16, 51, 89, 0.25);
   transform: translateX(100%);
   transition: transform 0.4s var(--am-transition), visibility 0s 0.4s;
-  z-index: 1200; /* Aumentado para estar sobre overlay */
+  z-index: 99999; /* Muy alto para garantizar prioridad visual */
+  isolation: isolate; /* Evita que filtros/overlay afecten el panel */
+  background-color: rgba(255,255,255,1) !important; /* Fondo 100% opaco */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  mix-blend-mode: normal;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -539,7 +550,12 @@
   box-shadow: -8px 0 40px rgba(16, 51, 89, 0.25);
   transform: translateX(100%);
   transition: transform 0.4s var(--am-transition), visibility 0s 0.4s;
-  z-index: 1200; /* Aumentado para estar sobre overlay */
+  z-index: 99999; /* Muy alto para garantizar prioridad visual */
+  isolation: isolate; /* Evita que filtros/overlay afecten el menú */
+  background-color: rgba(255,255,255,1) !important; /* Fondo 100% opaco */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  mix-blend-mode: normal;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -745,9 +761,12 @@
   background: rgba(16, 51, 89, 0.85) !important; /* Más opaco */
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  z-index: 1150; /* Entre header (1000) y paneles (1200) */
+  z-index: 9990; /* Debe quedar por debajo de los paneles (99999) */
   animation: overlayFadeIn 0.3s ease forwards;
   cursor: pointer;
+
+  /* Permitir que el overlay se vea pero no aplique efectos sobre elementos con isolation */
+  will-change: opacity;
 }
 
 @keyframes overlayFadeIn {
