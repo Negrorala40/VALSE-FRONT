@@ -9,8 +9,7 @@ import {
   ADDRESS, 
   CHECKOUT_ANONYMOUS,
   CHECKOUT_AUTHENTICATED,
-  MERCADOPAGO_SIMULATE,
-  MIGRATE_ORDERS
+  MERCADOPAGO_SIMULATE
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -851,32 +850,6 @@ const CheckoutPage = () => {
     }
   }, [step, createOrderAndPayment, isProcessingPayment, orderCreated]);
 
-  // Función para migrar carrito anónimo a usuario recién logueado
-  // Comentada porque no se usa actualmente, pero se mantiene para futura implementación
-  // const migrateCartToUser = useCallback(async () => {
-  //   const token = localStorage.getItem('token');
-  //   if (!token) return;
-    
-  //   try {
-  //     const res = await fetch(MIGRATE_ORDERS, {
-  //       method: 'POST',
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //         'Content-Type': 'application/json',
-  //       },
-  //       credentials: 'include',
-  //     });
-      
-  //     if (res.ok) {
-  //       console.log('🔄 Carrito migrado exitosamente');
-  //       // Recargar datos
-  //       loadAuthenticatedData(token);
-  //     }
-  //   } catch (err: unknown) {
-  //     console.error('Error migrando carrito:', err);
-  //   }
-  // }, [loadAuthenticatedData]);
-
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
     { number: 2, label: isAuthenticated ? "Envío" : "Datos", icon: isAuthenticated ? MapPin : User },
@@ -1653,7 +1626,7 @@ const CheckoutPage = () => {
                         <strong>¿Quieres guardar tus datos?</strong>
                         <br />
                         <small>
-                          <a href="/login" className="checkout-login-link">
+                          <a href="/auth/login" className="checkout-login-link">
                             Inicia sesión o regístrate
                           </a>{' '}
                           para guardar direcciones y ver tu historial de pedidos.

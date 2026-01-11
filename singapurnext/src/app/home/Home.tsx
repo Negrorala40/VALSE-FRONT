@@ -23,8 +23,8 @@ interface ProductVariant {
 }
 
 enum ProductGender {
-  MUJER = 'MUJER',
-  HOMBRE = 'HOMBRE',
+  NIÑOS = 'NIÑOS',
+  NIÑAS = 'NIÑAS',
   UNISEX = 'UNISEX'
 }
 
@@ -43,13 +43,13 @@ const Home = () => {
 
   // Estado para productos aleatorios
   const [categoryImages, setCategoryImages] = useState<{
-    hombre: string;
-    mujer: string;
+    niños: string;
+    niñas: string;
     unisex: string;
     oferta: string;
   }>({
-    hombre: '/images/placeholder.jpg',
-    mujer: '/images/placeholder.jpg',
+    niños: '/images/placeholder.jpg',
+    niñas: '/images/placeholder.jpg',
     unisex: '/images/placeholder.jpg',
     oferta: '/images/placeholder.jpg'
   });
@@ -63,8 +63,8 @@ const Home = () => {
         const products = response.data;
 
         // Filtrar productos por categoría
-        const hombreProducts = products.filter(p => p.gender === ProductGender.HOMBRE);
-        const mujerProducts = products.filter(p => p.gender === ProductGender.MUJER);
+        const niñosProducts = products.filter(p => p.gender === ProductGender.NIÑOS);
+        const niñasProducts = products.filter(p => p.gender === ProductGender.NIÑAS);
         const unisexProducts = products.filter(p => p.gender === ProductGender.UNISEX);
         
         // Productos para ofertas (los más económicos)
@@ -88,8 +88,8 @@ const Home = () => {
         };
 
         setCategoryImages({
-          hombre: getRandomImage(hombreProducts),
-          mujer: getRandomImage(mujerProducts),
+          niños: getRandomImage(niñosProducts),
+          niñas: getRandomImage(niñasProducts),
           unisex: getRandomImage(unisexProducts),
           oferta: getRandomImage(ofertaProducts)
         });
@@ -241,16 +241,16 @@ const Home = () => {
           className={`${styles.categoriesContainer} ${isVisible.categories ? styles.visible : ''}`}
         >
           <div className={styles.categoriesGrid}>
-            {/* Hombre */}
-            <Link href="/menu?gender=hombre" className={styles.categoryCard}>
+            {/* Niños */}
+            <Link href="/menu?gender=NIÑOS&type=SUPERIOR" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
                 {loading ? (
                   <div className={styles.loadingSkeleton}></div>
                 ) : (
                   <>
                     <Image
-                      src={categoryImages.hombre}
-                      alt="Moda para Hombre"
+                      src={categoryImages.niños}
+                      alt="Pijamas para Niños"
                       fill
                       className={styles.categoryImage}
                       sizes="(max-width: 768px) 100vw, 25vw"
@@ -261,20 +261,20 @@ const Home = () => {
                 )}
               </div>
               <div className={styles.categoryContent}>
-                <h3 className={styles.categoryTitle}>HOMBRE</h3>
+                <h3 className={styles.categoryTitle}>NIÑOS</h3>
               </div>
             </Link>
 
-            {/* Mujer */}
-            <Link href="/menu?gender=mujer" className={styles.categoryCard}>
+            {/* Niñas */}
+            <Link href="/menu?gender=NIÑAS&type=SUPERIOR" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
                 {loading ? (
                   <div className={styles.loadingSkeleton}></div>
                 ) : (
                   <>
                     <Image
-                      src={categoryImages.mujer}
-                      alt="Moda para Mujer"
+                      src={categoryImages.niñas}
+                      alt="Pijamas para Niñas"
                       fill
                       className={styles.categoryImage}
                       sizes="(max-width: 768px) 100vw, 25vw"
@@ -285,12 +285,12 @@ const Home = () => {
                 )}
               </div>
               <div className={styles.categoryContent}>
-                <h3 className={styles.categoryTitle}>MUJER</h3>
+                <h3 className={styles.categoryTitle}>NIÑAS</h3>
               </div>
             </Link>
 
             {/* Unisex */}
-            <Link href="/menu?gender=unisex" className={styles.categoryCard}>
+            <Link href="/menu?gender=UNISEX&type=SUPERIOR" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
                 {loading ? (
                   <div className={styles.loadingSkeleton}></div>
@@ -298,7 +298,7 @@ const Home = () => {
                   <>
                     <Image
                       src={categoryImages.unisex}
-                      alt="Moda Unisex"
+                      alt="Pijamas Unisex"
                       fill
                       className={styles.categoryImage}
                       sizes="(max-width: 768px) 100vw, 25vw"
