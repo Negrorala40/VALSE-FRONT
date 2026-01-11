@@ -30,6 +30,13 @@ interface Producto {
   variants: Variante[];
 }
 
+interface ErrorResponse {
+  response?: {
+    status?: number;
+  };
+  message?: string;
+}
+
 const getColorHex = (colorName: string): string => {
   const colors: Record<string, string> = {
     'azul': '#103359',
@@ -107,7 +114,8 @@ const ProductContent = () => {
         const precioMinimo = Math.min(...data.variants.map((v) => v.price));
         setPrecioSeleccionado(precioMinimo);
       } catch (err: unknown) {
-        setError((err as Error).message || 'Error al cargar el producto');
+        const errorMessage = err instanceof Error ? err.message : 'Error al cargar el producto';
+        setError(errorMessage);
         showNotification('Error al cargar el producto', 'error');
       } finally {
         setCargando(false);
@@ -209,15 +217,19 @@ const ProductContent = () => {
       // Redirigir al menú después de un breve delay
       setTimeout(() => router.push('/menu'), 1500);
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error:', err);
       
+      // Verificar si es un error de autenticación
+      const errorData = err as ErrorResponse;
+      
       // Si hay error de autenticación (aunque no debería con carrito anónimo)
-      if (err.response?.status === 401 || err.response?.status === 403) {
+      if (errorData.response?.status === 401 || errorData.response?.status === 403) {
         showNotification('Inicia sesión para continuar', 'info');
         router.push('/login');
       } else {
-        showNotification('Error al agregar al carrito', 'error');
+        const errorMessage = errorData.message || 'Error al agregar al carrito';
+        showNotification(errorMessage, 'error');
       }
     }
   };

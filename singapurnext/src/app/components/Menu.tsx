@@ -1,7 +1,7 @@
 'use client';
 
 import { MENU_PRODUCTS } from '../utils/Api';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';

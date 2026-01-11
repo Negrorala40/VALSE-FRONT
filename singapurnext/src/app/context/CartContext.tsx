@@ -1,8 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import axios from 'axios';
-import { ADD_TO_CART,CLEAR_CART, CART, GET_CART_COUNT, MIGRATE_CART } from '../utils/Api';
+import { ADD_TO_CART, CLEAR_CART, CART, GET_CART_COUNT, MIGRATE_CART } from '../utils/Api';
 import Cookies from 'js-cookie';
 
 interface CartItem {
@@ -67,8 +67,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return headers;
   };
 
-  // Obtener carrito
-  const getCart = async () => {
+  // Obtener carrito - usando useCallback para memoizar la función
+  const getCart = useCallback(async () => {
     setLoading(true);
     try {
       const response = await axios.get(CART, {
@@ -88,7 +88,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // Nota: getAuthHeaders también podría cambiar, pero es una función pura
 
   // Agregar al carrito
   const addToCart = async (productVariantId: number, quantity: number) => {
@@ -172,10 +172,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Cargar carrito al iniciar
+  // Cargar carrito al iniciar - ahora incluye getCart en las dependencias
   useEffect(() => {
     getCart();
-  }, []);
+  }, [getCart]); // getCart está memoizado con useCallback
 
   const value = {
     cartItems,

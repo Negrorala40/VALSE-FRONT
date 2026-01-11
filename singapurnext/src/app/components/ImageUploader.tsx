@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { CldUploadWidget } from 'next-cloudinary';
 import type { CloudinaryUploadWidgetOptions } from 'next-cloudinary';
+import Image from 'next/image';
 import styles from './ImageUploader.module.css';
 
 interface ImageData {
@@ -11,6 +12,19 @@ interface ImageData {
   thumbnailUrl: string;
   mediumUrl: string;
   largeUrl: string;
+}
+
+interface CloudinaryUploadResult {
+  event: string;
+  info: {
+    secure_url: string;
+    public_id: string;
+    original_filename?: string;
+  };
+}
+
+interface CloudinaryError {
+  message?: string;
 }
 
 interface ImageUploaderProps {
@@ -29,12 +43,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
 
-  // Configuración CORREGIDA con tipos específicos
+  // Configuración con tipos específicos
   const cloudinaryConfig: CloudinaryUploadWidgetOptions = {
     cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dzs8sf5li',
     uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'ecommerce_uploads',
     folder: 'ecommerce/productos',
-    sources: ['local', 'url'] as any, // Cast para evitar errores de tipos
+    sources: ['local', 'url'],
     multiple: false,
     maxFiles: 1,
     clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
@@ -59,7 +73,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     }
   };
 
-  const handleUploadSuccess = (result: any) => {
+  const handleUploadSuccess = useCallback((result: CloudinaryUploadResult) => {
     if (result.event === 'success') {
       const imageUrl = result.info.secure_url;
       const publicId = result.info.public_id;
@@ -84,13 +98,13 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       setPreviewUrl(thumbnailUrl);
       setUploading(false);
     }
-  };
+  }, [onUploadSuccess, variantIndex, imageIndex]);
 
-  const handleError = (error: any) => {
+  const handleError = useCallback((error: CloudinaryError) => {
     console.error('Error uploading:', error);
     alert('Error al subir la imagen. Por favor, intenta de nuevo.');
     setUploading(false);
-  };
+  }, []);
 
   const handleManualUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -106,8 +120,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_preset', cloudinaryConfig.uploadPreset!);
-      formData.append('folder', cloudinaryConfig.folder!);
+      formData.append('upload_preset', cloudinaryConfig.uploadPreset || 'ecommerce_uploads');
+      formData.append('folder', cloudinaryConfig.folder || 'ecommerce/productos');
       
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/upload`,
@@ -119,16 +133,34 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       
       const data = await response.json();
       if (data.secure_url) {
-        handleUploadSuccess({ event: 'success', info: data });
+        handleUploadSuccess({ 
+          event: 'success', 
+          info: {
+            secure_url: data.secure_url,
+            public_id: data.public_id,
+            original_filename: data.original_filename
+          }
+        });
       } else {
         throw new Error(data.error?.message || 'Error al subir');
       }
     } catch (error) {
-      handleError(error);
+      handleError(error as CloudinaryError);
     } finally {
-      event.target.value = ''; // Reset input
+      // Reset input
+      const target = event.target as HTMLInputElement;
+      target.value = '';
     }
   };
+
+  const handleWidgetError = useCallback((error: unknown) => {
+    const cloudinaryError = error as CloudinaryError;
+    handleError(cloudinaryError);
+  }, [handleError]);
+
+  const handleWidgetUpload = useCallback(() => {
+    setUploading(true);
+  }, []);
 
   return (
     <div className={styles.container}>
@@ -136,14 +168,14 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         <CldUploadWidget
           uploadPreset={cloudinaryConfig.uploadPreset}
           options={cloudinaryConfig}
-          onSuccess={handleUploadSuccess}
-          onError={handleError}
-          onUpload={() => setUploading(true)}
+          onSuccess={handleUploadSuccess as (result: unknown) => void}
+          onError={handleWidgetError}
+          onUpload={handleWidgetUpload}
         >
           {({ open }) => (
             <button
               type="button"
-              onClick={() => open()}
+              onClick={() => open && open()}
               disabled={uploading || disabled}
               className={`${styles.uploadButton} ${uploading ? styles.uploading : ''}`}
             >
@@ -166,14 +198,14 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         <div className={styles.manualUpload}>
           <input
             type="file"
-            id={`file-input-${variantIndex}-${imageIndex}`}
+            id={`file-input-${variantIndex || '0'}-${imageIndex || '0'}`}
             accept="image/*"
             onChange={handleManualUpload}
             disabled={uploading || disabled}
             style={{ display: 'none' }}
           />
           <label 
-            htmlFor={`file-input-${variantIndex}-${imageIndex}`}
+            htmlFor={`file-input-${variantIndex || '0'}-${imageIndex || '0'}`}
             className={`${styles.fileLabel} ${(uploading || disabled) ? styles.disabled : ''}`}
           >
             Seleccionar archivo
@@ -184,12 +216,16 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
       {previewUrl && (
         <div className={styles.previewContainer}>
           <p className={styles.previewTitle}>Vista previa:</p>
-          <img 
-            src={previewUrl} 
-            alt="Vista previa" 
-            className={styles.previewImage}
-            onError={() => setPreviewUrl('')}
-          />
+          <div className={styles.previewImageWrapper}>
+            <Image 
+              src={previewUrl} 
+              alt="Vista previa" 
+              className={styles.previewImage}
+              width={150}
+              height={150}
+              onError={() => setPreviewUrl('')}
+            />
+          </div>
           <p className={styles.helpText}>
             ✅ Imagen subida exitosamente a Cloudinary
           </p>
