@@ -1,3 +1,4 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Fredoka } from "next/font/google";
@@ -26,10 +27,11 @@ export const metadata: Metadata = {
   description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
   keywords: ['pijamas', 'niños', 'espacial', 'marte', 'infantil', 'ropa niños'],
   authors: [{ name: 'A Marte' }],
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'), // ← AÑADE ESTA LÍNEA
   openGraph: {
     type: 'website',
     locale: 'es_ES',
-    url: 'https://tu-dominio.com',
+    url: process.env.NEXT_PUBLIC_SITE_URL || 'https://tu-dominio.com',
     title: 'A Marte - Pijamas Espaciales para Niños',
     description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
     siteName: 'A Marte',
