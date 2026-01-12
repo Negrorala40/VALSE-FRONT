@@ -225,16 +225,16 @@ const Footer = () => {
                 <a href="/">Inicio</a>
               </li>
               <li>
-                <a href="/productos">Productos</a>
+                <a href="/menu">Productos</a>
               </li>
               <li>
-                <a href="/categorias">Categorías</a>
+                <a href="/home">Categorías</a>
               </li>
               <li>
-                <a href="/novedades">Novedades</a>
+                <a href="/menu">Novedades</a>
               </li>
               <li>
-                <a href="/ofertas">Ofertas</a>
+                <a href="/">Ofertas</a>
               </li>
             </ul>
           </div>

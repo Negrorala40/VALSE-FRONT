@@ -32,7 +32,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const [cartOpen, setCartOpen] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeMobileCategory, setActiveMobileCategory] = useState<string | null>(null);
 
   // Estado local para el carrito si no viene de props
   const [localCartItems, setLocalCartItems] = useState<CartItem[]>(cartItems);
@@ -64,7 +63,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     setMenuOpen(!menuOpen);
     if (menuOpen) {
       document.body.style.overflow = 'auto';
-      setActiveMobileCategory(null);
     } else {
       setSearchOpen(false);
       document.body.style.overflow = 'hidden';
@@ -77,7 +75,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       document.body.style.overflow = 'auto';
     } else {
       setMenuOpen(false);
-      setActiveMobileCategory(null);
       document.body.style.overflow = 'hidden';
     }
   }, [searchOpen]);
@@ -86,15 +83,15 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     setCartOpen(!cartOpen);
   }, [cartOpen]);
 
-  const toggleMobileCategory = useCallback((categoryId: string) => {
-    setActiveMobileCategory(activeMobileCategory === categoryId ? null : categoryId);
-  }, [activeMobileCategory]);
-
   // Logo configuration
   const logoConfig = {
     src: '/images/logos/logver.svg',
     alt: 'A Marte - Pijamas para niños',
   };
+  const LogoCohete = {
+    src: '/images/logos/logCohete.svg',
+    alt: 'A Marte Logo Cohete',
+  }
 
   // Scroll effect
   useEffect(() => {
@@ -120,7 +117,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
-        setActiveMobileCategory(null);
         document.body.style.overflow = 'auto';
       }
       
@@ -138,7 +134,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   useEffect(() => {
     setMenuOpen(false);
     setSearchOpen(false);
-    setActiveMobileCategory(null);
     document.body.style.overflow = 'auto';
   }, [pathname]);
 
@@ -146,46 +141,27 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const displayCartItems = setCartItems ? cartItems : localCartItems;
   const cartItemCount = displayCartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Categorías de menú (incluyendo Blog)
+  // Categorías de menú (sin iconos)
   const menuCategories = [
     {
       id: 'ninos',
       label: 'Niños',
-      href: '/menu?gender=NIÑOS&type=SUPERIOR',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-        </svg>
-      )
+      href: '/menu?gender=NIÑOS&type=SUPERIOR'
     },
     {
       id: 'ninas',
       label: 'Niñas',
-      href: '/menu?gender=NIÑAS&type=SUPERIOR',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-        </svg>
-      )
+      href: '/menu?gender=NIÑAS&type=SUPERIOR'
     },
     {
       id: 'unisex',
       label: 'Unisex',
-      href: '/menu?gender=UNISEX&type=SUPERIOR',
-      icon: (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
-          <circle cx="12" cy="12" r="10" />
-        </svg>
-      )
+      href: '/menu?gender=UNISEX&type=SUPERIOR'
     },
     {
       id: 'blog',
       label: 'Blog',
-      href: '/blog',
-      icon: <FiBookOpen size={20} />
+      href: '/blog'
     }
   ];
 
@@ -193,7 +169,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   useEffect(() => {
     return () => {
       document.body.style.overflow = 'auto';
-      setActiveMobileCategory(null);
     };
   }, []);
 
@@ -204,7 +179,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
 
   const handleCloseMenu = useCallback(() => {
     setMenuOpen(false);
-    setActiveMobileCategory(null);
     document.body.style.overflow = 'auto';
   }, []);
 
@@ -244,7 +218,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
                 href={cat.href}
                 className={`${styles.headerNavLink} ${cat.id === 'blog' ? styles.headerNavLinkBlog : ''}`}
               >
-                {cat.icon}
                 {cat.label}
               </Link>
             ))}
@@ -302,6 +275,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           <button 
             className={styles.searchPanelClose} 
             onClick={handleCloseSearch}
+            aria-label="Cerrar búsqueda"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -365,10 +339,11 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           <div className={styles.sideMenuBrand}>
             <div className={styles.sideMenuLogo}>
               <Image
-                src="/images/logCohete.svg"
-                alt="A Marte Logo Cohete"
+                src={LogoCohete.src || "/images/logos/logver.svg"}
+                alt={LogoCohete.alt}
                 width={32}
                 height={32}
+                priority
                 style={{ filter: 'brightness(0) invert(1)' }}
               />
             </div>
@@ -377,6 +352,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           <button 
             className={styles.sideMenuClose} 
             onClick={handleCloseMenu}
+            aria-label="Cerrar menú"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -386,39 +362,24 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
 
         <nav className={styles.sideMenuNav}>
-          <div className={styles.sideMenuUser}>
-            <div className={styles.sideMenuUserAvatar}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-              </svg>
-            </div>
-            <div className={styles.sideMenuUserInfo}>
-              <span className={styles.sideMenuUserGreeting}>¡Hola! 👋</span>
-              <span className={styles.sideMenuUserText}>Bienvenido a A Marte</span>
-            </div>
-          </div>
-
           <div className={styles.sideMenuSection}>
-            <h4 className={styles.sideMenuSectionTitle}>Categorías</h4>
-            {menuCategories.map((cat) => (
-              <Link 
-                key={cat.id} 
-                href={cat.href} 
-                className={`${styles.sideMenuLink} ${cat.id === 'blog' ? styles.sideMenuLinkBlog : ''}`}
-                onClick={handleCloseMenu}
-              >
-                <span className={styles.sideMenuLinkIcon}>
-                  {cat.icon}
-                </span>
-                <span className={styles.sideMenuLinkText}>{cat.label}</span>
-                <span className={styles.sideMenuLinkArrow}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </span>
-              </Link>
-            ))}
+            <div className={styles.sideMenuLinks}>
+              {menuCategories.map((cat) => (
+                <Link 
+                  key={cat.id} 
+                  href={cat.href} 
+                  className={`${styles.sideMenuLink} ${cat.id === 'blog' ? styles.sideMenuLinkBlog : ''}`}
+                  onClick={handleCloseMenu}
+                >
+                  <span className={styles.sideMenuLinkText}>{cat.label}</span>
+                  <span className={styles.sideMenuLinkArrow}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
 
           <div className={styles.sideMenuSection}>
@@ -427,15 +388,12 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               className={styles.sideMenuCta} 
               onClick={handleCloseMenu}
             >
+              <span className={styles.sideMenuCtaText}>Ver Todo</span>
               <span className={styles.sideMenuCtaIcon}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
+                  <polyline points="9 18 15 12 9 6" />
                 </svg>
               </span>
-              <span className={styles.sideMenuCtaText}>Ver Todo el Catálogo</span>
             </Link>
           </div>
         </nav>
@@ -485,7 +443,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
           onClick={() => {
             setMenuOpen(false);
             setSearchOpen(false);
-            setActiveMobileCategory(null);
             document.body.style.overflow = 'auto';
           }}
         />
