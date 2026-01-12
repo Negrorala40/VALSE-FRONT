@@ -177,16 +177,15 @@
 }
 
 .headerNavLinkAll {
-  background: linear-gradient(135deg, var(--am-primary) 0%, #1a4570 100%);
-  color: var(--am-white);
+  color: #103359;
   margin-left: 0.5rem;
   font-size: 1rem;
   padding: 0.75rem 1.5rem; /* Aumentado padding horizontal */
 }
 
 .headerNavLinkAll:hover {
-  background: linear-gradient(135deg, var(--am-secondary) 0%, #2ea077 100%);
-  color: var(--am-white);
+  background: var(--am-gray-100);
+  color: var(--am-secondary);
   transform: translateY(-2px);
   box-shadow: var(--am-shadow-md);
 }
