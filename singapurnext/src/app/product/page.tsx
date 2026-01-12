@@ -1,5 +1,6 @@
 import React from 'react';
 import Product from '../components/Product';
+import BlogPreview from '../components/BlogPreview';
 
 const MenuPage: React.FC = () => {
   return (
@@ -7,6 +8,8 @@ const MenuPage: React.FC = () => {
       
       <div style={{marginTop: '1rem'}}>
         <Product />
+        <BlogPreview />
+
       </div>
     </div>
   );
