@@ -8,6 +8,7 @@ import styles from './Header.module.css';
 import Cart from './Cart';
 import { HiShoppingCart } from "react-icons/hi2";
 import { FaSearch } from "react-icons/fa";
+import { FiBookOpen } from "react-icons/fi";
 
 interface CartItem {
   id: string;
@@ -31,6 +32,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const [cartOpen, setCartOpen] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [activeMobileCategory, setActiveMobileCategory] = useState<string | null>(null);
 
   // Estado local para el carrito si no viene de props
   const [localCartItems, setLocalCartItems] = useState<CartItem[]>(cartItems);
@@ -62,6 +64,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     setMenuOpen(!menuOpen);
     if (menuOpen) {
       document.body.style.overflow = 'auto';
+      setActiveMobileCategory(null);
     } else {
       setSearchOpen(false);
       document.body.style.overflow = 'hidden';
@@ -74,6 +77,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
       document.body.style.overflow = 'auto';
     } else {
       setMenuOpen(false);
+      setActiveMobileCategory(null);
       document.body.style.overflow = 'hidden';
     }
   }, [searchOpen]);
@@ -81,6 +85,10 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const toggleCart = useCallback(() => {
     setCartOpen(!cartOpen);
   }, [cartOpen]);
+
+  const toggleMobileCategory = useCallback((categoryId: string) => {
+    setActiveMobileCategory(activeMobileCategory === categoryId ? null : categoryId);
+  }, [activeMobileCategory]);
 
   // Logo configuration
   const logoConfig = {
@@ -112,6 +120,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setMenuOpen(false);
+        setActiveMobileCategory(null);
         document.body.style.overflow = 'auto';
       }
       
@@ -129,6 +138,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   useEffect(() => {
     setMenuOpen(false);
     setSearchOpen(false);
+    setActiveMobileCategory(null);
     document.body.style.overflow = 'auto';
   }, [pathname]);
 
@@ -136,29 +146,54 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const displayCartItems = setCartItems ? cartItems : localCartItems;
   const cartItemCount = displayCartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Cambiado: Solo categorías principales, sin submenús
+  // Categorías de menú (incluyendo Blog)
   const menuCategories = [
     {
       id: 'ninos',
       label: 'Niños',
-      href: '/menu?gender=NIÑOS&type=SUPERIOR', // URL directa
+      href: '/menu?gender=NIÑOS&type=SUPERIOR',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+        </svg>
+      )
     },
     {
       id: 'ninas',
       label: 'Niñas',
-      href: '/menu?gender=NIÑAS&type=SUPERIOR', // URL directa
+      href: '/menu?gender=NIÑAS&type=SUPERIOR',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+        </svg>
+      )
     },
     {
       id: 'unisex',
       label: 'Unisex',
-      href: '/menu?gender=UNISEX&type=SUPERIOR', // URL directa
+      href: '/menu?gender=UNISEX&type=SUPERIOR',
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
+          <circle cx="12" cy="12" r="10" />
+        </svg>
+      )
     },
+    {
+      id: 'blog',
+      label: 'Blog',
+      href: '/blog',
+      icon: <FiBookOpen size={20} />
+    }
   ];
 
   // Efecto para limpiar overflow cuando se desmonta
   useEffect(() => {
     return () => {
       document.body.style.overflow = 'auto';
+      setActiveMobileCategory(null);
     };
   }, []);
 
@@ -169,6 +204,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
 
   const handleCloseMenu = useCallback(() => {
     setMenuOpen(false);
+    setActiveMobileCategory(null);
     document.body.style.overflow = 'auto';
   }, []);
 
@@ -179,7 +215,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         <div className={styles.headerDecoration}></div>
 
         <div className={styles.headerContainer}>
-          {/* Logo - Left side - CON MÁRGEN VERTICAL */}
+          {/* Logo - Left side */}
           <Link href="/" className={styles.headerLogo} aria-label="Inicio - A Marte">
             <div className={styles.headerLogoWrapper}>
               <Image
@@ -200,14 +236,15 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             </div>
           </Link>
 
-          {/* Navigation - Desktop - SIN SUBMENÚS */}
+          {/* Navigation - Desktop */}
           <nav className={styles.headerNav}>
             {menuCategories.map((cat) => (
               <Link 
                 key={cat.id} 
                 href={cat.href}
-                className={styles.headerNavLink}
+                className={`${styles.headerNavLink} ${cat.id === 'blog' ? styles.headerNavLinkBlog : ''}`}
               >
+                {cat.icon}
                 {cat.label}
               </Link>
             ))}
@@ -255,7 +292,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </header>
 
-      {/* Search Panel - CORREGIDO: Opacidad */}
+      {/* Search Panel */}
       <div className={`${styles.searchPanel} ${searchOpen ? styles.searchPanelOpen : styles.searchPanelClosed}`} ref={searchRef}>
         <div className={styles.searchPanelHeader}>
           <h3 className={styles.searchPanelTitle}>
@@ -322,14 +359,19 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </div>
 
-      {/* Mobile Side Menu - CORREGIDO: Opacidad */}
+      {/* Mobile Side Menu - MEJORADO */}
       <div className={`${styles.sideMenu} ${menuOpen ? styles.sideMenuOpen : styles.sideMenuClosed}`} ref={menuRef}>
         <div className={styles.sideMenuHeader}>
           <div className={styles.sideMenuBrand}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2a7 7 0 0 0 0 14" />
-            </svg>
+            <div className={styles.sideMenuLogo}>
+              <Image
+                src="/images/logCohete.svg"
+                alt="A Marte Logo Cohete"
+                width={32}
+                height={32}
+                style={{ filter: 'brightness(0) invert(1)' }}
+              />
+            </div>
             <span>A Marte</span>
           </div>
           <button 
@@ -344,77 +386,106 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
 
         <nav className={styles.sideMenuNav}>
-          {menuCategories.map((cat) => (
-            <div key={cat.id} className={styles.sideMenuCategory}>
+          <div className={styles.sideMenuUser}>
+            <div className={styles.sideMenuUserAvatar}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+              </svg>
+            </div>
+            <div className={styles.sideMenuUserInfo}>
+              <span className={styles.sideMenuUserGreeting}>¡Hola! 👋</span>
+              <span className={styles.sideMenuUserText}>Bienvenido a A Marte</span>
+            </div>
+          </div>
+
+          <div className={styles.sideMenuSection}>
+            <h4 className={styles.sideMenuSectionTitle}>Categorías</h4>
+            {menuCategories.map((cat) => (
               <Link 
+                key={cat.id} 
                 href={cat.href} 
-                className={styles.sideMenuLink}
+                className={`${styles.sideMenuLink} ${cat.id === 'blog' ? styles.sideMenuLinkBlog : ''}`}
                 onClick={handleCloseMenu}
               >
-                <span className={styles.sideMenuCategoryIcon}>
-                  {cat.id === 'ninos' && (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-                    </svg>
-                  )}
-                  {cat.id === 'ninas' && (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-                    </svg>
-                  )}
-                  {cat.id === 'unisex' && (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 12h.01M15 12h.01M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5" />
-                      <circle cx="12" cy="12" r="10" />
-                    </svg>
-                  )}
+                <span className={styles.sideMenuLinkIcon}>
+                  {cat.icon}
                 </span>
-                <span>{cat.label}</span>
+                <span className={styles.sideMenuLinkText}>{cat.label}</span>
+                <span className={styles.sideMenuLinkArrow}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </span>
               </Link>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          <div className={styles.sideMenuSection}>
+            <Link 
+              href="/menu" 
+              className={styles.sideMenuCta} 
+              onClick={handleCloseMenu}
+            >
+              <span className={styles.sideMenuCtaIcon}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+              </span>
+              <span className={styles.sideMenuCtaText}>Ver Todo el Catálogo</span>
+            </Link>
+          </div>
         </nav>
 
         <div className={styles.sideMenuFooter}>
-          <Link 
-            href="/menu" 
-            className={styles.sideMenuCta} 
-            onClick={handleCloseMenu}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
-            Ver todo el catálogo
-          </Link>
+          <div className={styles.sideMenuContact}>
+            <h5 className={styles.sideMenuContactTitle}>¿Necesitas ayuda?</h5>
+            <a href="https://wa.me/" className={styles.sideMenuContactLink} target="_blank" rel="noopener noreferrer">
+              <span className={styles.sideMenuContactIcon}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                </svg>
+              </span>
+              <span className={styles.sideMenuContactText}>Chatear por WhatsApp</span>
+            </a>
+          </div>
+          
           <div className={styles.sideMenuSocial}>
-            <a href="#" className={styles.sideMenuSocialLink} aria-label="Instagram">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="2" width="20" height="20" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="18" cy="6" r="1" />
-              </svg>
-            </a>
-            <a href="#" className={styles.sideMenuSocialLink} aria-label="WhatsApp">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-            </a>
+            <span className={styles.sideMenuSocialTitle}>Síguenos</span>
+            <div className={styles.sideMenuSocialLinks}>
+              <a href="#" className={styles.sideMenuSocialLink} aria-label="Instagram">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="2" width="20" height="20" rx="5" />
+                  <circle cx="12" cy="12" r="4" />
+                  <circle cx="18" cy="6" r="1" />
+                </svg>
+              </a>
+              <a href="#" className={styles.sideMenuSocialLink} aria-label="Facebook">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </a>
+              <a href="#" className={styles.sideMenuSocialLink} aria-label="TikTok">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.3.045.6.088.9.13v-3.4a6.33 6.33 0 0 0-5.46 2.91 6.33 6.33 0 0 0 4.5 10.65 6.34 6.34 0 0 0 6.34-6.34V9.05a8.18 8.18 0 0 0 4.33 1.24v-3.6z"/>
+                </svg>
+              </a>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Overlay - SOLO cuando hay menú o búsqueda abiertos - FIXED */}
+      {/* Overlay */}
       {(menuOpen || searchOpen) && (
         <div
           className={styles.headerOverlay}
           onClick={() => {
             setMenuOpen(false);
             setSearchOpen(false);
+            setActiveMobileCategory(null);
             document.body.style.overflow = 'auto';
           }}
         />
