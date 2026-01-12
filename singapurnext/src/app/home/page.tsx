@@ -5,7 +5,7 @@ const HomePage: React.FC = () => {
   return (
     <div>
       
-      <div style={{marginTop: '4rem'}}>
+      <div style={{marginTop: '2rem'}}>
         <Home />
       </div>
     </div>

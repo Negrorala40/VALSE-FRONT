@@ -1,0 +1,257 @@
+.section {
+  padding: 4rem 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  background-color: #f9f9f9;
+  border-radius: 12px;
+  margin-top: 2rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.sectionTitle {
+  font-size: 2rem;
+  color: #333;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sectionTitle i {
+  color: #4f46e5;
+}
+
+.viewAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4f46e5;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+}
+
+.viewAll:hover {
+  background-color: #4f46e5;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  border-color: #4f46e5;
+}
+
+.cardLink {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.imageContainer {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.card:hover .image {
+  transform: scale(1.05);
+}
+
+.dateBadge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: rgba(79, 70, 229, 0.9);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  backdrop-filter: blur(4px);
+}
+
+.content {
+  padding: 1.5rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.4;
+  transition: color 0.2s ease;
+}
+
+.card:hover .title {
+  color: #4f46e5;
+}
+
+.excerpt {
+  color: #6b7280;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0 0 1rem 0;
+  flex-grow: 1;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin-top: auto;
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.author i {
+  font-size: 0.8rem;
+}
+
+.readMore {
+  padding: 1rem 1.5rem;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+  color: #4f46e5;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.card:hover .readMore {
+  background: #4f46e5;
+  color: white;
+}
+
+.readMore i {
+  transition: transform 0.2s ease;
+}
+
+.card:hover .readMore i {
+  transform: translateX(4px);
+}
+
+/* Estados de carga y error */
+.loadingContainer {
+  text-align: center;
+  padding: 3rem;
+  color: #6b7280;
+}
+
+.spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e5e7eb;
+  border-radius: 50%;
+  border-top-color: #4f46e5;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.errorContainer {
+  text-align: center;
+  padding: 2rem;
+  color: #ef4444;
+  background: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+}
+
+.errorContainer i {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .section {
+    padding: 2rem 1rem;
+  }
+  
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .sectionTitle {
+    font-size: 1.5rem;
+  }
+  
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .imageContainer {
+    height: 180px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

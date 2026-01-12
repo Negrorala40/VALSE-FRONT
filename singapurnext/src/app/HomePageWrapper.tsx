@@ -3,6 +3,7 @@ import React from 'react';
 import { Suspense } from 'react';
 import Home from './home/Home';
 import Menu from './components/Menu';
+import BlogPreview from './components/BlogPreview';
 
 export default function HomePageWrapper() {
   return (
@@ -10,6 +11,7 @@ export default function HomePageWrapper() {
       <div>
         <Home />
         <Menu />
+        <BlogPreview />
       </div>
     </Suspense>
   );

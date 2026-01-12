@@ -6,6 +6,7 @@ import Image from 'next/image';
 import styles from './Product.module.css';
 import { PRODUCT_DETAIL } from '../utils/Api';
 import { useCart } from '../context/CartContext'; // Usar contexto del carrito
+import BlogPreview from './BlogPreview';
 
 interface Imagen {
   imageUrl: string;
@@ -404,14 +405,17 @@ const ProductContent = () => {
 
 const Product = () => {
   return (
-    <Suspense fallback={
-      <div className={styles.loadingContainer}>
-        <div className={styles.loadingSpinner}></div>
-        <p>Cargando...</p>
-      </div>
-    }>
-      <ProductContent />
-    </Suspense>
+    <>
+      <Suspense fallback={
+        <div className={styles.loadingContainer}>
+          <div className={styles.loadingSpinner}></div>
+          <p>Cargando...</p>
+        </div>
+      }>
+        <ProductContent />
+      </Suspense>
+      <BlogPreview />
+    </>
   );
 };
 

@@ -129,107 +129,198 @@ const Home = () => {
   return (
     <div className={styles.homeContainer}>
       <main className={styles.mainContent}>
-        {/* Hero Section con imagen grande */}
+        {/* NUEVO HERO SECTION - Estilo del ejemplo */}
         <section className={styles.heroSection}>
-          <div className={styles.heroImageContainer}>
-            {/* Contenedor para la imagen con SVG overlay */}
-            <div className={styles.heroImageWrapper}>
-              <div className={styles.heroSvgContainer}>
-                {/* SVG de pijama en el centro */}
-                <svg 
-                  width="180" 
-                  height="180" 
-                  viewBox="0 0 100 100" 
-                  className={styles.pajamaSvg}
-                  aria-label="Ilustración de pijama"
-                >
-                  {/* Cuerpo del pijama */}
-                  <rect 
-                    x="25" 
-                    y="20" 
-                    width="50" 
-                    height="55" 
-                    rx="8" 
-                    fill="#3DB28A" 
-                    stroke="#103359" 
-                    strokeWidth="2"
-                  />
-                  
-                  {/* Manga izquierda */}
-                  <rect 
-                    x="15" 
-                    y="30" 
-                    width="15" 
-                    height="20" 
-                    rx="5" 
-                    fill="#806FF7" 
-                    stroke="#103359" 
-                    strokeWidth="2"
-                  />
-                  
-                  {/* Manga derecha */}
-                  <rect 
-                    x="70" 
-                    y="30" 
-                    width="15" 
-                    height="20" 
-                    rx="5" 
-                    fill="#806FF7" 
-                    stroke="#103359" 
-                    strokeWidth="2"
-                  />
-                  
-                  {/* Cuello */}
-                  <path 
-                    d="M35,20 Q50,10 65,20" 
-                    fill="none" 
-                    stroke="#E9566D" 
-                    strokeWidth="3" 
-                    strokeLinecap="round"
-                  />
-                  
-                  {/* Patrones decorativos */}
-                  <circle cx="40" cy="40" r="3" fill="#FFD449" />
-                  <circle cx="60" cy="40" r="3" fill="#FFD449" />
-                  <circle cx="50" cy="55" r="3" fill="#F47B47" />
-                  <circle cx="35" cy="60" r="3" fill="#F47B47" />
-                  <circle cx="65" cy="60" r="3" fill="#F47B47" />
-                  
-                  {/* Botones */}
-                  <circle cx="50" cy="30" r="2" fill="#103359" />
-                  <circle cx="50" cy="45" r="2" fill="#103359" />
-                </svg>
-              </div>
-              
-              {/* Imagen de fondo con niños en los extremos */}
-              <div className={styles.heroBackground}>
-                {/* Niño izquierdo */}
-                <div className={`${styles.childImage} ${styles.childLeft}`}>
-                  <div className={styles.childSilhouette}></div>
-                </div>
-                
-                {/* Niño derecho */}
-                <div className={`${styles.childImage} ${styles.childRight}`}>
-                  <div className={styles.childSilhouette}></div>
-                </div>
-              </div>
-            </div>
-            
-            <div className={styles.heroContent}>
-              <h1 className={styles.heroTitle}>
-                <span className={styles.titleHighlight}>AMARTE</span> COLOMBIA
-              </h1>
-              <p className={styles.heroSubtitle}>
-                Pijamas que llevan a los pequeños a Marte
+          {/* Top decorative line */}
+          <div className={styles.heroTopLine} />
+
+          {/* SVG Pajama - Main background element floating */}
+          <div className={styles.heroSvgContainer}>
+            <svg
+              className={styles.heroPajamaSvg}
+              viewBox="0 0 300 420"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-label="Ilustración de pijama infantil"
+            >
+              <defs>
+                <linearGradient id="pajamaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#3DB28A" />
+                  <stop offset="100%" stopColor="#2a9b74" />
+                </linearGradient>
+                <linearGradient id="sleeveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#3DB28A" />
+                  <stop offset="100%" stopColor="#28a076" />
+                </linearGradient>
+                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                  <feMerge>
+                    <feMergeNode in="coloredBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+
+              {/* Main body - pants part */}
+              <path
+                d="M 100 140 L 90 320 L 110 320 L 110 180 Q 110 160 115 150 L 115 140 Z"
+                fill="url(#pajamaBg)"
+                stroke="#103359"
+                strokeWidth="3"
+                strokeLinecap="round"
+                filter="url(#glow)"
+              />
+
+              {/* Right pant leg */}
+              <path
+                d="M 150 140 L 160 320 L 180 320 L 180 180 Q 180 160 185 150 L 185 140 Z"
+                fill="url(#pajamaBg)"
+                stroke="#103359"
+                strokeWidth="3"
+                strokeLinecap="round"
+                filter="url(#glow)"
+              />
+
+              {/* Main body - shirt part */}
+              <path
+                d="M 80 70 Q 75 90 75 120 L 75 140 L 185 140 L 185 120 Q 185 90 180 70 Q 150 50 150 50 Q 150 50 120 70 Z"
+                fill="url(#pajamaBg)"
+                stroke="#103359"
+                strokeWidth="3"
+                filter="url(#glow)"
+              />
+
+              {/* Left sleeve */}
+              <path
+                d="M 80 90 Q 40 95 25 110 Q 20 115 30 130 L 75 115 Z"
+                fill="url(#sleeveGrad)"
+                stroke="#103359"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                filter="url(#glow)"
+              />
+
+              {/* Right sleeve */}
+              <path
+                d="M 220 90 Q 260 95 275 110 Q 280 115 270 130 L 225 115 Z"
+                fill="url(#sleeveGrad)"
+                stroke="#103359"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                filter="url(#glow)"
+              />
+
+              {/* Collar/Neckline - rounded */}
+              <ellipse
+                cx="150"
+                cy="65"
+                rx="28"
+                ry="18"
+                fill="#806FF7"
+                stroke="#103359"
+                strokeWidth="3"
+                filter="url(#glow)"
+              />
+
+              {/* Collar detail inner ring */}
+              <ellipse
+                cx="150"
+                cy="62"
+                rx="24"
+                ry="14"
+                fill="none"
+                stroke="#103359"
+                strokeWidth="1.5"
+                opacity="0.4"
+              />
+
+              {/* Front buttons column */}
+              <g filter="url(#glow)">
+                <circle cx="150" cy="115" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
+                <circle cx="150" cy="115" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
+              </g>
+
+              <g filter="url(#glow)">
+                <circle cx="150" cy="155" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
+                <circle cx="150" cy="155" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
+              </g>
+
+              {/* Decorative stars - chest area */}
+              <g opacity="0.85">
+                <circle cx="110" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
+                <circle cx="110" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
+              </g>
+
+              <g opacity="0.85">
+                <circle cx="190" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
+                <circle cx="190" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
+              </g>
+
+              {/* Accent stars - lower area */}
+              <g opacity="0.8">
+                <circle cx="105" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
+              </g>
+
+              <g opacity="0.8">
+                <circle cx="195" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
+              </g>
+
+              {/* Rocket emoji as accent - centered bottom */}
+              <text
+                x="150"
+                y="260"
+                textAnchor="middle"
+                fontSize="48"
+                opacity="0.7"
+                filter="url(#glow)"
+              >
+                🚀
+              </text>
+
+              {/* Pattern circles - decorative scattered */}
+              <g opacity="0.3" stroke="#103359" strokeWidth="1.5" fill="none">
+                <circle cx="60" cy="140" r="8" />
+                <circle cx="240" cy="160" r="8" />
+                <circle cx="70" cy="220" r="6" />
+                <circle cx="230" cy="240" r="6" />
+              </g>
+            </svg>
+          </div>
+
+          {/* Overlay gradient for readability */}
+          <div className={styles.heroOverlay} />
+
+          {/* Content - positioned over SVG */}
+          <div className={styles.heroContent}>
+            <div className={styles.heroTextBox}>
+              {/* Small brand indicator */}
+              <p className={styles.heroBadge}>Colección A MARTE</p>
+
+              {/* Title */}
+              <h1 className={styles.heroTitle}>La magia en cada noche</h1>
+
+              {/* Description */}
+              <p className={styles.heroDescription}>
+                Pijamas diseñados para hacer soñar. Cada prenda cuenta una historia de aventura, comodidad y amor por los detalles.
               </p>
-              <div className={styles.heroButtons}>
-                <Link href="/menu" className={styles.primaryButton}>
-                  Ver Colección
-                </Link>
-                <Link href="/menu?filter=nuevo" className={styles.secondaryButton}>
-                  Nuevos Lanzamientos
-                </Link>
-              </div>
+
+              {/* Mirar más link */}
+              <Link href="/menu" className={styles.heroLink}>
+                <span>Ver Colección</span>
+                <svg
+                  className={styles.heroLinkArrow}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 7l5 5m0 0l-5 5m5-5H6"
+                  />
+                </svg>
+              </Link>
             </div>
           </div>
         </section>
