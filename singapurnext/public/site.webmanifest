@@ -1,0 +1,88 @@
+{
+  "name": "A Marte - Pijamas Espaciales para Niños",
+  "short_name": "A Marte",
+  "description": "Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["shopping", "kids", "clothing"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/logos/logCohete.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Ver Colección",
+      "short_name": "Colección",
+      "description": "Ver nuestra colección de pijamas espaciales",
+      "url": "/coleccion",
+      "icons": [
+        {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Cómo Comprar",
+      "short_name": "Comprar",
+      "description": "Instrucciones para realizar tu compra",
+      "url": "/como-comprar",
+      "icons": [
+        {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Contactar",
+      "short_name": "Contacto",
+      "description": "Contáctanos para consultas",
+      "url": "/contacto",
+      "icons": [
+        {
+          "src": "/android-chrome-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

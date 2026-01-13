@@ -27,29 +27,7 @@ export const metadata: Metadata = {
   description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
   keywords: ['pijamas', 'niños', 'espacial', 'marte', 'infantil', 'ropa niños'],
   authors: [{ name: 'A Marte' }],
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'), // ← AÑADE ESTA LÍNEA
-  openGraph: {
-    type: 'website',
-    locale: 'es_ES',
-    url: process.env.NEXT_PUBLIC_SITE_URL || 'https://tu-dominio.com',
-    title: 'A Marte - Pijamas Espaciales para Niños',
-    description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
-    siteName: 'A Marte',
-    images: [
-      {
-        url: '/og-image.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'A Marte - Pijamas Espaciales',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'A Marte - Pijamas Espaciales para Niños',
-    description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
-    images: ['/twitter-image.jpg'],
-  },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.amartekids.com'),
 };
 
 export default function RootLayout({
@@ -60,39 +38,24 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${inter.variable} ${fredoka.variable}`}>
       <head>
-  {/* Configuración de iconos con cache-busting */}
-  <link
-    rel="icon"
-    href="/images/logos/logCohete.svg?v=2"
-    type="image/svg+xml"
-    key="svg-icon"
-  />
-  
-  {/* ICO como fallback seguro */}
-  <link
-    rel="alternate icon"
-    href="/favicon.ico?v=2"
-    type="image/x-icon"
-    key="ico-icon"
-  />
-  
-  {/* Para iOS */}
-  <link
-    rel="apple-touch-icon"
-    href="/images/logos/logCohete.svg?v=2"
-    type="image/svg+xml"
-    key="apple-icon"
-  />
-  
-  {/* Metas para prevenir cache en desarrollo */}
-  {process.env.NODE_ENV === 'development' && (
-    <>
-      <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-      <meta httpEquiv="Pragma" content="no-cache" />
-      <meta httpEquiv="Expires" content="0" />
-    </>
-  )}
-</head>
+        {/* SOLO LO ESENCIAL: */}
+        
+        {/* 1. FAVICON PRINCIPAL */}
+        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+        
+        {/* 2. MANIFEST PWA */}
+        <link rel="manifest" href="/site.webmanifest" />
+        
+        {/* 3. COLOR DEL TEMA */}
+        <meta name="theme-color" content="#1e40af" />
+        
+        {/* 4. VIEWPORT */}
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        
+        {/* 5. PARA iOS */}
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+      </head>
       <body className="min-h-screen bg-white text-gray-900 font-sans antialiased">
         <Providers>
           <Header />

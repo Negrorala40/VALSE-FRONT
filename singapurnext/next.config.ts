@@ -9,26 +9,32 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    domains: ['res.cloudinary.com'],
+    // ELIMINA domains para quitar el warning
+    // domains: ['res.cloudinary.com'], // ← COMENTA ESTA LÍNEA
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   
-  // PROXY NECESARIO para sessionid - pero EXCLUYENDO NextAuth
+  // PROXY configurado correctamente
   async rewrites() {
     return [
       {
-        // Todo EXCEPTO /api/auth/**
         source: '/api/:path((?!auth).*)',
         destination: 'http://localhost:8080/api/:path*',
       },
     ];
   },
   
-  env: {
-    NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-    NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET,
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8080',
+  // Para desarrollo: desactiva algunas optimizaciones
+  experimental: {
+    optimizeCss: false,
+  },
+  
+  // Logs más limpios
+  logging: {
+    fetches: {
+      fullUrl: false,
+    },
   },
 };
 
