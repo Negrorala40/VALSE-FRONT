@@ -43,6 +43,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
   const [isFetching, setIsFetching] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false); // Nueva bandera
 
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
@@ -73,14 +74,15 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen, handleClose]);
 
+  // Mover fetchCart fuera del useEffect para mejor control
   const fetchCart = useCallback(async () => {
-    if (isFetching) return;
+    if (isFetching || hasFetched) return;
     
     setIsFetching(true);
     const token = localStorage.getItem('token');
     const userId = localStorage.getItem('userId');
 
-    console.log('🛒 Fetching cart - Token:', !!token, 'UserId:', userId);
+    console.log('🛒 Fetching cart - Token:', !!token, 'UserId:', userId, 'hasFetched:', hasFetched);
 
     try {
       if (token && userId) {
@@ -96,7 +98,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         if (!res.ok) throw new Error('Error al obtener el carrito');
         const data: ApiCartItem[] = await res.json();
 
-        console.log('🛒 Carrito obtenido (autenticado):', data);
+        console.log('🛒 Carrito obtenido (autenticado):', data.length, 'items');
 
         const transformedItems: CartItem[] = data.map((item) => ({
           id: item.id.toString(),
@@ -125,13 +127,14 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           if (res.status === 404) {
             console.log('🛒 Carrito vacío (404)');
             setCartItems([]);
+            setHasFetched(true);
             return;
           }
           throw new Error(`Error ${res.status} al obtener el carrito`);
         }
         
         const data: ApiCartItem[] = await res.json();
-        console.log('🛒 Carrito obtenido (no autenticado):', data);
+        console.log('🛒 Carrito obtenido (no autenticado):', data.length, 'items');
 
         const transformedItems: CartItem[] = data.map((item) => ({
           id: item.id.toString(),
@@ -146,6 +149,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
         setCartItems(transformedItems);
       }
+      setHasFetched(true); // Marcar como ya fetcheado
     } catch (err) {
       console.error('🛑 Error al cargar el carrito:', err);
       // Fallback a localStorage
@@ -171,16 +175,29 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       } else {
         setCartItems([]);
       }
+      setHasFetched(true);
     } finally {
       setIsFetching(false);
     }
-  }, [setCartItems, isFetching]);
+  }, [setCartItems, isFetching, hasFetched]); // Incluir hasFetched
 
   useEffect(() => {
-    if (isOpen) {
+    // Solo fetch cuando el carrito se abre y no ha sido fetcheado
+    if (isOpen && !hasFetched && !isFetching) {
       fetchCart();
     }
-  }, [isOpen, fetchCart]);
+  }, [isOpen, hasFetched, isFetching, fetchCart]);
+
+  // Resetear hasFetched cuando el carrito se cierra
+  useEffect(() => {
+    if (!isOpen) {
+      // Esperar un poco antes de resetear para evitar fetch inmediato al reabrir
+      const timer = setTimeout(() => {
+        setHasFetched(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const updateQuantity = useCallback(async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -384,7 +401,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       case 'oliva':
         return { background: '#808000' };
       default:
-        // Si no reconoce el color, intenta usar un hash para generar uno consistente
         const colors = [
           '#103359', '#3DB28A', '#E9566D', '#806FF7', '#F47B47', 
           '#FFD449', '#000000', '#FFFFFF', '#F5F5DC', '#808080',
@@ -441,7 +457,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           </button>
         </div>
 
-        {cartItems.length === 0 ? (
+        {isFetching && !hasFetched ? (
+          <div className="cart-loading">
+            <div className="loading-spinner"></div>
+            <p>Cargando carrito...</p>
+          </div>
+        ) : cartItems.length === 0 ? (
           <div className="cart-empty">
             <div className="cart-empty-illustration">
               <div className="empty-bag">
