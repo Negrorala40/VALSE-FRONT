@@ -332,8 +332,8 @@ const Home = () => {
           className={`${styles.categoriesContainer} ${isVisible.categories ? styles.visible : ''}`}
         >
           <div className={styles.categoriesGrid}>
-            {/* Niños */}
-            <Link href="/menu?gender=NIÑOS&type=SUPERIOR" className={styles.categoryCard}>
+            {/* Niños - Ahora muestra Niños + Unisex */}
+            <Link href="/menu?category=ninos&type=SUPERIOR" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
                 {loading ? (
                   <div className={styles.loadingSkeleton}></div>
@@ -341,7 +341,7 @@ const Home = () => {
                   <>
                     <Image
                       src={categoryImages.niños}
-                      alt="Pijamas para Niños"
+                      alt="Pijamas para Niños y Unisex"
                       fill
                       className={styles.categoryImage}
                       sizes="(max-width: 768px) 100vw, 25vw"
@@ -356,8 +356,8 @@ const Home = () => {
               </div>
             </Link>
 
-            {/* Niñas */}
-            <Link href="/menu?gender=NIÑAS&type=SUPERIOR" className={styles.categoryCard}>
+            {/* Niñas - Ahora muestra Niñas + Unisex */}
+            <Link href="/menu?category=ninas&type=SUPERIOR" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
                 {loading ? (
                   <div className={styles.loadingSkeleton}></div>
@@ -365,7 +365,7 @@ const Home = () => {
                   <>
                     <Image
                       src={categoryImages.niñas}
-                      alt="Pijamas para Niñas"
+                      alt="Pijamas para Niñas y Unisex"
                       fill
                       className={styles.categoryImage}
                       sizes="(max-width: 768px) 100vw, 25vw"
@@ -380,7 +380,7 @@ const Home = () => {
               </div>
             </Link>
 
-            {/* Unisex */}
+            {/* Unisex - Solo muestra Unisex */}
             <Link href="/menu?gender=UNISEX&type=SUPERIOR" className={styles.categoryCard}>
               <div className={styles.categoryImageContainer}>
                 {loading ? (

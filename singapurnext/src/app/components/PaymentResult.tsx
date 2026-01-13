@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Check,
   X,
@@ -28,11 +28,11 @@ import {
   Zap,
   Gift,
   ShieldCheck,
-  ShoppingCart
+  ShoppingCart,
+  ExternalLink
 } from 'lucide-react';
 import './PaymentResult.css';
 
-// Interfaz ALINEADA con lo que realmente devuelve tu backend
 interface OrderResponse {
   id: number;
   totalPrice: number;
@@ -49,39 +49,72 @@ interface OrderResponse {
   }>;
 }
 
+interface PaymentStatusResponse {
+  success: boolean;
+  orderId: number;
+  orderStatus: string;
+  mpStatus: string;
+  paymentId?: string;
+  paymentMethod?: string;
+  lastUpdated?: string;
+  hasPayment: boolean;
+  preferenceId?: string;
+}
+
 type PaymentStatus = 'loading' | 'approved' | 'rejected' | 'pending' | 'error';
 
 const PaymentResult = () => {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [order, setOrder] = useState<OrderResponse | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('loading');
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
   const [showFloatingMenu, setShowFloatingMenu] = useState(true);
   const [pollingCount, setPollingCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentStatusResponse | null>(null);
   
   const orderRef = useRef<HTMLDivElement>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   const orderId = searchParams.get('orderId');
+  const preferenceId = searchParams.get('preference_id');
+  const paymentId = searchParams.get('payment_id');
+  const collectionId = searchParams.get('collection_id');
+  const collectionStatus = searchParams.get('collection_status');
+  const externalReference = searchParams.get('external_reference');
+  const paymentType = searchParams.get('payment_type');
+  const merchantOrderId = searchParams.get('merchant_order_id');
 
-  // Verificar autenticación al cargar
+  // Verificar autenticación
   useEffect(() => {
     const token = localStorage.getItem('token');
     setIsAuthenticated(!!token);
+    
+    // Debug: Mostrar parámetros de URL
+    console.log('🔍 Parámetros de URL recibidos:');
+    console.log('   orderId:', orderId);
+    console.log('   preference_id:', preferenceId);
+    console.log('   payment_id:', paymentId);
+    console.log('   external_reference:', externalReference);
+    console.log('   collection_status:', collectionStatus);
+    console.log('   Autenticado:', !!token);
   }, []);
 
   // Formateadores
-  const formatPrice = (price: number) => {
+  const formatPrice = useCallback((price: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
       currency: 'COP',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(price);
-  };
+  }, []);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
@@ -98,138 +131,215 @@ const PaymentResult = () => {
     } catch {
       return 'Fecha no disponible';
     }
-  };
+  }, []);
 
-  // Generar número de orden
-  const generateOrderNumber = (id: number) => {
+  const generateOrderNumber = useCallback((id: number) => {
     return `A-MARTE-${id.toString().padStart(6, '0')}`;
-  };
+  }, []);
 
-  // Calcular subtotal
-  const calculateSubtotal = (items: OrderResponse['orderItems']) => {
+  const calculateSubtotal = useCallback((items: OrderResponse['orderItems']) => {
     return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  };
+  }, []);
 
-  // Cargar datos de la orden desde API
-  useEffect(() => {
-    const loadOrderData = async () => {
-      try {
-        if (!orderId) {
-          setError('No se encontró número de orden');
-          setPaymentStatus('error');
+  // Función para obtener headers con autenticación
+  const getHeaders = useCallback(() => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache'
+    };
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+  }, []);
+
+  // Cargar datos de la orden
+  const loadOrderData = useCallback(async () => {
+    try {
+      if (!orderId) {
+        // Intentar obtener orderId de localStorage si no está en URL
+        const pendingOrderId = localStorage.getItem('pendingOrderId');
+        if (pendingOrderId) {
+          console.log('📦 Usando orderId de localStorage:', pendingOrderId);
+          window.history.replaceState(null, '', `/checkout/success?orderId=${pendingOrderId}`);
           return;
         }
-
-        const response = await fetch(`/api/orders/${orderId}`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        });
-
-        if (response.status === 403) {
-          setError('No tienes acceso a esta orden.');
-          setPaymentStatus('error');
-          return;
-        }
-
-        if (response.status === 404) {
-          setError('Orden no encontrada en el sistema.');
-          setPaymentStatus('error');
-          return;
-        }
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Error ${response.status}: ${errorText || 'No se pudo cargar la orden'}`);
-        }
-
-        const orderData: OrderResponse = await response.json();
-        setOrder(orderData);
         
-        if (orderData.status === 'PAGO_APROBADO') {
-          setPaymentStatus('approved');
-        } else if (orderData.status === 'PAGO_RECHAZADO') {
-          setPaymentStatus('rejected');
-        } else if (orderData.status === 'PENDIENTE') {
-          setPaymentStatus('pending');
-        } else {
-          setPaymentStatus('approved');
-        }
-
-      } catch (err: unknown) {
-        console.error('❌ Error loading order:', err);
-        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-        setError(errorMessage || 'Error al cargar los detalles de la orden');
+        setError('No se encontró número de orden');
         setPaymentStatus('error');
+        return;
       }
-    };
 
-    loadOrderData();
-  }, [orderId]);
+      console.log('🔍 Cargando orden ID:', orderId);
+      
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: 'GET',
+        credentials: 'include', // IMPORTANTE: Envía cookies automáticamente
+        headers: getHeaders()
+      });
 
-  // Polling si el estado está pendiente
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+      console.log('📥 Response status:', response.status);
 
-    const checkStatus = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token && isAuthenticated) return;
+      if (response.status === 403) {
+        setError('No tienes acceso a esta orden.');
+        setPaymentStatus('error');
+        return;
+      }
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        };
-
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
+      if (response.status === 404) {
+        // Intentar con parámetros de MercadoPago
+        if (externalReference || preferenceId) {
+          setError('Orden no encontrada. Es posible que el pago aún se esté procesando.');
+          setPaymentStatus('pending');
+          return;
         }
+        setError('Orden no encontrada en el sistema.');
+        setPaymentStatus('error');
+        return;
+      }
 
-        const response = await fetch(`/api/payments/status/${orderId}`, {
-          headers,
-          credentials: 'include'
-        });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText || 'No se pudo cargar la orden'}`);
+      }
 
-        if (response.ok) {
-          const data = await response.json();
-          setPollingCount(prev => prev + 1);
+      const orderData: OrderResponse = await response.json();
+      console.log('✅ Orden cargada:', orderData);
+      
+      setOrder(orderData);
+      
+      // Determinar estado basado en status de la orden
+      if (orderData.status === 'PAGO_APROBADO' || orderData.status === 'APROBADO') {
+        setPaymentStatus('approved');
+        // Limpiar localStorage cuando el pago es exitoso
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+        localStorage.removeItem('pendingPreferenceId');
+      } else if (orderData.status === 'PAGO_RECHAZADO' || orderData.status === 'RECHAZADO') {
+        setPaymentStatus('rejected');
+      } else if (orderData.status === 'PENDIENTE') {
+        setPaymentStatus('pending');
+      } else {
+        setPaymentStatus('approved');
+      }
 
-          if (data.status === 'PAGO_APROBADO') {
-            setPaymentStatus('approved');
-            const orderRes = await fetch(`/api/orders/${orderId}`, {
-              headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-              credentials: 'include'
-            });
-            if (orderRes.ok) {
-              setOrder(await orderRes.json());
-            }
-            if (intervalId) clearInterval(intervalId);
-          } else if (data.status === 'PAGO_RECHAZADO') {
-            setPaymentStatus('rejected');
-            if (intervalId) clearInterval(intervalId);
+    } catch (err: unknown) {
+      console.error('❌ Error loading order:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errorMessage || 'Error al cargar los detalles de la orden');
+      setPaymentStatus('error');
+    }
+  }, [orderId, externalReference, preferenceId, getHeaders]);
+
+  // Verificar estado del pago en MercadoPago
+  const checkPaymentStatus = useCallback(async () => {
+    if (!orderId) return;
+
+    try {
+      console.log('🔄 Verificando estado del pago para orden:', orderId);
+      
+      const response = await fetch(`/api/payments/status/${orderId}`, {
+        method: 'GET',
+        credentials: 'include', // IMPORTANTE: Envía cookies automáticamente
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        console.log('❌ Error verificando estado:', response.status);
+        return;
+      }
+
+      const data: PaymentStatusResponse = await response.json();
+      console.log('📊 Estado del pago:', data);
+      
+      setPaymentDetails(data);
+      setPollingCount(prev => prev + 1);
+
+      // Actualizar estado según respuesta
+      if (data.orderStatus === 'APROBADO' || data.mpStatus === 'approved') {
+        setPaymentStatus('approved');
+        setSuccessMessage('✅ ¡Pago confirmado exitosamente!');
+        // Recargar datos de la orden
+        await loadOrderData();
+        // Detener polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      } else if (data.orderStatus === 'RECHAZADO' || data.mpStatus === 'rejected') {
+        setPaymentStatus('rejected');
+        setError('❌ El pago fue rechazado. Por favor intenta con otro método de pago.');
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
+
+    } catch (err) {
+      console.error('Error verificando estado del pago:', err);
+    }
+  }, [orderId, getHeaders, loadOrderData]);
+
+  // Polling automático para órdenes pendientes
+  useEffect(() => {
+    if (paymentStatus === 'pending' && orderId && !pollingIntervalRef.current) {
+      // Verificar inmediatamente
+      checkPaymentStatus();
+      
+      // Configurar polling cada 5 segundos
+      pollingIntervalRef.current = setInterval(checkPaymentStatus, 5000);
+      
+      // Detener después de 2 minutos (120 segundos)
+      setTimeout(() => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          if (paymentStatus === 'pending') {
+            setError('⚠️ Tiempo de espera agotado. Si realizaste el pago, contáctanos.');
           }
         }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-    };
-
-    if (paymentStatus === 'pending' && orderId && pollingCount < 20) {
-      intervalId = setInterval(checkStatus, 3000);
-      setTimeout(() => {
-        if (intervalId) clearInterval(intervalId);
-      }, 60000);
+      }, 120000);
     }
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     };
-  }, [paymentStatus, orderId, pollingCount, isAuthenticated]);
+  }, [paymentStatus, orderId, checkPaymentStatus]);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadOrderData();
+  }, [loadOrderData]);
+
+  // Manejar parámetros de MercadoPago en la URL
+  useEffect(() => {
+    // Si hay parámetros de MercadoPago pero no orderId, buscar en localStorage
+    if ((preferenceId || externalReference) && !orderId) {
+      const pendingOrderId = localStorage.getItem('pendingOrderId');
+      if (pendingOrderId) {
+        console.log('🔄 Redirigiendo con orderId desde localStorage:', pendingOrderId);
+        router.replace(`/checkout/success?orderId=${pendingOrderId}`);
+      }
+    }
+
+    // Si tenemos collection_status de MercadoPago, actualizar estado
+    if (collectionStatus === 'approved' && paymentStatus !== 'approved') {
+      setPaymentStatus('approved');
+      setSuccessMessage('✅ ¡Pago aprobado por MercadoPago!');
+    } else if (collectionStatus === 'rejected' && paymentStatus !== 'rejected') {
+      setPaymentStatus('rejected');
+      setError('❌ Pago rechazado por MercadoPago');
+    }
+  }, [preferenceId, externalReference, orderId, collectionStatus, paymentStatus, router]);
 
   // Copiar número de orden
-  const copyOrderNumber = () => {
+  const copyOrderNumber = useCallback(() => {
     if (order) {
       navigator.clipboard.writeText(generateOrderNumber(order.id))
         .then(() => {
@@ -238,10 +348,12 @@ const PaymentResult = () => {
         })
         .catch(err => console.error('Error copying:', err));
     }
-  };
+  }, [order, generateOrderNumber]);
 
   // Generar PDF
-  const generatePDF = () => {
+  const generatePDF = useCallback(() => {
+    if (!order) return;
+    
     setGeneratingPDF(true);
     
     setTimeout(() => {
@@ -251,26 +363,50 @@ const PaymentResult = () => {
       const printContent = `
         <html>
           <head>
-            <title>Comprobante - ${generateOrderNumber(order!.id)}</title>
+            <title>Comprobante - ${generateOrderNumber(order.id)}</title>
             <style>
               body { font-family: Arial; margin: 20px; }
-              .header { text-align: center; margin-bottom: 20px; }
-              .order-number { font-size: 18px; font-weight: bold; color: #103359; }
-              .section { margin: 15px 0; padding: 10px; border: 1px solid #ddd; }
-              .total { font-size: 16px; font-weight: bold; color: #3db28a; }
+              .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #3DB28A; padding-bottom: 20px; }
+              .order-number { font-size: 24px; font-weight: bold; color: #103359; margin: 10px 0; }
+              .section { margin: 20px 0; padding: 15px; border: 1px solid #E1E4E8; border-radius: 8px; }
+              .total { font-size: 18px; font-weight: bold; color: #3db28a; }
+              .product-row { display: flex; justify-content: space-between; margin: 8px 0; }
+              .product-name { flex: 2; }
+              .product-qty { flex: 1; text-align: center; }
+              .product-price { flex: 1; text-align: right; }
+              .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
             </style>
           </head>
           <body>
             <div class="header">
-              <h2>A MARTE - Comprobante de Pago</h2>
-              <div class="order-number">${generateOrderNumber(order!.id)}</div>
-              <p>Fecha: ${formatDate(order!.orderDate)}</p>
+              <h1>A MARTE - Comprobante de Pago</h1>
+              <div class="order-number">${generateOrderNumber(order.id)}</div>
+              <p>Fecha: ${formatDate(order.orderDate)}</p>
+              <p>Estado: ${order.status}</p>
             </div>
+            
             <div class="section">
-              <h3>Resumen</h3>
-              <p>Estado: ${order!.status}</p>
-              <p>Total: ${formatPrice(order!.totalPrice)}</p>
-              <p>Productos: ${order!.orderItems.length}</p>
+              <h3>Resumen del Pedido</h3>
+              ${order.orderItems.map((item, index) => `
+                <div class="product-row">
+                  <span class="product-name">Producto ${index + 1}</span>
+                  <span class="product-qty">x${item.quantity}</span>
+                  <span class="product-price">${formatPrice(item.price * item.quantity)}</span>
+                </div>
+              `).join('')}
+              
+              <div style="border-top: 1px solid #ddd; margin-top: 15px; padding-top: 15px;">
+                <div class="product-row">
+                  <strong>Total:</strong>
+                  <span></span>
+                  <strong class="total">${formatPrice(order.totalPrice)}</strong>
+                </div>
+              </div>
+            </div>
+            
+            <div class="footer">
+              <p>¡Gracias por tu compra en A Marte!</p>
+              <p>Pijamas cómodas para sueños felices ✨</p>
             </div>
           </body>
         </html>
@@ -283,63 +419,45 @@ const PaymentResult = () => {
         printWindow.print();
       }
     }, 1500);
-  };
+  }, [order, formatPrice, formatDate, generateOrderNumber]);
 
   // Compartir por WhatsApp
-  const shareViaWhatsApp = () => {
+  const shareViaWhatsApp = useCallback(() => {
     if (order) {
       const statusText = paymentStatus === 'approved' ? '✅ APROBADO' : 
                         paymentStatus === 'rejected' ? '❌ RECHAZADO' : '⏳ PENDIENTE';
       
-      const message = `Mi pedido en A MARTE\n\nOrden: ${generateOrderNumber(order.id)}\nEstado: ${statusText}\nTotal: ${formatPrice(order.totalPrice)}\nFecha: ${formatDate(order.orderDate)}\n\n¡Gracias por tu compra!`;
+      const message = `🌟 Mi pedido en A MARTE 🌟\n\n✨ Orden: ${generateOrderNumber(order.id)}\n✅ Estado: ${statusText}\n💰 Total: ${formatPrice(order.totalPrice)}\n📅 Fecha: ${formatDate(order.orderDate)}\n\n¡Gracias por tu compra! 🛒`;
       const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
       window.open(url, '_blank');
     }
-  };
+  }, [order, paymentStatus, formatPrice, formatDate, generateOrderNumber]);
 
   // Toast helper
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info', duration = 3000) => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info', duration = 3000) => {
     const event = new CustomEvent('show-toast', {
       detail: { message, type, duration }
     });
     window.dispatchEvent(event);
-  };
+  }, []);
 
   // Reintentar verificación
-  const retryVerification = async () => {
+  const retryVerification = useCallback(async () => {
     setPollingCount(0);
     setPaymentStatus('loading');
-    const token = localStorage.getItem('token');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    setError('');
+    await loadOrderData();
+  }, [loadOrderData]);
+
+  // Volver al checkout
+  const returnToCheckout = useCallback(() => {
+    const pendingOrderId = localStorage.getItem('pendingOrderId');
+    if (pendingOrderId) {
+      router.push(`/checkout?orderId=${pendingOrderId}`);
+    } else {
+      router.push('/checkout');
     }
-    
-    try {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        headers,
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const orderData: OrderResponse = await response.json();
-        setOrder(orderData);
-        
-        if (orderData.status === 'PAGO_APROBADO') {
-          setPaymentStatus('approved');
-        } else if (orderData.status === 'PAGO_RECHAZADO') {
-          setPaymentStatus('rejected');
-        } else if (orderData.status === 'PENDIENTE') {
-          setPaymentStatus('pending');
-        }
-      }
-    } catch (error) {
-      console.error('Error retrying:', error);
-    }
-  };
+  }, [router]);
 
   // Renderizar estado aprobado
   const renderApprovedStatus = () => (
@@ -383,10 +501,10 @@ const PaymentResult = () => {
         <br />Revisa los datos de tu tarjeta o intenta con otro método de pago.
       </p>
       <div className="status-actions">
-        <Link href="/checkout" className="btn btn-primary">
+        <button onClick={returnToCheckout} className="btn btn-primary">
           <RefreshCw className="icon" />
           Reintentar pago
-        </Link>
+        </button>
         <Link href="/contact" className="btn btn-outline">
           <Shield className="icon" />
           Contactar soporte
@@ -404,7 +522,7 @@ const PaymentResult = () => {
       <h1 className="status-title">Verificando tu pago</h1>
       <p className="status-subtitle">
         Estamos verificando el estado de tu pago para confirmar tu orden.
-        {pollingCount > 0 && ` (Verificando... ${pollingCount}/20)`}
+        {pollingCount > 0 && ` (Verificando... ${pollingCount})`}
       </p>
       <div className="loading-dots">
         <span></span>
@@ -441,10 +559,10 @@ const PaymentResult = () => {
             Ver mis pedidos
           </Link>
         ) : (
-          <Link href="/" className="btn btn-outline">
-            <Home className="icon" />
-            Volver al inicio
-          </Link>
+          <button onClick={returnToCheckout} className="btn btn-outline">
+            <ExternalLink className="icon" />
+            Volver al checkout
+          </button>
         )}
       </div>
     </header>
@@ -489,8 +607,8 @@ const PaymentResult = () => {
                 <h4>Compra como invitado</h4>
                 <p>
                   Para guardar tu historial de compras y recibir actualizaciones, 
-                  <Link href="/" className="link-button">
-                    visita nuestro sitio web
+                  <Link href="/auth/register" className="link-button">
+                    regístrate en nuestro sitio
                   </Link>
                 </p>
               </div>
@@ -859,6 +977,21 @@ const PaymentResult = () => {
 
   return (
     <div className="payment-result-container">
+      {/* Mensajes de éxito/error */}
+      {successMessage && (
+        <div className="payment-success-message">
+          <Check className="icon" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+      
+      {error && (
+        <div className="payment-error-message">
+          <AlertCircle className="icon" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Botón para volver atrás */}
       <div className="back-button-container">
         <Link href="/" className="back-button">

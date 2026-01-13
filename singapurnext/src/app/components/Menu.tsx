@@ -1,7 +1,7 @@
 'use client';
 
 import { MENU_PRODUCTS } from '../utils/Api';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import axios from 'axios';
 import Image from 'next/image';
@@ -55,6 +55,53 @@ interface ProductSelectionState {
   };
 }
 
+// Función para filtrar variantes con stock > 0
+const filterVariantsWithStock = (variants: ProductVariant[]): ProductVariant[] => {
+  return variants.filter(variant => variant.stock > 0);
+};
+
+// Función para obtener colores únicos solo de variantes con stock
+const getUniqueColorsWithStock = (variants: ProductVariant[]): string[] => {
+  const availableVariants = filterVariantsWithStock(variants);
+  const colors = [...new Set(availableVariants.map((v) => v.color))];
+  return colors.slice(0, 6);
+};
+
+// Función para obtener tallas disponibles para un color específico (solo con stock)
+const getSizesForColorWithStock = (variants: ProductVariant[], color: string): string[] => {
+  const availableSizes = filterVariantsWithStock(variants)
+    .filter(v => v.color === color)
+    .map(v => v.size)
+    .filter((size, index, self) => self.indexOf(size) === index);
+  
+  return availableSizes.sort((a, b) => {
+    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+    return sizeOrder.indexOf(a) - sizeOrder.indexOf(b);
+  });
+};
+
+// Función para obtener imagen para un color específico (solo si tiene stock)
+const getImageForColor = (variants: ProductVariant[], color: string): string => {
+  const variantWithImage = filterVariantsWithStock(variants).find(v => 
+    v.color === color && v.images && v.images.length > 0
+  );
+  return variantWithImage?.images?.[0]?.imageUrl || '/images/placeholder.png';
+};
+
+// Función para verificar si un producto tiene al menos una variante con stock
+const hasAvailableVariants = (product: Product): boolean => {
+  return product.variants.some(variant => variant.stock > 0);
+};
+
+// Función para obtener el precio mínimo solo de variantes con stock
+const getMinPrice = (variants: ProductVariant[]): number => {
+  const availableVariants = filterVariantsWithStock(variants);
+  if (!availableVariants || availableVariants.length === 0) return 0;
+  
+  const prices = availableVariants.map(v => Number(v.price || 0)).filter(p => p > 0);
+  return prices.length > 0 ? Math.min(...prices) : 0;
+};
+
 const getColorHex = (colorName: string): string => {
   const colors: Record<string, string> = {
     'azul': '#103359',
@@ -83,34 +130,18 @@ const getColorHex = (colorName: string): string => {
   return colors[colorName.toLowerCase()] || '#103359';
 };
 
-const getMinPrice = (variants: ProductVariant[]): number => {
-  if (!variants || variants.length === 0) return 0;
-  const prices = variants.map(v => Number(v.price || 0)).filter(p => p > 0);
-  return prices.length > 0 ? Math.min(...prices) : 0;
+const hasLowStock = (variants: ProductVariant[]) => {
+  const availableVariants = filterVariantsWithStock(variants);
+  return availableVariants.some((v) => v.stock > 0 && v.stock <= 3);
 };
 
-const getImageForColor = (variants: ProductVariant[], color: string): string => {
-  const variantWithImage = variants.find(v => 
-    v.color === color && v.images && v.images.length > 0
-  );
-  return variantWithImage?.images?.[0]?.imageUrl || '/images/placeholder.png';
-};
-
-const getUniqueColors = (variants: ProductVariant[]): string[] => {
-  const colors = [...new Set(variants.map((v) => v.color))];
-  return colors.slice(0, 6);
-};
-
-const getSizesForColor = (variants: ProductVariant[], color: string): string[] => {
-  const sizes = variants
-    .filter(v => v.color === color && v.stock > 0)
-    .map(v => v.size)
-    .filter((size, index, self) => self.indexOf(size) === index);
-  
-  return sizes.sort((a, b) => {
-    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    return sizeOrder.indexOf(a) - sizeOrder.indexOf(b);
-  });
+const isNew = (createdAt?: string) => {
+  if (!createdAt) return false;
+  const productDate = new Date(createdAt);
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+  return productDate >= thirtyDaysAgo;
 };
 
 const Menu: React.FC = () => {
@@ -121,6 +152,7 @@ const Menu: React.FC = () => {
   const productRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState<boolean>(true);
   const [sortOption, setSortOption] = useState<string>('');
@@ -128,29 +160,37 @@ const Menu: React.FC = () => {
   const [selectionStates, setSelectionStates] = useState<ProductSelectionState>({});
   const [quickAddLoading, setQuickAddLoading] = useState<number | null>(null);
 
+  // Cargar productos y filtrar solo aquellos con stock
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         const response = await axios.get<Product[]>(MENU_PRODUCTS);
         const productsData = response.data;
         
+        // Filtrar productos que tienen al menos una variante con stock
+        const productsWithStock = productsData.filter(hasAvailableVariants);
+        
+        // Inicializar estados de selección para productos con stock
         const initialSelections: ProductSelectionState = {};
         
-        productsData.forEach(product => {
-          const colors = getUniqueColors(product.variants);
-          const firstColor = colors[0] || '';
-          const sizesForFirstColor = firstColor ? getSizesForColor(product.variants, firstColor) : [];
-          
-          initialSelections[product.id] = {
-            selectedColor: firstColor,
-            selectedSize: sizesForFirstColor[0] || '',
-            availableSizes: sizesForFirstColor
-          };
+        productsWithStock.forEach(product => {
+          const colors = getUniqueColorsWithStock(product.variants);
+          if (colors.length > 0) {
+            const firstColor = colors[0];
+            const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
+            
+            initialSelections[product.id] = {
+              selectedColor: firstColor,
+              selectedSize: sizesForFirstColor[0] || '',
+              availableSizes: sizesForFirstColor
+            };
+          }
         });
         
-        setProducts(productsData);
+        setProducts(productsWithStock);
+        setFilteredProducts(productsWithStock);
         setSelectionStates(initialSelections);
-        setVisibleCards(new Array(productsData.length).fill(false));
+        setVisibleCards(new Array(productsWithStock.length).fill(false));
         setLoading(false);
       } catch (error) {
         console.error('Error al cargar los productos:', error);
@@ -191,17 +231,39 @@ const Menu: React.FC = () => {
     return () => {
       observer.disconnect();
     };
-  }, [visibleCount, products.length]);
+  }, [visibleCount, filteredProducts.length]);
 
+  // Filtrar productos según búsqueda
+  // En el useEffect que filtra productos, cambia esto:
+useEffect(() => {
   const searchQuery = searchParams.get('search') || '';
   const genderQuery = searchParams.get('gender') || '';
+  const categoryQuery = searchParams.get('category') || ''; // ← Nuevo parámetro
   const typeQuery = searchParams.get('type') || '';
 
-  const filteredProducts = products.filter((product) => {
-    const matchesGender = !genderQuery || 
-      (genderQuery.toLowerCase() === 'niñas' && product.gender === ProductGender.NINAS) ||
-      (genderQuery.toLowerCase() === 'niños' && product.gender === ProductGender.NINOS) ||
-      (genderQuery.toLowerCase() === 'unisex' && product.gender === ProductGender.UNISEX);
+  const filtered = products.filter((product) => {
+    // Lógica para categorías
+    let matchesGender = true;
+    
+    if (categoryQuery) {
+      // Para Niños: mostrar NIÑOS y UNISEX
+      if (categoryQuery === 'ninos') {
+        matchesGender = product.gender === ProductGender.NINOS || 
+                       product.gender === ProductGender.UNISEX;
+      }
+      // Para Niñas: mostrar NIÑAS y UNISEX
+      else if (categoryQuery === 'ninas') {
+        matchesGender = product.gender === ProductGender.NINAS || 
+                       product.gender === ProductGender.UNISEX;
+      }
+    }
+    // Para Unisex directo (parámetro gender)
+    else if (genderQuery) {
+      matchesGender = 
+        (genderQuery.toLowerCase() === 'niñas' && product.gender === ProductGender.NINAS) ||
+        (genderQuery.toLowerCase() === 'niños' && product.gender === ProductGender.NINOS) ||
+        (genderQuery.toLowerCase() === 'unisex' && product.gender === ProductGender.UNISEX);
+    }
     
     const matchesType = !typeQuery || product.type.toLowerCase() === typeQuery.toLowerCase();
     const matchesSearch =
@@ -212,6 +274,11 @@ const Menu: React.FC = () => {
     return matchesGender && matchesType && matchesSearch;
   });
 
+  setFilteredProducts(filtered);
+  setVisibleCount(20);
+}, [searchParams, products]);
+
+  // Ordenar productos
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     const aPrice = getMinPrice(a.variants);
     const bPrice = getMinPrice(b.variants);
@@ -230,13 +297,13 @@ const Menu: React.FC = () => {
     }
   });
 
-  const handleColorSelect = (e: React.MouseEvent, productId: number, color: string) => {
+  const handleColorSelect = useCallback((e: React.MouseEvent, productId: number, color: string) => {
     e.stopPropagation();
     
     const product = products.find(p => p.id === productId);
     if (!product) return;
     
-    const sizesForColor = getSizesForColor(product.variants, color);
+    const sizesForColor = getSizesForColorWithStock(product.variants, color);
     
     setSelectionStates(prev => ({
       ...prev,
@@ -246,9 +313,9 @@ const Menu: React.FC = () => {
         availableSizes: sizesForColor
       }
     }));
-  };
+  }, [products]);
 
-  const handleSizeSelect = (e: React.MouseEvent, productId: number, size: string) => {
+  const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, size: string) => {
     e.stopPropagation();
     
     setSelectionStates(prev => ({
@@ -258,9 +325,9 @@ const Menu: React.FC = () => {
         selectedSize: size
       }
     }));
-  };
+  }, []);
 
-  const handleQuickAddClick = async (e: React.MouseEvent, product: Product) => {
+  const handleQuickAddClick = useCallback(async (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
     
     const productId = product.id;
@@ -271,19 +338,15 @@ const Menu: React.FC = () => {
       return;
     }
     
-    // Buscar la variante específica seleccionada
+    // Buscar la variante específica seleccionada (que ya sabemos que tiene stock)
     const selectedVariant = product.variants.find(v => 
       v.color === selectionState.selectedColor && 
-      v.size === selectionState.selectedSize
+      v.size === selectionState.selectedSize &&
+      v.stock > 0
     );
     
     if (!selectedVariant) {
-      console.error('Variante no disponible');
-      return;
-    }
-    
-    if (selectedVariant.stock <= 0) {
-      console.error('Stock agotado para esta variante');
+      console.error('Variante no disponible o sin stock');
       return;
     }
     
@@ -293,29 +356,34 @@ const Menu: React.FC = () => {
       await addToCart(selectedVariant.id, 1);
       console.log('Producto agregado al carrito:', productId);
       
-      // Aquí podrías mostrar una notificación de éxito
+      // Mostrar notificación de éxito
+      const event = new CustomEvent('show-toast', {
+        detail: { 
+          message: '¡Producto agregado al carrito!', 
+          type: 'success',
+          duration: 3000
+        }
+      });
+      window.dispatchEvent(event);
+      
     } catch (error) {
       console.error('Error al agregar al carrito:', error);
-      // Aquí podrías mostrar una notificación de error
+      
+      // Mostrar notificación de error
+      const event = new CustomEvent('show-toast', {
+        detail: { 
+          message: 'Error al agregar al carrito', 
+          type: 'error',
+          duration: 3000
+        }
+      });
+      window.dispatchEvent(event);
     } finally {
       setQuickAddLoading(null);
     }
-  };
+  }, [selectionStates, addToCart]);
 
-  const hasLowStock = (variants: ProductVariant[]) => {
-    return variants.some((v) => v.stock > 0 && v.stock <= 3);
-  };
-
-  const isNew = (createdAt?: string) => {
-    if (!createdAt) return false;
-    const productDate = new Date(createdAt);
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    return productDate >= thirtyDaysAgo;
-  };
-
-  const renderGenderBadge = (gender: ProductGender) => {
+  const renderGenderBadge = useCallback((gender: ProductGender) => {
     const badgeConfig = {
       [ProductGender.NINAS]: { text: 'NIÑAS', color: '#E9566D' },
       [ProductGender.NINOS]: { text: 'NIÑOS', color: '#103359' },
@@ -333,15 +401,22 @@ const Menu: React.FC = () => {
         {config.text}
       </span>
     );
-  };
+  }, []);
 
-  const setProductRef = (element: HTMLDivElement | null, index: number) => {
+  const setProductRef = useCallback((element: HTMLDivElement | null, index: number) => {
     if (element) {
       productRefs.current.set(index, element);
     } else {
       productRefs.current.delete(index);
     }
-  };
+  }, []);
+
+  // Verificar si un producto tiene al menos un color con stock
+  const hasAvailableColors = useCallback((productId: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return false;
+    return getUniqueColorsWithStock(product.variants).length > 0;
+  }, [products]);
 
   if (loading) return (
     <div className={styles.menuContainer}>
@@ -378,7 +453,7 @@ const Menu: React.FC = () => {
         <div className={styles.filterBarInner}>
           <div className={styles.resultsCount}>
             <span className={styles.resultsNumber}>{sortedProducts.length}</span>
-            <span className={styles.resultsText}>productos</span>
+            <span className={styles.resultsText}>productos disponibles</span>
           </div>
 
           <div className={styles.filterContainer}>
@@ -408,21 +483,30 @@ const Menu: React.FC = () => {
                 <path d="M21 21L16.65 16.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
-            <h3 className={styles.emptyTitle}>No encontramos productos</h3>
+            <h3 className={styles.emptyTitle}>No encontramos productos disponibles</h3>
             <p className={styles.emptyText}>Intenta con otros filtros de búsqueda</p>
           </div>
         ) : (
           sortedProducts.slice(0, visibleCount).map((product, index) => {
             const price = getMinPrice(product.variants);
-            const colors = getUniqueColors(product.variants);
+            const colors = getUniqueColorsWithStock(product.variants);
             const selectionState = selectionStates[product.id] || {
               selectedColor: colors[0] || '',
               selectedSize: '',
               availableSizes: []
             };
             
-            const currentImageUrl = getImageForColor(product.variants, selectionState.selectedColor);
+            // Verificar si el color seleccionado actualmente tiene stock
+            const currentColorHasStock = colors.includes(selectionState.selectedColor);
+            const effectiveColor = currentColorHasStock ? selectionState.selectedColor : (colors[0] || '');
+            
+            const currentImageUrl = getImageForColor(product.variants, effectiveColor);
             const availableSizes = selectionState.availableSizes || [];
+
+            // Si no hay colores disponibles, no renderizar el producto
+            if (colors.length === 0) {
+              return null;
+            }
 
             return (
               <div
@@ -462,14 +546,14 @@ const Menu: React.FC = () => {
                 <div className={styles.productDetails}>
                   <h3 className={styles.productName}>{product.name}</h3>
 
-                  {/* Selector de color */}
+                  {/* Selector de color - solo muestra colores con stock */}
                   {colors.length > 0 && (
                     <div className={styles.productColors}>
                       {colors.map((color, i) => (
                         <button
                           key={i}
                           className={`${styles.colorDotBtn} ${
-                            selectionState.selectedColor === color ? styles.colorDotSelected : ''
+                            effectiveColor === color ? styles.colorDotSelected : ''
                           }`}
                           title={color}
                           style={{
@@ -481,14 +565,11 @@ const Menu: React.FC = () => {
                           <span className={styles.colorDot}></span>
                         </button>
                       ))}
-                      {product.variants.length > 6 && (
-                        <span className={styles.colorMore}>+{product.variants.length - 6}</span>
-                      )}
                     </div>
                   )}
 
-                  {/* Selector de talla */}
-                  {selectionState.selectedColor && availableSizes.length > 0 && (
+                  {/* Selector de talla - solo muestra tallas con stock para el color seleccionado */}
+                  {effectiveColor && availableSizes.length > 0 && (
                     <div className={styles.productSizes}>
                       <div className={styles.sizesSelector}>
                         {availableSizes.map((size, i) => (
@@ -507,7 +588,7 @@ const Menu: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Precio */}
+                  {/* Precio - solo si hay productos disponibles */}
                   <div className={styles.productPriceContainer}>
                     <span className={styles.productPrice}>
                       {price > 0 ? `$${price.toLocaleString('es-CO')}` : 'Consultar'}
@@ -515,8 +596,8 @@ const Menu: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Botón de agregar rápido - solo visible si hay color y talla seleccionados */}
-                {selectionState.selectedColor && selectionState.selectedSize && (
+                {/* Botón de agregar rápido - solo si hay color y talla seleccionados con stock */}
+                {effectiveColor && selectionState.selectedSize && (
                   <button 
                     className={`${styles.quickAddBtn} ${
                       quickAddLoading === product.id ? styles.quickAddLoading : ''
@@ -534,9 +615,16 @@ const Menu: React.FC = () => {
                     )}
                   </button>
                 )}
+
+                {/* Indicador de stock agotado si no hay tallas disponibles para el color seleccionado */}
+                {effectiveColor && availableSizes.length === 0 && (
+                  <div className={styles.outOfStockBadge}>
+                    <span>Sin tallas disponibles</span>
+                  </div>
+                )}
               </div>
             );
-          })
+          }).filter(Boolean) // Filtrar nulos
         )}
       </div>
 

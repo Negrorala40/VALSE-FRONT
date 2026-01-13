@@ -8,7 +8,6 @@ import styles from './Header.module.css';
 import Cart from './Cart';
 import { HiShoppingCart } from "react-icons/hi2";
 import { FaSearch } from "react-icons/fa";
-import { FiBookOpen } from "react-icons/fi";
 
 interface CartItem {
   id: string;
@@ -141,22 +140,22 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   const displayCartItems = setCartItems ? cartItems : localCartItems;
   const cartItemCount = displayCartItems.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Categorías de menú (sin iconos)
+  // Categorías de menú - Cambiadas según lo requerido
   const menuCategories = [
     {
       id: 'ninos',
       label: 'Niños',
-      href: '/menu?gender=NIÑOS&type=SUPERIOR'
+      href: '/menu?category=ninos&type=SUPERIOR' // ← Cambiado a category=ninos
     },
     {
       id: 'ninas',
       label: 'Niñas',
-      href: '/menu?gender=NIÑAS&type=SUPERIOR'
+      href: '/menu?category=ninas&type=SUPERIOR' // ← Cambiado a category=ninas
     },
     {
       id: 'unisex',
       label: 'Unisex',
-      href: '/menu?gender=UNISEX&type=SUPERIOR'
+      href: '/menu?gender=UNISEX&type=SUPERIOR' // ← Se mantiene gender para Unisex
     },
     {
       id: 'blog',
@@ -185,11 +184,9 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
   return (
     <>
       <header className={`${styles.header} ${isScrolled ? styles.headerScrolled : ''}`}>
-        {/* Decorative top bar */}
         <div className={styles.headerDecoration}></div>
 
         <div className={styles.headerContainer}>
-          {/* Logo - Left side */}
           <Link href="/" className={styles.headerLogo} aria-label="Inicio - A Marte">
             <div className={styles.headerLogoWrapper}>
               <Image
@@ -210,7 +207,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             </div>
           </Link>
 
-          {/* Navigation - Desktop */}
           <nav className={styles.headerNav}>
             {menuCategories.map((cat) => (
               <Link 
@@ -226,9 +222,7 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
             </Link>
           </nav>
 
-          {/* Actions - Right side */}
           <div className={styles.headerActions}>
-            {/* Search */}
             <button
               className={`${styles.headerActionBtn} ${styles.headerActionBtnSearch}`}
               onClick={toggleSearch}
@@ -237,7 +231,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               <FaSearch size={22} />
             </button>
 
-            {/* Cart */}
             <button
               className={`${styles.headerActionBtn} ${styles.headerActionBtnCart}`}
               onClick={toggleCart}
@@ -249,7 +242,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
               )}
             </button>
 
-            {/* Mobile menu toggle */}
             <button
               className={`${styles.headerActionBtn} ${styles.headerActionBtnMenu} ${menuOpen ? styles.headerActionBtnActive : ''}`}
               onClick={toggleMenu}
@@ -265,7 +257,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </header>
 
-      {/* Search Panel */}
       <div className={`${styles.searchPanel} ${searchOpen ? styles.searchPanelOpen : styles.searchPanelClosed}`} ref={searchRef}>
         <div className={styles.searchPanelHeader}>
           <h3 className={styles.searchPanelTitle}>
@@ -333,7 +324,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </div>
 
-      {/* Mobile Side Menu - MEJORADO */}
       <div className={`${styles.sideMenu} ${menuOpen ? styles.sideMenuOpen : styles.sideMenuClosed}`} ref={menuRef}>
         <div className={styles.sideMenuHeader}>
           <div className={styles.sideMenuBrand}>
@@ -436,7 +426,6 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         </div>
       </div>
 
-      {/* Overlay */}
       {(menuOpen || searchOpen) && (
         <div
           className={styles.headerOverlay}
@@ -448,10 +437,8 @@ const Header: React.FC<HeaderProps> = ({ cartItems = [], setCartItems }) => {
         />
       )}
 
-      {/* Spacer for fixed header */}
       <div className={styles.headerSpacer}></div>
 
-      {/* Cart Component */}
       <Cart
         cartItems={displayCartItems}
         setCartItems={(items) => {
