@@ -1,4 +1,4 @@
-// app/layout.tsx
+// app/layout.tsx - VERSIÓN ACTUALIZADA
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Fredoka } from "next/font/google";
@@ -28,6 +28,56 @@ export const metadata: Metadata = {
   keywords: ['pijamas', 'niños', 'espacial', 'marte', 'infantil', 'ropa niños'],
   authors: [{ name: 'A Marte' }],
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.amartekids.com'),
+  
+  // NUEVO: Para mejorar SEO y favicon
+  icons: {
+    icon: [
+      {
+        url: '/favicon.ico',
+        type: 'image/x-icon',
+      },
+      {
+        url: '/favicon-16x16.png',
+        sizes: '16x16',
+        type: 'image/png',
+      },
+      {
+        url: '/favicon-32x32.png',
+        sizes: '32x32',
+        type: 'image/png',
+      },
+    ],
+    apple: {
+      url: '/apple-touch-icon.png',
+      sizes: '180x180',
+      type: 'image/png',
+    },
+  },
+  
+  // NUEVO: Open Graph para redes sociales
+  openGraph: {
+    title: 'A Marte - Pijamas Espaciales para Niños',
+    description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
+    url: 'https://www.amartekids.com',
+    siteName: 'A Marte Kids',
+    images: [
+      {
+        url: '/og-image.png', // <-- Crea esta imagen (1200x630px)
+        width: 1200,
+        height: 630,
+        alt: 'A Marte Kids - Pijamas Espaciales',
+      },
+    ],
+    type: 'website',
+  },
+  
+  // NUEVO: Twitter Card
+  twitter: {
+    card: 'summary_large_image',
+    title: 'A Marte - Pijamas Espaciales para Niños',
+    description: 'Pijamas que llevan a los pequeños a Marte',
+    images: ['/og-image.png'],
+  },
 };
 
 export default function RootLayout({
@@ -38,23 +88,35 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${inter.variable} ${fredoka.variable}`}>
       <head>
-        {/* SOLO LO ESENCIAL: */}
+        {/* NUEVO: Structured Data para SEO */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              "name": "A Marte Kids",
+              "description": "Pijamas espaciales para niños que inspiran la imaginación y el sueño",
+              "url": "https://www.amartekids.com",
+              "logo": "https://www.amartekids.com/logo.png", // <-- Asegúrate de tener este archivo
+              "sameAs": [
+                "https://www.instagram.com/amartekids",
+                "https://www.facebook.com/amartekids"
+              ],
+              "contactPoint": {
+                "@type": "ContactPoint",
+                "email": "hola@amartekids.com",
+                "contactType": "Customer Service"
+              }
+            })
+          }}
+        />
         
-        {/* 1. FAVICON PRINCIPAL */}
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+        {/* NUEVO: Preconnect para mejorar performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
-        {/* 2. MANIFEST PWA */}
-        <link rel="manifest" href="/site.webmanifest" />
-        
-        {/* 3. COLOR DEL TEMA */}
-        <meta name="theme-color" content="#1e40af" />
-        
-        {/* 4. VIEWPORT */}
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        
-        {/* 5. PARA iOS */}
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
+        {/* Viewport - Next.js lo maneja automáticamente, puedes remover esta línea */}
       </head>
       <body className="min-h-screen bg-white text-gray-900 font-sans antialiased">
         <Providers>
