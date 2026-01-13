@@ -60,21 +60,39 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${inter.variable} ${fredoka.variable}`}>
       <head>
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
-        
-        {/* Preconnect para mejorar performance */}
-        <link rel="preconnect" href="https://res.cloudinary.com" />
-        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
-        
-        {/* Script de Cloudinary Widget */}
-        <script 
-          src="https://upload-widget.cloudinary.com/global/all.js" 
-          type="text/javascript"
-          async
-        />
-      </head>
+  {/* Configuración de iconos con cache-busting */}
+  <link
+    rel="icon"
+    href="/images/logos/logCohete.svg?v=2"
+    type="image/svg+xml"
+    key="svg-icon"
+  />
+  
+  {/* ICO como fallback seguro */}
+  <link
+    rel="alternate icon"
+    href="/favicon.ico?v=2"
+    type="image/x-icon"
+    key="ico-icon"
+  />
+  
+  {/* Para iOS */}
+  <link
+    rel="apple-touch-icon"
+    href="/images/logos/logCohete.svg?v=2"
+    type="image/svg+xml"
+    key="apple-icon"
+  />
+  
+  {/* Metas para prevenir cache en desarrollo */}
+  {process.env.NODE_ENV === 'development' && (
+    <>
+      <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+      <meta httpEquiv="Pragma" content="no-cache" />
+      <meta httpEquiv="Expires" content="0" />
+    </>
+  )}
+</head>
       <body className="min-h-screen bg-white text-gray-900 font-sans antialiased">
         <Providers>
           <Header />
