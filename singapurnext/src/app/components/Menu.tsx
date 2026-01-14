@@ -52,6 +52,7 @@ interface ProductSelectionState {
     selectedColor: string;
     selectedSize: string;
     availableSizes: string[];
+    currentPrice: number;
   };
 }
 
@@ -68,15 +69,14 @@ const getUniqueColorsWithStock = (variants: ProductVariant[]): string[] => {
 };
 
 // Función para obtener tallas disponibles para un color específico (solo con stock)
-const getSizesForColorWithStock = (variants: ProductVariant[], color: string): string[] => {
-  const availableSizes = filterVariantsWithStock(variants)
-    .filter(v => v.color === color)
-    .map(v => v.size)
-    .filter((size, index, self) => self.indexOf(size) === index);
+const getSizesForColorWithStock = (variants: ProductVariant[], color: string): ProductVariant[] => {
+  const availableVariants = filterVariantsWithStock(variants)
+    .filter(v => v.color === color);
   
-  return availableSizes.sort((a, b) => {
-    const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-    return sizeOrder.indexOf(a) - sizeOrder.indexOf(b);
+  // Ordenar por tamaño
+  const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+  return availableVariants.sort((a, b) => {
+    return sizeOrder.indexOf(a.size) - sizeOrder.indexOf(b.size);
   });
 };
 
@@ -86,6 +86,17 @@ const getImageForColor = (variants: ProductVariant[], color: string): string => 
     v.color === color && v.images && v.images.length > 0
   );
   return variantWithImage?.images?.[0]?.imageUrl || '/images/placeholder.png';
+};
+
+// Función para obtener el precio para una variante específica
+const getPriceForVariant = (variants: ProductVariant[], color: string, size: string): number => {
+  const variant = variants.find(v => 
+    v.color === color && 
+    v.size === size && 
+    v.stock > 0
+  );
+  
+  return variant?.price ? Number(variant.price) : 0;
 };
 
 // Función para verificar si un producto tiene al menos una variante con stock
@@ -178,11 +189,18 @@ const Menu: React.FC = () => {
           if (colors.length > 0) {
             const firstColor = colors[0];
             const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
+            const firstSize = sizesForFirstColor[0]?.size || '';
+            
+            // Obtener el precio inicial para la primera variante seleccionada
+            const initialPrice = firstSize ? 
+              getPriceForVariant(product.variants, firstColor, firstSize) : 
+              getMinPrice(product.variants);
             
             initialSelections[product.id] = {
               selectedColor: firstColor,
-              selectedSize: sizesForFirstColor[0] || '',
-              availableSizes: sizesForFirstColor
+              selectedSize: firstSize,
+              availableSizes: sizesForFirstColor.map(v => v.size),
+              currentPrice: initialPrice
             };
           }
         });
@@ -234,54 +252,56 @@ const Menu: React.FC = () => {
   }, [visibleCount, filteredProducts.length]);
 
   // Filtrar productos según búsqueda
-  // En el useEffect que filtra productos, cambia esto:
-useEffect(() => {
-  const searchQuery = searchParams.get('search') || '';
-  const genderQuery = searchParams.get('gender') || '';
-  const categoryQuery = searchParams.get('category') || ''; // ← Nuevo parámetro
-  const typeQuery = searchParams.get('type') || '';
+  useEffect(() => {
+    const searchQuery = searchParams.get('search') || '';
+    const genderQuery = searchParams.get('gender') || '';
+    const categoryQuery = searchParams.get('category') || '';
+    const typeQuery = searchParams.get('type') || '';
 
-  const filtered = products.filter((product) => {
-    // Lógica para categorías
-    let matchesGender = true;
-    
-    if (categoryQuery) {
-      // Para Niños: mostrar NIÑOS y UNISEX
-      if (categoryQuery === 'ninos') {
-        matchesGender = product.gender === ProductGender.NINOS || 
-                       product.gender === ProductGender.UNISEX;
+    const filtered = products.filter((product) => {
+      // Lógica para categorías
+      let matchesGender = true;
+      
+      if (categoryQuery) {
+        // Para Niños: mostrar NIÑOS y UNISEX
+        if (categoryQuery === 'ninos') {
+          matchesGender = product.gender === ProductGender.NINOS || 
+                         product.gender === ProductGender.UNISEX;
+        }
+        // Para Niñas: mostrar NIÑAS y UNISEX
+        else if (categoryQuery === 'ninas') {
+          matchesGender = product.gender === ProductGender.NINAS || 
+                         product.gender === ProductGender.UNISEX;
+        }
       }
-      // Para Niñas: mostrar NIÑAS y UNISEX
-      else if (categoryQuery === 'ninas') {
-        matchesGender = product.gender === ProductGender.NINAS || 
-                       product.gender === ProductGender.UNISEX;
+      // Para Unisex directo (parámetro gender)
+      else if (genderQuery) {
+        matchesGender = 
+          (genderQuery.toLowerCase() === 'niñas' && product.gender === ProductGender.NINAS) ||
+          (genderQuery.toLowerCase() === 'niños' && product.gender === ProductGender.NINOS) ||
+          (genderQuery.toLowerCase() === 'unisex' && product.gender === ProductGender.UNISEX);
       }
-    }
-    // Para Unisex directo (parámetro gender)
-    else if (genderQuery) {
-      matchesGender = 
-        (genderQuery.toLowerCase() === 'niñas' && product.gender === ProductGender.NINAS) ||
-        (genderQuery.toLowerCase() === 'niños' && product.gender === ProductGender.NINOS) ||
-        (genderQuery.toLowerCase() === 'unisex' && product.gender === ProductGender.UNISEX);
-    }
-    
-    const matchesType = !typeQuery || product.type.toLowerCase() === typeQuery.toLowerCase();
-    const matchesSearch =
-      !searchQuery ||
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesType = !typeQuery || product.type.toLowerCase() === typeQuery.toLowerCase();
+      const matchesSearch =
+        !searchQuery ||
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesGender && matchesType && matchesSearch;
-  });
+      return matchesGender && matchesType && matchesSearch;
+    });
 
-  setFilteredProducts(filtered);
-  setVisibleCount(20);
-}, [searchParams, products]);
+    setFilteredProducts(filtered);
+    setVisibleCount(20);
+  }, [searchParams, products]);
 
   // Ordenar productos
   const sortedProducts = [...filteredProducts].sort((a, b) => {
-    const aPrice = getMinPrice(a.variants);
-    const bPrice = getMinPrice(b.variants);
+    const aSelection = selectionStates[a.id];
+    const bSelection = selectionStates[b.id];
+    
+    const aPrice = aSelection?.currentPrice || getMinPrice(a.variants);
+    const bPrice = bSelection?.currentPrice || getMinPrice(b.variants);
 
     switch (sortOption) {
       case 'price-asc':
@@ -304,13 +324,20 @@ useEffect(() => {
     if (!product) return;
     
     const sizesForColor = getSizesForColorWithStock(product.variants, color);
+    const firstSize = sizesForColor[0]?.size || '';
+    
+    // Obtener el precio para la nueva variante seleccionada
+    const newPrice = firstSize ? 
+      getPriceForVariant(product.variants, color, firstSize) : 
+      getMinPrice(product.variants);
     
     setSelectionStates(prev => ({
       ...prev,
       [productId]: {
         selectedColor: color,
-        selectedSize: sizesForColor[0] || '',
-        availableSizes: sizesForColor
+        selectedSize: firstSize,
+        availableSizes: sizesForColor.map(v => v.size),
+        currentPrice: newPrice
       }
     }));
   }, [products]);
@@ -318,14 +345,28 @@ useEffect(() => {
   const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, size: string) => {
     e.stopPropagation();
     
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const selectionState = selectionStates[productId];
+    if (!selectionState) return;
+    
+    // Obtener el precio para la nueva talla seleccionada
+    const newPrice = getPriceForVariant(
+      product.variants, 
+      selectionState.selectedColor, 
+      size
+    );
+    
     setSelectionStates(prev => ({
       ...prev,
       [productId]: {
         ...prev[productId],
-        selectedSize: size
+        selectedSize: size,
+        currentPrice: newPrice
       }
     }));
-  }, []);
+  }, [products, selectionStates]);
 
   const handleQuickAddClick = useCallback(async (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
@@ -488,12 +529,12 @@ useEffect(() => {
           </div>
         ) : (
           sortedProducts.slice(0, visibleCount).map((product, index) => {
-            const price = getMinPrice(product.variants);
             const colors = getUniqueColorsWithStock(product.variants);
             const selectionState = selectionStates[product.id] || {
               selectedColor: colors[0] || '',
               selectedSize: '',
-              availableSizes: []
+              availableSizes: [],
+              currentPrice: getMinPrice(product.variants)
             };
             
             // Verificar si el color seleccionado actualmente tiene stock
@@ -502,6 +543,7 @@ useEffect(() => {
             
             const currentImageUrl = getImageForColor(product.variants, effectiveColor);
             const availableSizes = selectionState.availableSizes || [];
+            const currentPrice = selectionState.currentPrice || getMinPrice(product.variants);
 
             // Si no hay colores disponibles, no renderizar el producto
             if (colors.length === 0) {
@@ -588,10 +630,10 @@ useEffect(() => {
                     </div>
                   )}
 
-                  {/* Precio - solo si hay productos disponibles */}
+                  {/* Precio - se actualiza con cada cambio de color/talla */}
                   <div className={styles.productPriceContainer}>
                     <span className={styles.productPrice}>
-                      {price > 0 ? `$${price.toLocaleString('es-CO')}` : 'Consultar'}
+                      {currentPrice > 0 ? `$${currentPrice.toLocaleString('es-CO')}` : 'Consultar'}
                     </span>
                   </div>
                 </div>
