@@ -1164,3 +1164,47 @@
     gap: 0.25rem;
   }
 }
+/* Selectores de color (tu diseño original) */
+.productColors {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.colorDot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--color-white);
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(16, 51, 89, 0.15);
+}
+
+.colorDot:hover {
+  transform: scale(1.15);
+}
+
+.colorDotSelected {
+  box-shadow: 0 0 0 2px var(--color-secondary),
+              0 0 0 3px var(--color-white);
+  transform: scale(1.1);
+}
+
+/* Ajustes responsive para los dots */
+@media (max-width: 768px) {
+  .colorDot {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+@media (max-width: 576px) {
+  .colorDot {
+    width: 16px;
+    height: 16px;
+  }
+}
