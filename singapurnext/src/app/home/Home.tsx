@@ -20,6 +20,7 @@ interface ProductVariant {
   stock: number;
   price?: number;
   images: Img[];
+  enabled?: boolean;
 }
 
 enum ProductGender {
@@ -33,6 +34,7 @@ interface Product {
   name: string;
   gender: ProductGender;
   variants: ProductVariant[];
+  enabled?: boolean;
 }
 
 const Home = () => {
@@ -54,38 +56,94 @@ const Home = () => {
     oferta: '/images/placeholder.jpg'
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Función para filtrar productos habilitados y con stock
+  const filterAvailableProducts = (products: Product[]): Product[] => {
+    return products.filter(product => {
+      // Verificar si el producto está habilitado
+      if (product.enabled === false) return false;
+      
+      // Verificar si tiene al menos una variante habilitada con stock
+      return product.variants.some(variant => 
+        variant.enabled !== false && 
+        variant.stock > 0 && 
+        variant.images && 
+        variant.images.length > 0
+      );
+    });
+  };
 
   // Función para obtener imágenes aleatorias de productos
   useEffect(() => {
     const fetchCategoryImages = async () => {
       try {
-        const response = await axios.get<Product[]>(MENU_PRODUCTS);
-        const products = response.data;
-
-        // Filtrar productos por categoría
-        const niñosProducts = products.filter(p => p.gender === ProductGender.NIÑOS);
-        const niñasProducts = products.filter(p => p.gender === ProductGender.NIÑAS);
-        const unisexProducts = products.filter(p => p.gender === ProductGender.UNISEX);
+        setLoading(true);
+        setError(null);
         
-        // Productos para ofertas (los más económicos)
-        const ofertaProducts = [...products]
-          .filter(p => p.variants[0]?.price)
+        // Usar el endpoint de productos activos
+        const response = await axios.get<Product[]>(`${MENU_PRODUCTS}/active`);
+        const allProducts = response.data;
+        
+        // Filtrar solo productos disponibles
+        const availableProducts = filterAvailableProducts(allProducts);
+        
+        // Filtrar productos por categoría
+        const niñosProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑOS);
+        const niñasProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑAS);
+        const unisexProducts = availableProducts.filter(p => p.gender === ProductGender.UNISEX);
+        
+        // Función para obtener todas las imágenes válidas de un producto
+        const getValidImagesFromProduct = (product: Product): string[] => {
+          const images: string[] = [];
+          product.variants.forEach(variant => {
+            if (variant.enabled !== false && variant.stock > 0 && variant.images) {
+              variant.images.forEach(img => {
+                if (img.imageUrl && img.imageUrl.trim() !== '') {
+                  images.push(img.imageUrl);
+                }
+              });
+            }
+          });
+          return images;
+        };
+
+        // Función para obtener imagen aleatoria de un array de productos
+        const getRandomImage = (productArray: Product[]): string => {
+          if (productArray.length === 0) return '/images/placeholder.jpg';
+          
+          // Coleccionar todas las imágenes disponibles
+          const allImages: string[] = [];
+          productArray.forEach(product => {
+            const productImages = getValidImagesFromProduct(product);
+            allImages.push(...productImages);
+          });
+          
+          if (allImages.length === 0) return '/images/placeholder.jpg';
+          
+          // Seleccionar una imagen aleatoria
+          return allImages[Math.floor(Math.random() * allImages.length)];
+        };
+
+        // Productos para ofertas (los 10 más económicos con imágenes)
+        const ofertaProducts = [...availableProducts]
+          .filter(p => {
+            const firstVariant = p.variants.find(v => 
+              v.enabled !== false && 
+              v.stock > 0 && 
+              v.images && 
+              v.images.length > 0
+            );
+            return firstVariant?.price;
+          })
           .sort((a, b) => {
-            const aPrice = a.variants[0]?.price || Infinity;
-            const bPrice = b.variants[0]?.price || Infinity;
+            const aVariant = a.variants.find(v => v.enabled !== false && v.stock > 0);
+            const bVariant = b.variants.find(v => v.enabled !== false && v.stock > 0);
+            const aPrice = aVariant?.price || Infinity;
+            const bPrice = bVariant?.price || Infinity;
             return aPrice - bPrice;
           })
           .slice(0, 10);
-
-        // Función para obtener imagen aleatoria de un array de productos
-        const getRandomImage = (productArray: Product[]) => {
-          if (productArray.length === 0) return '/images/placeholder.jpg';
-          
-          const randomProduct = productArray[Math.floor(Math.random() * productArray.length)];
-          const imageUrl = randomProduct.variants[0]?.images?.[0]?.imageUrl;
-          
-          return imageUrl || '/images/placeholder.jpg';
-        };
 
         setCategoryImages({
           niños: getRandomImage(niñosProducts),
@@ -95,8 +153,9 @@ const Home = () => {
         });
 
         setLoading(false);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error al cargar imágenes:', error);
+        setError('Error al cargar las imágenes de categorías');
         setLoading(false);
       }
     };
@@ -125,6 +184,19 @@ const Home = () => {
 
     return () => observer.disconnect();
   }, []);
+
+  // Componente de error
+  if (error) {
+    return (
+      <div className={styles.homeContainer}>
+        <div className={styles.errorContainer}>
+          <h2>Error al cargar contenido</h2>
+          <p>{error}</p>
+          <button onClick={() => window.location.reload()}>Reintentar</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -347,6 +419,10 @@ const Home = () => {
                         className={styles.categoryImage}
                         sizes="(max-width: 768px) 100vw, 25vw"
                         priority
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/images/placeholder.jpg';
+                        }}
                       />
                       <div className={styles.categoryOverlay}></div>
                     </>
@@ -371,6 +447,10 @@ const Home = () => {
                         className={styles.categoryImage}
                         sizes="(max-width: 768px) 100vw, 25vw"
                         priority
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/images/placeholder.jpg';
+                        }}
                       />
                       <div className={styles.categoryOverlay}></div>
                     </>
@@ -395,6 +475,10 @@ const Home = () => {
                         className={styles.categoryImage}
                         sizes="(max-width: 768px) 100vw, 25vw"
                         priority
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/images/placeholder.jpg';
+                        }}
                       />
                       <div className={styles.categoryOverlay}></div>
                     </>
@@ -420,6 +504,10 @@ const Home = () => {
                         className={styles.categoryImage}
                         sizes="(max-width: 768px) 100vw, 25vw"
                         priority
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/images/placeholder.jpg';
+                        }}
                       />
                       <div className={styles.categoryOverlay}></div>
                     </>

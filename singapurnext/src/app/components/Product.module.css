@@ -674,3 +674,97 @@
     max-height: 600px;
   }
 }
+/* Estados de stock */
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lowStock {
+  color: #f97316;
+  font-weight: 600;
+}
+
+.outOfStock {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.sizeBadge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stockWarning, .disabledWarning {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.warningIcon {
+  font-size: 1.2em;
+}
+
+.noOptions {
+  color: #6b7280;
+  font-style: italic;
+  padding: 10px;
+  text-align: center;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+/* Mensajes de error mejorados */
+.errorContainer, .emptyContainer {
+  text-align: center;
+  padding: 60px 20px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.errorIcon, .emptyIcon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.errorTitle, .emptyTitle {
+  font-size: 24px;
+  color: #374151;
+  margin-bottom: 15px;
+}
+
+.errorText {
+  color: #6b7280;
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+.backButton {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.backButton:hover {
+  background: #2563eb;
+}
