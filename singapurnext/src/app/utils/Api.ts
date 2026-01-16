@@ -32,10 +32,13 @@ export const MIGRATE_ORDERS = `${API_BASE_URL}/api/orders/migrate`;
 // Bold Payments
 // export const BOLD_SIGNATURE = `${API_BASE_URL}/api/bold/signature`;
 
+
 // Mercado Pago
 export const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
 export const MERCADOPAGO_STATUS = `${API_BASE_URL}/api/payments/status`;
 export const MERCADOPAGO_SIMULATE = `${API_BASE_URL}/api/payments/simulate-payment`;
+export const MERCADOPAGO_PUBLIC_KEY = `${API_BASE_URL}/api/payments/public-key`;
+
 
 // ======================= BLOG ENDPOINTS =======================
 export const BLOG_POSTS = `${API_BASE_URL}/api/blog`;

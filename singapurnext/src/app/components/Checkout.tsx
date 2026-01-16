@@ -27,12 +27,15 @@ import {
   Sparkles,
   X,
   Loader2,
-  Wallet,
+  Wallet as WalletIcon,
   User,
   Mail,
   Phone,
   AlertCircle
 } from 'lucide-react';
+
+// 🔴 IMPORTAR SDK DE MERCADO PAGO CHECKOUT PRO
+import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
 
 interface CartItem {
   id: string;
@@ -142,11 +145,52 @@ const CheckoutPage = () => {
   const [mercadoPagoLoading, setMercadoPagoLoading] = useState(false);
   const [mercadoPagoData, setMercadoPagoData] = useState<MercadoPagoResponse | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
+  const [publicKey, setPublicKey] = useState<string>('');
   
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
   const paymentStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const orderFromStorageRef = useRef<string | null>(null);
+
+  // 🔴 INICIALIZAR MERCADO PAGO UNA VEZ
+  useEffect(() => {
+    const initializeMercadoPago = async () => {
+      try {
+        console.log('🔄 Inicializando Mercado Pago...');
+        
+        // Obtener la public key desde tu backend
+        const response = await fetch(`${MERCADOPAGO_STATUS.replace('/status', '/public-key')}`, {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.publicKey) {
+            setPublicKey(data.publicKey);
+            // Inicializar SDK de Mercado Pago con la public key
+            initMercadoPago(data.publicKey, {
+              locale: 'es-CO'
+            });
+            console.log('✅ Mercado Pago inicializado con public key');
+          }
+        } else {
+          console.warn('⚠️ No se pudo obtener public key, usando predeterminada');
+          // Usar public key de prueba como fallback
+          const testPublicKey = 'APP_USR-a8338cdd-4d1d-4cb2-a9d4-47e1518214b2';
+          setPublicKey(testPublicKey);
+          initMercadoPago(testPublicKey, {
+            locale: 'es-CO'
+          });
+          console.log('⚠️ Mercado Pago inicializado con public key de prueba');
+        }
+      } catch (error) {
+        console.error('Error inicializando Mercado Pago:', error);
+      }
+    };
+    
+    initializeMercadoPago();
+  }, []);
 
   const formatPrice = useCallback((price: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -174,7 +218,6 @@ const CheckoutPage = () => {
         setOrderCreated(true);
         orderFromStorageRef.current = pendingOrder;
         
-        // Si estamos en el paso 3, intentar obtener la preferencia nuevamente
         if (step === 3) {
           console.log('🔄 Recuperando orden pendiente:', pendingOrder);
           setSuccessMessage(`Orden #${pendingOrder} recuperada. Continúa con el pago.`);
@@ -756,7 +799,6 @@ const CheckoutPage = () => {
         
         if (!orderRes.ok) {
           let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
-
           try {
             const errorData = await orderRes.text();
             errorMessage = errorData || errorMessage;
@@ -842,15 +884,10 @@ const CheckoutPage = () => {
       }
       
       setMercadoPagoData(data);
-      setSuccessMessage(`✅ Preferencia de pago creada. Redirigiendo a MercadoPago...`);
+      setSuccessMessage(`✅ Preferencia de pago creada. ¡Ya puedes pagar!`);
       
       // Guardar preferenceId en localStorage
       localStorage.setItem('pendingPreferenceId', data.preferenceId);
-      
-      // Redirigir a MercadoPago después de 1 segundo
-      setTimeout(() => {
-        redirectToMercadoPago(data);
-      }, 1000);
       
       return data;
       
@@ -862,19 +899,6 @@ const CheckoutPage = () => {
     } finally {
       setMercadoPagoLoading(false);
     }
-  };
-
-  const redirectToMercadoPago = (mpData: MercadoPagoResponse) => {
-    if (!mpData || !mpData.initPoint) {
-      setError('No se pudo obtener la URL de pago');
-      return;
-    }
-    
-    // En producción siempre usar initPoint
-    const mpUrl = mpData.initPoint;
-    
-    console.log('🌐 Redirigiendo a MercadoPago:', mpUrl);
-    window.location.href = mpUrl;
   };
 
   const checkPaymentStatus = async (orderId: string): Promise<PaymentStatusResponse | null> => {
@@ -1043,13 +1067,6 @@ const CheckoutPage = () => {
           <Sparkles className="checkout-icon-sm" />
         </div>
       </div>
-
-      {/* {!isAuthenticated && step > 1 && (
-        <div className="checkout-user-info-banner">
-          <User className="checkout-icon" />
-          <span>Comprando como invitado</span>
-        </div>
-      )} */}
 
       <div className="checkout-progress-section">
         <div className="checkout-progress-container">
@@ -1588,14 +1605,14 @@ const CheckoutPage = () => {
                       <div className="checkout-processing-payment">
                         <div className="checkout-spinner large purple"></div>
                         <h4>Conectando con MercadoPago...</h4>
-                        <p>Te redireccionaremos en un momento al portal de pago seguro.</p>
+                        <p>Preparando tu pago seguro.</p>
                       </div>
                     )}
 
                     {paymentStatus && (
                       <div className="checkout-payment-status">
                         <div className="checkout-payment-status-header">
-                          <Wallet className="checkout-icon" />
+                          <WalletIcon className="checkout-icon" />
                           <h4>Estado del Pago</h4>
                         </div>
                         <div className="checkout-payment-status-info">
@@ -1625,6 +1642,7 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
+                    {/* 🔴 SECCIÓN DE CHECKOUT PRO - COMPONENTE WALLET */}
                     {orderCreated && mercadoPagoData && !mercadoPagoLoading && (
                       <div className="checkout-payment-action">
                         <div className="checkout-payment-ready">
@@ -1632,31 +1650,51 @@ const CheckoutPage = () => {
                             <Check className="checkout-icon" />
                             <h4>¡Listo para pagar!</h4>
                           </div>
-                          <p>Tu orden ha sido creada y estamos listos para procesar el pago seguro.</p>
+                          <p>Tu orden ha sido creada. Haz clic en el botón para completar el pago seguro.</p>
                           
                           <div className="checkout-payment-buttons">
-                            <button
-                              onClick={() => redirectToMercadoPago(mercadoPagoData)}
-                              className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
-                              disabled={mercadoPagoLoading}
-                            >
-                              {mercadoPagoLoading ? (
-                                <>
-                                  <Loader2 className="checkout-icon spinning" />
-                                  Procesando...
-                                </>
-                              ) : (
-                                <>
-                                  <CreditCard className="checkout-icon" />
-                                  Pagar con MercadoPago
-                                </>
-                              )}
-                            </button>
+                            <div className="mercado-pago-wallet-container">
+  {publicKey && mercadoPagoData.preferenceId ? (
+    // 🔴 ESTA ES LA CONFIGURACIÓN CORRECTA:
+// 🔴 CONFIGURACIÓN MÍNIMA FUNCIONAL:
+<Wallet
+  initialization={{
+    preferenceId: mercadoPagoData.preferenceId,
+    redirectMode: "self"
+  }}
+  // 🔴 SIN customization o con configuración básica
+/>
+  ) : (
+    <button
+      className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
+      onClick={() => {
+        if (mercadoPagoData?.initPoint) {
+          window.open(mercadoPagoData.initPoint, '_blank');
+        }
+      }}
+      disabled={mercadoPagoLoading}
+    >
+      {mercadoPagoLoading ? (
+        <>
+          <Loader2 className="checkout-icon spinning" />
+          Procesando...
+        </>
+      ) : (
+        <>
+          <CreditCard className="checkout-icon" />
+          Pagar con MercadoPago
+        </>
+      )}
+    </button>
+  )}
+</div>
                             
                             <p className="checkout-payment-note">
-                              Serás redirigido a MercadoPago para completar el pago de forma segura.
-                              <br />
-                              <small>Si no eres redirigido automáticamente, haz clic en el botón arriba.</small>
+                              <small>
+                                💳 Pagos seguros con Mercado Pago.<br />
+                                🔒 Tus datos están protegidos.<br />
+                                ⚡ Pago rápido y sencillo.
+                              </small>
                             </p>
                           </div>
                         </div>

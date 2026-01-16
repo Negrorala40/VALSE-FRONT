@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@mercadopago/sdk-react": "^1.0.7",
     "axios": "^1.8.2",
     "cloudinary": "^2.8.0",
     "html2canvas": "^1.4.1",

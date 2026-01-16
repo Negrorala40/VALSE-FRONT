@@ -1617,3 +1617,82 @@
 .checkout-icon.spinning {
   animation: checkoutSpin 1s linear infinite;
 }
+/* Estilos para Mercado Pago Wallet */
+.mercado-pago-wallet-container {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+/* Asegurar que el botón de Mercado Pago tenga buen estilo */
+.mercado-pago__button {
+  width: 100% !important;
+  border-radius: 0.75rem !important;
+  padding: 1rem !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  transition: all 0.3s ease !important;
+  background: linear-gradient(135deg, #009ee3 0%, #00b2ff 100%) !important;
+  border: none !important;
+  color: white !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  cursor: pointer !important;
+}
+
+.mercado-pago__button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 146, 227, 0.25) !important;
+}
+
+.mercado-pago__button:active {
+  transform: translateY(0) !important;
+}
+/* Estilos para Mercado Pago Wallet (Checkout Pro) */
+.mercado-pago-wallet-container {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+/* Personalizar el botón de Mercado Pago */
+.mercado-pago__button {
+  width: 100% !important;
+  height: 56px !important;
+  border-radius: 0.75rem !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+  transition: all 0.3s ease !important;
+  background: linear-gradient(135deg, #009ee3 0%, #00b2ff 100%) !important;
+  border: none !important;
+  color: white !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  cursor: pointer !important;
+  position: relative !important;
+}
+
+.mercado-pago__button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(0, 146, 227, 0.25) !important;
+}
+
+.mercado-pago__button:active {
+  transform: translateY(0) !important;
+}
+
+/* Estilo para el modal de Checkout Pro */
+.mercadopago-modal {
+  z-index: 9999 !important;
+}
+
+/* Asegurar que el iframe sea responsive */
+.mercadopago-modal iframe {
+  width: 100% !important;
+  max-width: 500px !important;
+  height: 600px !important;
+  border-radius: 1rem !important;
+  overflow: hidden !important;
+}
