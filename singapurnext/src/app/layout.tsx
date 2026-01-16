@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   description: 'Pijamas que llevan a los pequeños a Marte. Colección de pijamas espaciales infantiles.',
   keywords: ['pijamas', 'niños', 'espacial', 'marte', 'infantil', 'ropa niños'],
   authors: [{ name: 'A Marte' }],
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://www.amartekids.com'),
+ metadataBase: new URL('https://www.amartekids.com'), // SIN process.env
   
   // NUEVO: Para mejorar SEO y favicon
   icons: {
