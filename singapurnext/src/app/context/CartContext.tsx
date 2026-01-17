@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import axios from 'axios';
 import { ADD_TO_CART, CLEAR_CART, CART, GET_CART_COUNT, MIGRATE_CART } from '../utils/Api';
 
 interface CartItem {
@@ -46,7 +45,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest' // Para Safari
     };
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -54,33 +55,67 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return headers;
   };
 
-  // Obtener carrito
+  // Helper para fetch con cookies
+  const fetchWithCookies = async (url: string, options: RequestInit = {}) => {
+    const headers = getAuthHeaders();
+    
+    // Forzar cookie para Safari antes de cada request
+    if (typeof document !== 'undefined' && navigator.userAgent.includes('Safari')) {
+      document.cookie = `safari_fix=${Date.now()}; path=/; SameSite=None; Secure`;
+    }
+    
+    return fetch(url, {
+      ...options,
+      credentials: 'include', // ← CRÍTICO para cookies
+      headers: {
+        ...headers,
+        ...options.headers
+      }
+    });
+  };
+
+  // Obtener carrito - CON FETCH
   const getCart = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(CART, {
-        headers: getAuthHeaders(),
-        withCredentials: true
-      });
-      setCartItems(response.data);
+      const response = await fetchWithCookies(CART);
       
-      // Actualizar contador
-      const countResponse = await axios.get(GET_CART_COUNT, {
-        headers: getAuthHeaders(),
-        withCredentials: true
-      });
-      setCartCount(countResponse.data.count || 0);
-    } catch (error: any) {
-      if (error.response?.status !== 404 && error.response?.status !== 400) {
-        console.error('Error obteniendo carrito:', error);
+      console.log('🛒 Fetch cart - Status:', response.status);
+      
+      if (response.status === 404 || response.status === 400) {
+        // Carrito vacío o sin sesión - es normal
+        setCartItems([]);
+        setCartCount(0);
+        return;
       }
-      // 404 o 400 significa carrito vacío o sin sesión - es normal
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setCartItems(data);
+      
+      // Obtener contador
+      const countResponse = await fetchWithCookies(GET_CART_COUNT);
+      if (countResponse.ok) {
+        const countData = await countResponse.json();
+        setCartCount(countData.count || 0);
+      }
+      
+    } catch (error: any) {
+      console.error('Error obteniendo carrito:', error);
+      if (error.message?.includes('404') || error.message?.includes('400')) {
+        // Carrito vacío - normal
+        setCartItems([]);
+        setCartCount(0);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Agregar al carrito
+  // Agregar al carrito - CON FETCH
   const addToCart = async (productVariantId: number, quantity: number) => {
     try {
       const payload = {
@@ -88,87 +123,137 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         quantity
       };
 
-      await axios.post(ADD_TO_CART, payload, {
-        headers: getAuthHeaders(),
-        withCredentials: true
+      const response = await fetchWithCookies(ADD_TO_CART, {
+        method: 'POST',
+        body: JSON.stringify(payload)
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Producto agregado al carrito:', data);
+      
+      // DEBUG: Ver cookies
+      console.log('Cookies después de POST:', document.cookie);
+      
       // Actualizar carrito después de agregar
       await getCart();
+      
+      return data;
     } catch (error) {
       console.error('Error agregando al carrito:', error);
       throw error;
     }
   };
 
-  // Eliminar del carrito
+  // Eliminar del carrito - CON FETCH
   const removeFromCart = async (cartItemId: number) => {
     try {
-      await axios.delete(`${CART}/remove/${cartItemId}`, {
-        headers: getAuthHeaders(),
-        withCredentials: true
+      const response = await fetchWithCookies(`${CART}/remove/${cartItemId}`, {
+        method: 'DELETE'
       });
+      
+      if (!response.ok) {
+        if (response.status === 400) {
+          throw new Error('No hay sesión de carrito');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       await getCart();
     } catch (error: any) {
       console.error('Error eliminando del carrito:', error);
-      if (error.response?.status === 400) {
-        throw new Error('No hay sesión de carrito');
-      }
+      throw error;
     }
   };
 
-  // Actualizar cantidad
+  // Actualizar cantidad - CON FETCH
   const updateQuantity = async (cartItemId: number, quantity: number) => {
     try {
-      await axios.put(`${CART}/update/${cartItemId}`, null, {
-        params: { quantity },
-        headers: getAuthHeaders(),
-        withCredentials: true
+      const response = await fetchWithCookies(`${CART}/update/${cartItemId}?quantity=${quantity}`, {
+        method: 'PUT'
       });
+      
+      if (!response.ok) {
+        if (response.status === 400) {
+          throw new Error('No hay sesión de carrito');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       await getCart();
     } catch (error: any) {
       console.error('Error actualizando cantidad:', error);
-      if (error.response?.status === 400) {
-        throw new Error('No hay sesión de carrito');
-      }
+      throw error;
     }
   };
 
-  // Vaciar carrito
+  // Vaciar carrito - CON FETCH
   const clearCart = async () => {
     try {
-      await axios.delete(CLEAR_CART, {
-        headers: getAuthHeaders(),
-        withCredentials: true
+      const response = await fetchWithCookies(CLEAR_CART, {
+        method: 'DELETE'
       });
+      
+      if (!response.ok) {
+        if (response.status === 400) {
+          throw new Error('No hay sesión de carrito');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       setCartItems([]);
       setCartCount(0);
     } catch (error: any) {
       console.error('Error vaciando carrito:', error);
-      if (error.response?.status === 400) {
-        throw new Error('No hay sesión de carrito');
-      }
+      throw error;
     }
   };
 
-  // Migrar carrito anónimo a usuario autenticado
+  // Migrar carrito anónimo a usuario autenticado - CON FETCH
   const migrateCart = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
     try {
-      await axios.post(MIGRATE_CART, {}, {
+      const response = await fetchWithCookies(MIGRATE_CART, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
-        },
-        withCredentials: true
+        }
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
       await getCart();
     } catch (error) {
       console.error('Error migrando carrito:', error);
+      throw error;
     }
   };
+
+  // Inicializar carrito al cargar la página
+  React.useEffect(() => {
+    // Forzar cookie inicial para Safari
+    if (typeof document !== 'undefined') {
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (isSafari) {
+        document.cookie = `cart_init=${Date.now()}; path=/; SameSite=None; Secure; max-age=3600`;
+        console.log('🦁 Safari cookie inicializada');
+      }
+    }
+    
+    // Cargar carrito
+    const timer = setTimeout(() => {
+      getCart();
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const value = {
     cartItems,
