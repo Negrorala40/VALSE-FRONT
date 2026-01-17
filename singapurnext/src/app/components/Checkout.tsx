@@ -860,7 +860,7 @@ const CheckoutPage = () => {
       }
       
       setMercadoPagoData(data);
-      setSuccessMessage(`✅ Preferencia de pago creada. ¡Ya puedes pagar!`);
+      //setSuccessMessage(`✅ Preferencia de pago creada. ¡Ya puedes pagar!`);
       
       localStorage.setItem('pendingPreferenceId', data.preferenceId);
       localStorage.setItem('mercadoPagoOrderId', orderId);
@@ -1314,10 +1314,10 @@ const CheckoutPage = () => {
                         </div>
                         
                         <div className="checkout-guest-notice">
-                          <small>
+                          {/* <small>
                             ⚠️ Como invitado, tu pedido se vinculará a tu email. 
                             Puedes registrarte después para ver el historial de tus órdenes.
-                          </small>
+                          </small> */}
                         </div>
                       </div>
                     )}
