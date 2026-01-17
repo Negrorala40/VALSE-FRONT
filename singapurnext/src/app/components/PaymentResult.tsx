@@ -141,7 +141,7 @@ const PaymentResult = () => {
     return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   }, []);
 
-  // Función para obtener headers con autenticación
+  // Función para obtener headers con autenticación y sessionId del carrito
   const getHeaders = useCallback(() => {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -151,6 +151,13 @@ const PaymentResult = () => {
     const token = localStorage.getItem('token');
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Agregar el sessionId del carrito si está disponible
+    const sessionId = localStorage.getItem('cartSessionId');
+    if (sessionId) {
+      headers['X-Cart-Session-Id'] = sessionId;
+      console.log('🛒 SessionId del carrito incluido en headers:', sessionId);
     }
 
     return headers;
@@ -182,6 +189,7 @@ const PaymentResult = () => {
       });
 
       console.log('📥 Response status:', response.status);
+      console.log('🛒 Headers enviados:', getHeaders());
 
       if (response.status === 403) {
         setError('No tienes acceso a esta orden.');
@@ -243,9 +251,11 @@ const PaymentResult = () => {
       
       const response = await fetch(`/api/payments/status/${orderId}`, {
         method: 'GET',
-        credentials: 'include', // IMPORTANTE: Envía cookies automáticamente
+        credentials: 'include',
         headers: getHeaders()
       });
+
+      console.log('📊 Estado del pago - Headers enviados:', getHeaders());
 
       if (!response.ok) {
         console.log('❌ Error verificando estado:', response.status);
