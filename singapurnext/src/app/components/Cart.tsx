@@ -43,17 +43,84 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
   const [isFetching, setIsFetching] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false); // Nuevo: controlar si ya se fetcheó
+  const [hasFetched, setHasFetched] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Constante para header
+  const CART_SESSION_HEADER = 'X-Cart-Session-Id';
+  const CART_SESSION_KEY = 'cartSessionId';
 
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+
+  // Obtener sessionId desde localStorage
+  const getSessionId = () => {
+    return sessionId || localStorage.getItem(CART_SESSION_KEY);
+  };
+
+  // Guardar sessionId desde headers de respuesta
+  const saveSessionIdFromHeaders = (headers: Headers) => {
+    const newSessionId = headers.get(CART_SESSION_HEADER);
+    if (newSessionId && newSessionId !== 'cleared') {
+      localStorage.setItem(CART_SESSION_KEY, newSessionId);
+      setSessionId(newSessionId);
+      console.log('📥 SessionId guardado desde headers:', newSessionId);
+    } else if (newSessionId === 'cleared') {
+      localStorage.removeItem(CART_SESSION_KEY);
+      setSessionId(null);
+      console.log('🗑️ SessionId limpiado');
+    }
+  };
+
+  // Configurar headers para peticiones
+  const getHeaders = () => {
+    const token = localStorage.getItem('token');
+    const currentSessionId = getSessionId();
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    // Agregar sessionId en header SI existe
+    if (currentSessionId) {
+      headers[CART_SESSION_HEADER] = currentSessionId;
+      console.log('📤 Enviando sessionId en header:', currentSessionId);
+    }
+
+    // Agregar token de autenticación SI existe
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+  };
+
+  // Función de fetch que maneja sessionId
+  const fetchWithSession = async (url: string, options: RequestInit = {}) => {
+    const headers = getHeaders();
+    
+    const response = await fetch(url, {
+      ...options,
+      credentials: 'include', // IMPORTANTE para cookies
+      headers: {
+        ...headers,
+        ...options.headers
+      }
+    });
+
+    // Guardar sessionId si viene en la respuesta
+    saveSessionIdFromHeaders(response.headers);
+
+    return response;
+  };
 
   const handleClose = useCallback(() => {
     setIsClosing(true);
     setTimeout(() => {
       onClose();
       setIsClosing(false);
-      setHasFetched(false); // Resetear cuando se cierra
+      setHasFetched(false);
     }, 400);
   }, [onClose]);
 
@@ -75,31 +142,31 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen, handleClose]);
 
-  // Obtener carrito cuando se abre - USAR useCallback con dependencias correctas
+  // Obtener carrito cuando se abre
   const fetchCart = useCallback(async () => {
     if (isFetching || hasFetched) return;
     
     setIsFetching(true);
-    const token = localStorage.getItem('token');
-
+    
     try {
-      const res = await fetch(CART, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
+      console.log('🛒 Obteniendo carrito...');
+      
+      const response = await fetchWithSession(CART);
+      
+      console.log('🛒 Fetch cart - Status:', response.status);
 
-      console.log('🛒 Fetch cart - Status:', res.status, 'Auth:', !!token);
-
-      if (res.status === 404 || res.status === 400) {
+      if (response.status === 404 || response.status === 400) {
         // Carrito vacío o sin sesión - esto es normal
+        console.log('📭 Carrito vacío o sin sesión');
         setCartItems([]);
-      } else if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${res.statusText}`);
+      } else if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error en respuesta:', errorText);
+        // Línea 165 - CORRECCIÓN:
+throw new Error(`Error ${response.status}: ${response.statusText}`);
       } else {
-        const data: ApiCartItem[] = await res.json();
+        const data: ApiCartItem[] = await response.json();
+        console.log('✅ Carrito obtenido:', data.length, 'ítems');
         
         const transformedItems: CartItem[] = data.map((item) => ({
           id: item.id.toString(),
@@ -114,7 +181,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
         setCartItems(transformedItems);
       }
-      setHasFetched(true); // Marcar como ya fetcheado
+      setHasFetched(true);
     } catch (err) {
       console.error('Error al cargar el carrito:', err);
       setCartItems([]);
@@ -122,14 +189,21 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     } finally {
       setIsFetching(false);
     }
-  }, [setCartItems, isFetching, hasFetched]); // Dependencias correctas
+  }, [setCartItems, isFetching, hasFetched]);
 
   // Este useEffect SOLO se ejecuta cuando isOpen cambia
   useEffect(() => {
     if (isOpen && !hasFetched && !isFetching) {
+      // Verificar si hay sessionId guardado
+      const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
+      if (savedSessionId) {
+        setSessionId(savedSessionId);
+        console.log('📦 SessionId cargado desde localStorage:', savedSessionId);
+      }
+      
       fetchCart();
     }
-  }, [isOpen]); // SOLO isOpen como dependencia
+  }, [isOpen]);
 
   const updateQuantity = useCallback(async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -142,20 +216,15 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       return;
     }
 
-    const token = localStorage.getItem('token');
-    
     try {
-      const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
-        method: 'PUT',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+      console.log(`📊 Actualizando cantidad del ítem ${itemId} a ${newQuantity}`);
+      
+      const response = await fetchWithSession(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
+        method: 'PUT'
       });
 
-      if (!res.ok) {
-        if (res.status === 400) {
+      if (!response.ok) {
+        if (response.status === 400) {
           throw new Error('No hay sesión de carrito. Agrega un producto primero.');
         }
         throw new Error('Error actualizando cantidad');
@@ -166,6 +235,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         item.id === itemId ? { ...item, quantity: newQuantity } : item
       );
       setCartItems(updatedCart);
+      
+      console.log('✅ Cantidad actualizada');
     } catch (err) {
       console.error('Error actualizando cantidad:', err);
       alert(err instanceof Error ? err.message : 'Error al actualizar la cantidad');
@@ -173,20 +244,15 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   }, [cartItems, setCartItems]);
 
   const removeItem = useCallback(async (itemId: string) => {
-    const token = localStorage.getItem('token');
-    
     try {
-      const res = await fetch(`${CART}/remove/${itemId}`, {
-        method: 'DELETE',
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+      console.log(`➖ Eliminando ítem ${itemId}`);
+      
+      const response = await fetchWithSession(`${CART}/remove/${itemId}`, {
+        method: 'DELETE'
       });
 
-      if (!res.ok) {
-        if (res.status === 400) {
+      if (!response.ok) {
+        if (response.status === 400) {
           throw new Error('No hay sesión de carrito');
         }
         throw new Error('Error eliminando el producto');
@@ -195,6 +261,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       // Actualizar UI localmente
       const updatedCart = cartItems.filter(item => item.id !== itemId);
       setCartItems(updatedCart);
+      
+      console.log('✅ Ítem eliminado');
     } catch (err) {
       console.error('Error eliminando producto:', err);
       alert(err instanceof Error ? err.message : 'Error al eliminar el producto');
@@ -325,6 +393,14 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     }
   }, []);
 
+  // Botón para debug: mostrar sessionId actual
+  const debugSession = () => {
+    const currentSessionId = getSessionId();
+    console.log('🔍 SessionId actual:', currentSessionId);
+    console.log('🍪 Cookies:', document.cookie);
+    alert(`SessionId: ${currentSessionId || 'No disponible'}`);
+  };
+
   return (
     <>
       {/* Overlay */}
@@ -340,6 +416,28 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         ref={cartRef} 
         className={`cart-panel ${isOpen ? 'open' : ''} ${isClosing ? 'closing' : ''}`}
       >
+        {/* Botón de debug (solo en desarrollo) */}
+        {process.env.NODE_ENV === 'development' && (
+          <button 
+            onClick={debugSession}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '60px',
+              background: '#666',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '2px 8px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              zIndex: 1000
+            }}
+          >
+            🔍 Session
+          </button>
+        )}
+
         {/* Decoración superior con gradiente */}
         <div className="cart-decoration-top"></div>
 
@@ -358,6 +456,11 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
               <span className="cart-subtitle">
                 {totalItems === 0 ? 'Vacío' : `${totalItems} producto${totalItems > 1 ? 's' : ''}`}
               </span>
+              {sessionId && (
+                <small style={{fontSize: '10px', color: '#666', display: 'block', marginTop: '2px'}}>
+                  Session: {sessionId.substring(0, 8)}...
+                </small>
+              )}
             </div>
           </div>
           <button className="close-btn" onClick={handleClose} aria-label="Cerrar carrito">

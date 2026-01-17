@@ -1,7 +1,13 @@
 'use client';
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { ADD_TO_CART, CLEAR_CART, CART, GET_CART_COUNT, MIGRATE_CART } from '../utils/Api';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import { 
+  ADD_TO_CART, 
+  CLEAR_CART, 
+  CART, 
+  GET_CART_COUNT, 
+  MIGRATE_CART 
+} from '../utils/Api';
 
 interface CartItem {
   id: number;
@@ -25,6 +31,7 @@ interface CartContextType {
   clearCart: () => Promise<void>;
   getCart: () => Promise<void>;
   migrateCart: () => Promise<void>;
+  refreshCart: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -42,48 +49,77 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartCount, setCartCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const getAuthHeaders = () => {
+  // Constante para header
+  const CART_SESSION_HEADER = 'X-Cart-Session-Id';
+
+  // Obtener sessionId desde localStorage
+  const getSessionId = () => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('cartSessionId');
+    }
+    return null;
+  };
+
+  // Guardar sessionId desde headers de respuesta
+  const saveSessionIdFromHeaders = (headers: Headers) => {
+    const sessionId = headers.get(CART_SESSION_HEADER);
+    if (sessionId && sessionId !== 'cleared') {
+      localStorage.setItem('cartSessionId', sessionId);
+    } else if (sessionId === 'cleared') {
+      localStorage.removeItem('cartSessionId');
+    }
+  };
+
+  // Configurar headers para todas las peticiones
+  const getHeaders = () => {
     const token = localStorage.getItem('token');
+    const sessionId = getSessionId();
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest' // Para Safari
+      'Accept': 'application/json'
     };
+
+    // Agregar sessionId en header si existe
+    if (sessionId) {
+      headers[CART_SESSION_HEADER] = sessionId;
+    }
+
+    // Agregar token de autenticación si existe
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+
     return headers;
   };
 
-  // Helper para fetch con cookies
-  const fetchWithCookies = async (url: string, options: RequestInit = {}) => {
-    const headers = getAuthHeaders();
+  // Función de fetch con manejo de sessionId
+  const fetchWithSession = async (url: string, options: RequestInit = {}) => {
+    const headers = getHeaders();
     
-    // Forzar cookie para Safari antes de cada request
-    if (typeof document !== 'undefined' && navigator.userAgent.includes('Safari')) {
-      document.cookie = `safari_fix=${Date.now()}; path=/; SameSite=None; Secure`;
-    }
-    
-    return fetch(url, {
+    const response = await fetch(url, {
       ...options,
-      credentials: 'include', // ← CRÍTICO para cookies
+      credentials: 'include', // IMPORTANTE para cookies
       headers: {
         ...headers,
         ...options.headers
       }
     });
+
+    // Guardar sessionId si viene en la respuesta
+    saveSessionIdFromHeaders(response.headers);
+
+    return response;
   };
 
-  // Obtener carrito - CON FETCH
-  const getCart = async () => {
+  // Obtener carrito
+  const getCart = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchWithCookies(CART);
-      
-      console.log('🛒 Fetch cart - Status:', response.status);
+      const response = await fetchWithSession(CART);
       
       if (response.status === 404 || response.status === 400) {
-        // Carrito vacío o sin sesión - es normal
+        // Carrito vacío - normal
         setCartItems([]);
         setCartCount(0);
         return;
@@ -97,7 +133,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       setCartItems(data);
       
       // Obtener contador
-      const countResponse = await fetchWithCookies(GET_CART_COUNT);
+      const countResponse = await fetchWithSession(GET_CART_COUNT);
       if (countResponse.ok) {
         const countData = await countResponse.json();
         setCartCount(countData.count || 0);
@@ -106,24 +142,25 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       console.error('Error obteniendo carrito:', error);
       if (error.message?.includes('404') || error.message?.includes('400')) {
-        // Carrito vacío - normal
         setCartItems([]);
         setCartCount(0);
       }
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Refrescar carrito (para uso externo)
+  const refreshCart = async () => {
+    await getCart();
   };
 
-  // Agregar al carrito - CON FETCH
+  // Agregar al carrito
   const addToCart = async (productVariantId: number, quantity: number) => {
     try {
-      const payload = {
-        productVariantId,
-        quantity
-      };
+      const payload = { productVariantId, quantity };
 
-      const response = await fetchWithCookies(ADD_TO_CART, {
+      const response = await fetchWithSession(ADD_TO_CART, {
         method: 'POST',
         body: JSON.stringify(payload)
       });
@@ -133,10 +170,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const data = await response.json();
-      console.log('✅ Producto agregado al carrito:', data);
-      
-      // DEBUG: Ver cookies
-      console.log('Cookies después de POST:', document.cookie);
       
       // Actualizar carrito después de agregar
       await getCart();
@@ -148,17 +181,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Eliminar del carrito - CON FETCH
+  // Eliminar del carrito
   const removeFromCart = async (cartItemId: number) => {
     try {
-      const response = await fetchWithCookies(`${CART}/remove/${cartItemId}`, {
+      const response = await fetchWithSession(`${CART}/remove/${cartItemId}`, {
         method: 'DELETE'
       });
       
       if (!response.ok) {
-        if (response.status === 400) {
-          throw new Error('No hay sesión de carrito');
-        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -169,17 +199,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Actualizar cantidad - CON FETCH
+  // Actualizar cantidad
   const updateQuantity = async (cartItemId: number, quantity: number) => {
     try {
-      const response = await fetchWithCookies(`${CART}/update/${cartItemId}?quantity=${quantity}`, {
+      const response = await fetchWithSession(`${CART}/update/${cartItemId}?quantity=${quantity}`, {
         method: 'PUT'
       });
       
       if (!response.ok) {
-        if (response.status === 400) {
-          throw new Error('No hay sesión de carrito');
-        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -190,17 +217,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Vaciar carrito - CON FETCH
+  // Vaciar carrito
   const clearCart = async () => {
     try {
-      const response = await fetchWithCookies(CLEAR_CART, {
+      const response = await fetchWithSession(CLEAR_CART, {
         method: 'DELETE'
       });
       
       if (!response.ok) {
-        if (response.status === 400) {
-          throw new Error('No hay sesión de carrito');
-        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -212,17 +236,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Migrar carrito anónimo a usuario autenticado - CON FETCH
+  // Migrar carrito anónimo a usuario autenticado
   const migrateCart = async () => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
     try {
-      const response = await fetchWithCookies(MIGRATE_CART, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetchWithSession(MIGRATE_CART, {
+        method: 'POST'
       });
       
       if (!response.ok) {
@@ -236,26 +257,25 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Inicializar carrito al cargar la página
-  React.useEffect(() => {
-    // Forzar cookie inicial para Safari
-    if (typeof document !== 'undefined') {
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      if (isSafari) {
-        document.cookie = `cart_init=${Date.now()}; path=/; SameSite=None; Secure; max-age=3600`;
-        console.log('🦁 Safari cookie inicializada');
+  // Inicializar al cargar la página
+  useEffect(() => {
+    getCart();
+    
+    // Escuchar cambios de autenticación
+    const handleStorageChange = () => {
+      if (localStorage.getItem('token') && cartItems.length > 0) {
+        migrateCart();
       }
-    }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
     
-    // Cargar carrito
-    const timer = setTimeout(() => {
-      getCart();
-    }, 100);
-    
-    return () => clearTimeout(timer);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
-  const value = {
+  const value: CartContextType = {
     cartItems,
     cartCount,
     loading,
@@ -264,7 +284,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     updateQuantity,
     clearCart,
     getCart,
-    migrateCart
+    migrateCart,
+    refreshCart
   };
 
   return (
