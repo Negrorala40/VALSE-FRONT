@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Checkout from '../components/Checkout';
 import '../components/Checkout.css';
+import { CART } from '../utils/Api';
 
 const CheckoutPage: React.FC = () => {
   const router = useRouter();
@@ -23,7 +24,7 @@ const CheckoutPage: React.FC = () => {
         
         if (token) {
           // Usuario autenticado - verificar carrito del backend
-          const res = await fetch('http://localhost:8080/api/cart', {
+          const res = await fetch(CART, {
             credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
@@ -59,7 +60,7 @@ const CheckoutPage: React.FC = () => {
         }
         
         // Si no está autenticado o falló la verificación del backend
-        const res = await fetch('http://localhost:8080/api/cart', {
+        const res = await fetch(CART, {
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json'
