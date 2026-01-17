@@ -884,3 +884,84 @@
     padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
   }
 }
+/* esta guevonada se borra tenkiu  */
+/* Debug buttons */
+.debug-buttons {
+  position: absolute;
+  top: 10px;
+  right: 60px;
+  display: flex;
+  gap: 5px;
+  z-index: 1000;
+}
+
+.debug-btn {
+  background: #666;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.debug-btn:hover {
+  background: #888;
+}
+
+/* Session info */
+.session-info {
+  font-size: 10px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.copy-session-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  color: #666;
+}
+
+.copy-session-btn:hover {
+  color: #333;
+}
+
+/* Session status in empty cart */
+.session-status {
+  margin: 10px 0;
+  text-align: center;
+}
+
+.session-status small {
+  display: block;
+  margin-bottom: 5px;
+  color: #666;
+}
+
+.session-btn {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #666;
+}
+
+.session-btn:hover {
+  background: #e0e0e0;
+}
+
+/* Loading retry indicator */
+.cart-loading small {
+  display: block;
+  margin-top: 5px;
+  color: #999;
+}

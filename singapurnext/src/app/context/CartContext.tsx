@@ -32,6 +32,7 @@ interface CartContextType {
   getCart: () => Promise<void>;
   migrateCart: () => Promise<void>;
   refreshCart: () => Promise<void>;
+  sessionId: string | null;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -48,32 +49,36 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartCount, setCartCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   // Constante para header
   const CART_SESSION_HEADER = 'X-Cart-Session-Id';
+  const CART_SESSION_KEY = 'cartSessionId';
 
   // Obtener sessionId desde localStorage
   const getSessionId = () => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('cartSessionId');
+      return localStorage.getItem(CART_SESSION_KEY) || sessionId;
     }
     return null;
   };
 
   // Guardar sessionId desde headers de respuesta
   const saveSessionIdFromHeaders = (headers: Headers) => {
-    const sessionId = headers.get(CART_SESSION_HEADER);
-    if (sessionId && sessionId !== 'cleared') {
-      localStorage.setItem('cartSessionId', sessionId);
-    } else if (sessionId === 'cleared') {
-      localStorage.removeItem('cartSessionId');
+    const newSessionId = headers.get(CART_SESSION_HEADER);
+    if (newSessionId && newSessionId.trim() !== '' && newSessionId !== 'cleared') {
+      localStorage.setItem(CART_SESSION_KEY, newSessionId);
+      setSessionId(newSessionId);
+    } else if (newSessionId === 'cleared') {
+      localStorage.removeItem(CART_SESSION_KEY);
+      setSessionId(null);
     }
   };
 
   // Configurar headers para todas las peticiones
   const getHeaders = () => {
     const token = localStorage.getItem('token');
-    const sessionId = getSessionId();
+    const currentSessionId = getSessionId();
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -81,8 +86,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     };
 
     // Agregar sessionId en header si existe
-    if (sessionId) {
-      headers[CART_SESSION_HEADER] = sessionId;
+    if (currentSessionId) {
+      headers[CART_SESSION_HEADER] = currentSessionId;
     }
 
     // Agregar token de autenticación si existe
@@ -259,11 +264,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   // Inicializar al cargar la página
   useEffect(() => {
+    // Cargar sessionId inicial desde localStorage
+    if (typeof window !== 'undefined') {
+      const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
+      if (savedSessionId) {
+        setSessionId(savedSessionId);
+      }
+    }
+    
     getCart();
     
     // Escuchar cambios de autenticación
-    const handleStorageChange = () => {
-      if (localStorage.getItem('token') && cartItems.length > 0) {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'token' && e.newValue && cartItems.length > 0) {
         migrateCart();
       }
     };
@@ -285,7 +298,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     clearCart,
     getCart,
     migrateCart,
-    refreshCart
+    refreshCart,
+    sessionId
   };
 
   return (

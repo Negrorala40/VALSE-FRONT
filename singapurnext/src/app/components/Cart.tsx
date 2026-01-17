@@ -45,6 +45,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const [isFetching, setIsFetching] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 2;
 
   // Constante para header
   const CART_SESSION_HEADER = 'X-Cart-Session-Id';
@@ -55,16 +57,19 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
   // Obtener sessionId desde localStorage
   const getSessionId = () => {
-    return sessionId || localStorage.getItem(CART_SESSION_KEY);
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(CART_SESSION_KEY) || sessionId;
+    }
+    return null;
   };
 
   // Guardar sessionId desde headers de respuesta
   const saveSessionIdFromHeaders = (headers: Headers) => {
     const newSessionId = headers.get(CART_SESSION_HEADER);
-    if (newSessionId && newSessionId !== 'cleared') {
+    if (newSessionId && newSessionId.trim() !== '' && newSessionId !== 'cleared') {
       localStorage.setItem(CART_SESSION_KEY, newSessionId);
       setSessionId(newSessionId);
-      console.log('📥 SessionId guardado desde headers:', newSessionId);
+      console.log('📥 SessionId guardado desde headers:', newSessionId.substring(0, 8) + '...');
     } else if (newSessionId === 'cleared') {
       localStorage.removeItem(CART_SESSION_KEY);
       setSessionId(null);
@@ -85,7 +90,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     // Agregar sessionId en header SI existe
     if (currentSessionId) {
       headers[CART_SESSION_HEADER] = currentSessionId;
-      console.log('📤 Enviando sessionId en header:', currentSessionId);
+      console.log('📤 Enviando sessionId en header:', currentSessionId.substring(0, 8) + '...');
     }
 
     // Agregar token de autenticación SI existe
@@ -100,6 +105,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const fetchWithSession = async (url: string, options: RequestInit = {}) => {
     const headers = getHeaders();
     
+    console.log('🔗 Fetch URL:', url);
+    console.log('📋 Headers enviados:', Object.keys(headers));
+    
     const response = await fetch(url, {
       ...options,
       credentials: 'include', // IMPORTANTE para cookies
@@ -108,6 +116,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         ...options.headers
       }
     });
+
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', Array.from(response.headers.entries()));
 
     // Guardar sessionId si viene en la respuesta
     saveSessionIdFromHeaders(response.headers);
@@ -143,8 +154,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   }, [isOpen, handleClose]);
 
   // Obtener carrito cuando se abre
-  const fetchCart = useCallback(async () => {
-    if (isFetching || hasFetched) return;
+  const fetchCart = useCallback(async (forceRefresh = false) => {
+    if (isFetching && !forceRefresh) return;
     
     setIsFetching(true);
     
@@ -154,16 +165,34 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       const response = await fetchWithSession(CART);
       
       console.log('🛒 Fetch cart - Status:', response.status);
+      console.log('🛒 SessionId actual:', getSessionId());
 
       if (response.status === 404 || response.status === 400) {
         // Carrito vacío o sin sesión - esto es normal
         console.log('📭 Carrito vacío o sin sesión');
         setCartItems([]);
+        setRetryCount(0);
+      } else if (response.status === 401) {
+        console.log('🔐 No autorizado, intentando sin token...');
+        // Intentar sin token de autorización
+        const token = localStorage.getItem('token');
+        if (token) {
+          console.log('🔄 Token encontrado, pero falló la autorización');
+        }
+        setCartItems([]);
       } else if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Error en respuesta:', errorText);
-        // Línea 165 - CORRECCIÓN:
-throw new Error(`Error ${response.status}: ${response.statusText}`);
+        
+        // Reintentar si no superamos el máximo
+        if (retryCount < maxRetries) {
+          console.log(`🔄 Reintentando (${retryCount + 1}/${maxRetries})...`);
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => fetchCart(true), 1000);
+          return;
+        } else {
+          throw new Error(`Error ${response.status}: ${errorText}`);
+        }
       } else {
         const data: ApiCartItem[] = await response.json();
         console.log('✅ Carrito obtenido:', data.length, 'ítems');
@@ -180,16 +209,24 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
         }));
 
         setCartItems(transformedItems);
+        setRetryCount(0);
       }
       setHasFetched(true);
     } catch (err) {
       console.error('Error al cargar el carrito:', err);
       setCartItems([]);
       setHasFetched(true);
+      
+      // Si hay error, limpiar sessionId por si está corrupto
+      if (retryCount >= maxRetries) {
+        localStorage.removeItem(CART_SESSION_KEY);
+        setSessionId(null);
+        console.log('🧹 SessionId limpiado por errores persistentes');
+      }
     } finally {
       setIsFetching(false);
     }
-  }, [setCartItems, isFetching, hasFetched]);
+  }, [setCartItems, isFetching, retryCount]);
 
   // Este useEffect SOLO se ejecuta cuando isOpen cambia
   useEffect(() => {
@@ -198,12 +235,33 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
       const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
       if (savedSessionId) {
         setSessionId(savedSessionId);
-        console.log('📦 SessionId cargado desde localStorage:', savedSessionId);
+        console.log('📦 SessionId cargado desde localStorage:', savedSessionId.substring(0, 8) + '...');
+      } else {
+        console.log('📭 No hay sessionId guardado en localStorage');
       }
       
       fetchCart();
     }
   }, [isOpen]);
+
+  // Efecto para refrescar automáticamente cuando cambia la sesión
+  useEffect(() => {
+    if (isOpen && hasFetched) {
+      // Solo refrescar si hay cambios en la sesión
+      const checkSession = () => {
+        const currentSessionId = getSessionId();
+        const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
+        
+        if (currentSessionId !== savedSessionId) {
+          console.log('🔄 SessionId cambió, refrescando carrito...');
+          setHasFetched(false);
+        }
+      };
+      
+      const interval = setInterval(checkSession, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen, hasFetched]);
 
   const updateQuantity = useCallback(async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -283,6 +341,25 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
     router.push('/menu');
     handleClose();
   }, [router, handleClose]);
+
+  // Función para generar nueva sesión manualmente
+  const createNewSession = async () => {
+    try {
+      console.log('🆕 Creando nueva sesión...');
+      const response = await fetchWithSession(`${CART}/new-session`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Nueva sesión creada:', data.sessionId.substring(0, 8) + '...');
+        alert('Nueva sesión creada. Por favor, intenta nuevamente.');
+        setHasFetched(false);
+      }
+    } catch (err) {
+      console.error('Error creando nueva sesión:', err);
+    }
+  };
 
   const getSafeImageUrl = useCallback((url: string | undefined): string => {
     if (!url || url.trim() === '') {
@@ -396,9 +473,12 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
   // Botón para debug: mostrar sessionId actual
   const debugSession = () => {
     const currentSessionId = getSessionId();
+    const allCookies = document.cookie;
     console.log('🔍 SessionId actual:', currentSessionId);
-    console.log('🍪 Cookies:', document.cookie);
-    alert(`SessionId: ${currentSessionId || 'No disponible'}`);
+    console.log('🍪 Cookies:', allCookies);
+    console.log('📦 LocalStorage session:', localStorage.getItem(CART_SESSION_KEY));
+    
+    alert(`SessionId: ${currentSessionId ? currentSessionId.substring(0, 8) + '...' : 'No disponible'}\nLocalStorage: ${localStorage.getItem(CART_SESSION_KEY) ? 'Sí' : 'No'}\nCookies: ${allCookies.length > 0 ? 'Sí' : 'No'}`);
   };
 
   return (
@@ -416,26 +496,24 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
         ref={cartRef} 
         className={`cart-panel ${isOpen ? 'open' : ''} ${isClosing ? 'closing' : ''}`}
       >
-        {/* Botón de debug (solo en desarrollo) */}
+        {/* Botones de debug (solo en desarrollo) */}
         {process.env.NODE_ENV === 'development' && (
-          <button 
-            onClick={debugSession}
-            style={{
-              position: 'absolute',
-              top: '10px',
-              right: '60px',
-              background: '#666',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              padding: '2px 8px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              zIndex: 1000
-            }}
-          >
-            🔍 Session
-          </button>
+          <div className="debug-buttons">
+            <button 
+              onClick={debugSession}
+              className="debug-btn"
+              title="Debug session"
+            >
+              🔍 Session
+            </button>
+            <button 
+              onClick={createNewSession}
+              className="debug-btn"
+              title="Crear nueva sesión"
+            >
+              🆕 Nueva Sesión
+            </button>
+          </div>
         )}
 
         {/* Decoración superior con gradiente */}
@@ -457,8 +535,18 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
                 {totalItems === 0 ? 'Vacío' : `${totalItems} producto${totalItems > 1 ? 's' : ''}`}
               </span>
               {sessionId && (
-                <small style={{fontSize: '10px', color: '#666', display: 'block', marginTop: '2px'}}>
+                <small className="session-info">
                   Session: {sessionId.substring(0, 8)}...
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(sessionId);
+                      alert('SessionId copiado al portapapeles');
+                    }}
+                    className="copy-session-btn"
+                    title="Copiar sessionId"
+                  >
+                    📋
+                  </button>
                 </small>
               )}
             </div>
@@ -475,6 +563,9 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
           <div className="cart-loading">
             <div className="loading-spinner"></div>
             <p>Cargando carrito...</p>
+            {retryCount > 0 && (
+              <small>Reintentando... ({retryCount}/{maxRetries})</small>
+            )}
           </div>
         ) : cartItems.length === 0 ? (
           <div className="cart-empty">
@@ -503,6 +594,17 @@ throw new Error(`Error ${response.status}: ${response.statusText}`);
             <p className="empty-message">
               Explora nuestra colección de pijamas y encuentra el favorito de tus pequeños
             </p>
+            {!sessionId && (
+              <div className="session-status">
+                <small>Estado: Sin sesión activa</small>
+                <button 
+                  onClick={createNewSession}
+                  className="session-btn"
+                >
+                  Crear nueva sesión
+                </button>
+              </div>
+            )}
             <button onClick={handleContinueShopping} className="cart-explore-btn">
               <span>Explorar productos</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
