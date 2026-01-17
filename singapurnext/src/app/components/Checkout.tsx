@@ -173,7 +173,7 @@ const CheckoutPage = () => {
   // 🔴 FUNCIÓN PARA OBTENER SESSION ID DESDE MULTIPLES FUENTES
   const getSessionId = useCallback(() => {
     // 1. Intentar desde localStorage
-    let sessionId = localStorage.getItem('cart_session_id');
+      let sessionId = localStorage.getItem('cartSessionId');
     
     // 2. Si no existe, crear uno nuevo
     if (!sessionId) {
@@ -185,8 +185,8 @@ const CheckoutPage = () => {
     }
     
     // 3. También guardar en sessionStorage
-    sessionStorage.setItem('cart_session_id', sessionId);
-    
+  localStorage.setItem('cart_session_id', sessionId);
+  sessionStorage.setItem('cart_session_id', sessionId);    
     setSessionId(sessionId);
     return sessionId;
   }, []);
