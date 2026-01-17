@@ -31,11 +31,16 @@ import {
   User,
   Mail,
   Phone,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 
-// 🔴 IMPORTAR SDK DE MERCADO PAGO CHECKOUT PRO
-import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
+// 🔴 IMPORTAR SDK DE MERCADO PAGO CHECKOUT PRO CORRECTAMENTE
+declare global {
+  interface Window {
+    MercadoPago: any;
+  }
+}
 
 interface CartItem {
   id: string;
@@ -55,6 +60,7 @@ interface Address {
   city: string;
   state: string;
   country: string;
+  postalCode?: string;
 }
 
 interface UserData {
@@ -71,7 +77,7 @@ interface OrderResponse {
   orderDate: string;
   status: string;
   totalPrice: number;
-  userId: number;
+  userId: number | null;
   shippingAddressId: number;
   orderItems: Array<{
     id: number;
@@ -80,6 +86,7 @@ interface OrderResponse {
     orderId: number;
     productVariantId: number;
   }>;
+  customerEmail?: string;
 }
 
 interface AnonymousUserInfo {
@@ -93,22 +100,30 @@ interface MercadoPagoResponse {
   success: boolean;
   preferenceId: string;
   initPoint: string;
-  sandboxInitPoint: string;
+  sandboxInitPoint?: string;
   publicKey: string;
   orderId: string;
   externalReference: string;
+  notificationUrl?: string;
+  backUrls?: {
+    success: string;
+    failure: string;
+    pending: string;
+  };
 }
 
 interface PaymentStatusResponse {
   success: boolean;
   orderId: number;
-  orderStatus: string;
-  mpStatus: string;
+  status: string; // Estado de la orden
+  mercadoPagoStatus?: string; // Estado de MercadoPago
   paymentId?: string;
   paymentMethod?: string;
   lastUpdated?: string;
   hasPayment: boolean;
   preferenceId?: string;
+  totalPrice?: number;
+  mercadoPagoPreferenceId?: string;
 }
 
 const CheckoutPage = () => {
@@ -122,15 +137,16 @@ const CheckoutPage = () => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string>('');
 
   const [step, setStep] = useState<number>(1);
 
   const [addingAddress, setAddingAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState({
+  const [newAddress, setNewAddress] = useState<Omit<Address, 'id'>>({
     address: '',
     city: '',
     state: '',
-    country: '',
+    country: 'Colombia',
   });
 
   const [anonymousUserInfo, setAnonymousUserInfo] = useState<AnonymousUserInfo>({
@@ -146,51 +162,102 @@ const CheckoutPage = () => {
   const [mercadoPagoData, setMercadoPagoData] = useState<MercadoPagoResponse | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
   const [publicKey, setPublicKey] = useState<string>('');
+  const [mp, setMp] = useState<any>(null);
   
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
   const paymentStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const orderFromStorageRef = useRef<string | null>(null);
+  const walletRef = useRef<HTMLDivElement>(null);
 
-  // 🔴 INICIALIZAR MERCADO PAGO UNA VEZ
-  useEffect(() => {
-    const initializeMercadoPago = async () => {
-      try {
-        console.log('🔄 Inicializando Mercado Pago...');
-        
-        // Obtener la public key desde tu backend
-        const response = await fetch(`${MERCADOPAGO_STATUS.replace('/status', '/public-key')}`, {
-          method: 'GET',
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.publicKey) {
-            setPublicKey(data.publicKey);
-            // Inicializar SDK de Mercado Pago con la public key
-            initMercadoPago(data.publicKey, {
-              locale: 'es-CO'
-            });
-            console.log('✅ Mercado Pago inicializado con public key');
-          }
-        } else {
-          console.warn('⚠️ No se pudo obtener public key, usando predeterminada');
-          // Usar public key de prueba como fallback
-          const testPublicKey = 'APP_USR-a8338cdd-4d1d-4cb2-a9d4-47e1518214b2';
-          setPublicKey(testPublicKey);
-          initMercadoPago(testPublicKey, {
-            locale: 'es-CO'
-          });
-          console.log('⚠️ Mercado Pago inicializado con public key de prueba');
-        }
-      } catch (error) {
-        console.error('Error inicializando Mercado Pago:', error);
-      }
-    };
+  // 🔴 FUNCIÓN PARA OBTENER SESSION ID DESDE MULTIPLES FUENTES
+  const getSessionId = useCallback(() => {
+    // 1. Intentar desde localStorage
+    let sessionId = localStorage.getItem('cart_session_id');
     
-    initializeMercadoPago();
+    // 2. Si no existe, crear uno nuevo
+    if (!sessionId) {
+        sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('cart_session_id', sessionId);
+        console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
+    } else {
+        console.log('🔁 SessionId existente:', sessionId.substring(0, 8) + '...');
+    }
+    
+    // 3. También guardar en sessionStorage
+    sessionStorage.setItem('cart_session_id', sessionId);
+    
+    setSessionId(sessionId);
+    return sessionId;
   }, []);
+
+  // 🔴 AGREGAR SESSION ID A TODAS LAS REQUESTS
+  const getRequestHeaders = useCallback((token?: string | null) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Agregar token si existe
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // 🔴 ENVIAR SESSION ID EN HEADER (CRÍTICO)
+    const currentSessionId = getSessionId();
+    headers['X-Cart-Session-Id'] = currentSessionId;
+    
+    // DEBUG en desarrollo
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      console.log('📤 Headers enviados:', {
+        'X-Cart-Session-Id': currentSessionId.substring(0, 8) + '...',
+        'Authorization': token ? 'Presente' : 'No'
+      });
+    }
+
+    return headers;
+  }, [getSessionId]);
+
+  // 🔴 INICIALIZAR MERCADO PAGO
+  const initializeMercadoPago = useCallback(async () => {
+    try {
+      console.log('🔄 Inicializando Mercado Pago...');
+      
+      // Obtener public key del backend
+      const response = await fetch(`${MERCADOPAGO_STATUS.replace('/status', '/public-key')}`, {
+        method: 'GET',
+        headers: getRequestHeaders(),
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.publicKey) {
+          setPublicKey(data.publicKey);
+          
+          // Cargar SDK
+          const script = document.createElement('script');
+          script.src = 'https://sdk.mercadopago.com/js/v2';
+          script.onload = () => {
+            if (window.MercadoPago) {
+              const mpInstance = new window.MercadoPago(data.publicKey, {
+                locale: 'es-CO'
+              });
+              setMp(mpInstance);
+              console.log('✅ MercadoPago inicializado');
+            }
+          };
+          document.body.appendChild(script);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error inicializando Mercado Pago:', error);
+    }
+  }, [getRequestHeaders]);
+
+  useEffect(() => {
+    initializeMercadoPago();
+  }, [initializeMercadoPago]);
 
   const formatPrice = useCallback((price: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -206,7 +273,7 @@ const CheckoutPage = () => {
     setTotal(newTotal);
   }, []);
 
-  // Verificar si hay una orden pendiente en localStorage
+  // Verificar si hay una orden pendiente
   const checkPendingOrder = useCallback(() => {
     const pendingOrder = localStorage.getItem('pendingOrderId');
     const pendingOrderData = localStorage.getItem('pendingOrderData');
@@ -220,7 +287,7 @@ const CheckoutPage = () => {
         
         if (step === 3) {
           console.log('🔄 Recuperando orden pendiente:', pendingOrder);
-          setSuccessMessage(`Orden #${pendingOrder} recuperada. Continúa con el pago.`);
+          setSuccessMessage(`Orden #${pendingOrder} recuperada.`);
         }
       } catch (err) {
         console.error('Error parsing pending order data:', err);
@@ -234,14 +301,7 @@ const CheckoutPage = () => {
     try {
       console.log('🛒 Fetching cart data...');
       
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
+      const headers = getRequestHeaders(token);
       const res = await fetch(CART, {
         headers,
         signal,
@@ -261,7 +321,6 @@ const CheckoutPage = () => {
       }
       
       const data = await res.json();
-      console.log('🛒 Datos del carrito recibidos:', data);
       
       if (!Array.isArray(data)) {
         console.error('🛑 La respuesta no es un array:', data);
@@ -271,20 +330,7 @@ const CheckoutPage = () => {
       }
       
       const items: CartItem[] = data.map(
-        (item: {
-          id?: number | string;
-          imageUrls?: string[];
-          imageUrl?: string;
-          productName?: string;
-          name?: string;
-          price?: number;
-          productVariant?: { price?: number; size?: string; color?: string; stock?: number };
-          size?: string;
-          color?: string;
-          quantity?: number;
-          stock?: number;
-          productVariantId?: number | string;
-        }) => ({
+        (item: any) => ({
           id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
           image: item.imageUrls?.[0]?.trim() || item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || item.name?.trim() || 'Producto',
@@ -299,58 +345,25 @@ const CheckoutPage = () => {
       
       setCartItems(items);
       calculateTotal(items);
+      console.log(`✅ Carrito cargado: ${items.length} items`);
+      
     } catch (error: unknown) {
       const err = error as Error;
       if (err.name !== 'AbortError') {
         console.error('🛑 Error fetching cart:', err);
-        const pendingCart = localStorage.getItem('pendingCartItem');
-        if (pendingCart && !token) {
-          try {
-            const parsed = JSON.parse(pendingCart) as {
-              id?: string | number;
-              image?: string;
-              imageUrl?: string;
-              name?: string;
-              productName?: string;
-              price?: number;
-              size?: string;
-              color?: string;
-              quantity?: number;
-              stock?: number;
-            };
-            const fallbackItem: CartItem = {
-              id: parsed.id?.toString() || `pending-${Date.now()}`,
-              image: parsed.image?.trim() || parsed.imageUrl?.trim() || '/images/placeholder.png',
-              name: parsed.name?.trim() || parsed.productName?.trim() || 'Producto',
-              price: parsed.price || 0,
-              size: parsed.size || '',
-              color: parsed.color || '',
-              quantity: parsed.quantity || 1,
-              stock: parsed.stock || 100,
-            };
-            setCartItems([fallbackItem]);
-            calculateTotal([fallbackItem]);
-          } catch {
-            setCartItems([]);
-            calculateTotal([]);
-          }
-        } else {
-          setCartItems([]);
-          calculateTotal([]);
-        }
+        setCartItems([]);
+        calculateTotal([]);
         throw err;
       }
     }
-  }, [calculateTotal]);
+  }, [calculateTotal, getRequestHeaders]);
 
   const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
       console.log('👤 Fetching user data...');
+      const headers = getRequestHeaders(token);
       const res = await fetch(PERFIL_ME, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
         signal,
         credentials: 'include'
       });
@@ -358,20 +371,7 @@ const CheckoutPage = () => {
       if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
       
       const user = await res.json() as UserData;
-      console.log('👤 Datos de usuario recibidos:', user);
-      
-      if (user.addresses && Array.isArray(user.addresses)) {
-        const uniqueAddresses = new Map();
-        user.addresses.forEach((address: Address) => {
-          if (!uniqueAddresses.has(address.id)) {
-            uniqueAddresses.set(address.id, address);
-          }
-        });
-        
-        user.addresses = Array.from(uniqueAddresses.values());
-      } else {
-        user.addresses = [];
-      }
+      console.log('✅ Usuario cargado:', user.email);
       
       setUserData(user);
       if (user.addresses && user.addresses.length > 0) {
@@ -391,14 +391,17 @@ const CheckoutPage = () => {
         throw err;
       }
     }
-  }, []);
+  }, [getRequestHeaders]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const isAuth = !!token;
     setIsAuthenticated(isAuth);
 
-    // Verificar orden pendiente primero
+    // Obtener sessionId
+    getSessionId();
+
+    // Verificar orden pendiente
     checkPendingOrder();
 
     if (isAuth && !hasFetchedRef.current) {
@@ -412,7 +415,7 @@ const CheckoutPage = () => {
         clearInterval(paymentStatusIntervalRef.current);
       }
     };
-  }, [checkPendingOrder]);
+  }, [checkPendingOrder, getSessionId]);
 
   const loadAuthenticatedData = useCallback(async (token: string) => {
     setLoading(true);
@@ -472,13 +475,7 @@ const CheckoutPage = () => {
     try {
       setLoading(true);
       
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = getRequestHeaders(token);
       
       const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT',
@@ -514,13 +511,7 @@ const CheckoutPage = () => {
     try {
       setLoading(true);
       
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = getRequestHeaders(token);
       
       const res = await fetch(`${CART}/remove/${itemId}`, {
         method: 'DELETE',
@@ -565,12 +556,10 @@ const CheckoutPage = () => {
 
     try {
       setLoading(true);
+      const headers = getRequestHeaders(token);
       const res = await fetch(ADDRESS, {
         method: 'POST',
-        headers: { 
-          Authorization: `Bearer ${token}`, 
-          'Content-Type': 'application/json' 
-        },
+        headers,
         body: JSON.stringify(newAddress),
       });
 
@@ -605,7 +594,7 @@ const CheckoutPage = () => {
       
       setSelectedAddress(createdAddress);
       setAddingAddress(false);
-      setNewAddress({ address: '', city: '', state: '', country: '' });
+      setNewAddress({ address: '', city: '', state: '', country: 'Colombia' });
       setError('');
       
     } catch (err: unknown) {
@@ -628,12 +617,10 @@ const CheckoutPage = () => {
 
     try {
       setLoading(true);
+      const headers = getRequestHeaders(token);
       const res = await fetch(`${ADDRESS}/${addressId}`, {
         method: 'DELETE',
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
       });
 
       if (!res.ok) {
@@ -733,6 +720,8 @@ const CheckoutPage = () => {
       setSuccessMessage('');
 
       console.log('🚀 Creando orden...');
+      console.log('📤 SessionId enviado:', sessionId?.substring(0, 8) + '...');
+      console.log('👤 Autenticado:', isAuthenticated);
       
       let orderResponse: OrderResponse;
       
@@ -740,14 +729,10 @@ const CheckoutPage = () => {
         const token = localStorage.getItem('token');
         if (!token) throw new Error('Usuario no autenticado');
         
-        console.log('👤 Usuario autenticado, creando orden con shippingAddressId:', selectedAddress.id);
-        
+        const headers = getRequestHeaders(token);
         const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
           method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+          headers,
           credentials: 'include',
           body: JSON.stringify({
             shippingAddressId: selectedAddress.id
@@ -766,20 +751,17 @@ const CheckoutPage = () => {
         }
 
         orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden autenticada creada:', orderResponse);
+        console.log('✅ Orden autenticada creada:', orderResponse.id);
         
       } else {
         if (!anonymousUserInfo.email) {
           throw new Error('Email requerido para usuarios anónimos');
         }
         
-        console.log('👤 Usuario anónimo, creando orden con email:', anonymousUserInfo.email);
-        
+        const headers = getRequestHeaders();
         const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           credentials: 'include',
           body: JSON.stringify({
             customerEmail: anonymousUserInfo.email,
@@ -807,14 +789,14 @@ const CheckoutPage = () => {
         }
 
         orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden anónima creada:', orderResponse);
+        console.log('✅ Orden anónima creada:', orderResponse.id);
       }
 
       if (!orderResponse.id) {
         throw new Error('No se pudo obtener el ID de la orden');
       }
 
-      // Guardar orden en localStorage para recuperación
+      // Guardar orden en localStorage
       localStorage.setItem('pendingOrderId', orderResponse.id.toString());
       localStorage.setItem('pendingOrderData', JSON.stringify({
         shippingAddress: selectedAddress,
@@ -826,7 +808,6 @@ const CheckoutPage = () => {
       setOrderCreated(true);
       setSuccessMessage(`✅ Orden #${orderResponse.id} creada exitosamente`);
       
-      // Si hay una orden anterior del storage, limpiarla
       if (orderFromStorageRef.current) {
         orderFromStorageRef.current = null;
       }
@@ -842,7 +823,7 @@ const CheckoutPage = () => {
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData]);
+  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, sessionId]);
 
   const createMercadoPagoPreference = async (orderId: string) => {
     try {
@@ -850,15 +831,10 @@ const CheckoutPage = () => {
       setError('');
       
       console.log('💳 Creando preferencia MercadoPago para orden:', orderId);
+      console.log('📤 SessionId enviado:', sessionId?.substring(0, 8) + '...');
       
       const token = localStorage.getItem('token');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = getRequestHeaders(token);
       
       const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
@@ -877,7 +853,7 @@ const CheckoutPage = () => {
       }
 
       const data = await response.json() as MercadoPagoResponse;
-      console.log('✅ Preferencia MercadoPago creada:', data);
+      console.log('✅ Preferencia creada:', data.preferenceId);
       
       if (!data.success) {
         throw new Error('No se pudo crear la preferencia de pago');
@@ -886,8 +862,8 @@ const CheckoutPage = () => {
       setMercadoPagoData(data);
       setSuccessMessage(`✅ Preferencia de pago creada. ¡Ya puedes pagar!`);
       
-      // Guardar preferenceId en localStorage
       localStorage.setItem('pendingPreferenceId', data.preferenceId);
+      localStorage.setItem('mercadoPagoOrderId', orderId);
       
       return data;
       
@@ -906,13 +882,7 @@ const CheckoutPage = () => {
       console.log('🔄 Verificando estado del pago para orden:', orderId);
       
       const token = localStorage.getItem('token');
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = getRequestHeaders(token);
       
       const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
         method: 'GET',
@@ -930,12 +900,12 @@ const CheckoutPage = () => {
       
       setPaymentStatus(data);
       
-      if (data.orderStatus === 'APROBADO' || data.mpStatus === 'approved') {
+      if (data.status === 'APROBADO' || data.mercadoPagoStatus === 'approved') {
         handleSuccessfulPayment(orderId);
         return data;
       }
       
-      if (data.orderStatus === 'RECHAZADO' || data.mpStatus === 'rejected') {
+      if (data.status === 'RECHAZADO' || data.mercadoPagoStatus === 'rejected') {
         setError('El pago fue rechazado. Por favor intenta con otro método de pago.');
         return data;
       }
@@ -978,7 +948,7 @@ const CheckoutPage = () => {
     localStorage.removeItem('pendingOrderId');
     localStorage.removeItem('pendingOrderData');
     localStorage.removeItem('pendingPreferenceId');
-    localStorage.removeItem('pendingCartItem');
+    localStorage.removeItem('mercadoPagoOrderId');
     
     setCartItems([]);
     setTotal(0);
@@ -1002,10 +972,52 @@ const CheckoutPage = () => {
     await createMercadoPagoPreference(orderId);
   };
 
+  // 🔴 INICIALIZAR CHECKOUT PRO
+  const initializeCheckoutPro = useCallback(() => {
+    if (!mp || !mercadoPagoData?.preferenceId || !walletRef.current) {
+      return;
+    }
+
+    try {
+      console.log('🔄 Inicializando Checkout Pro...');
+      
+      // Limpiar contenedor primero
+      if (walletRef.current) {
+        walletRef.current.innerHTML = '';
+      }
+
+      const checkoutButton = mp.checkout({
+        preference: {
+          id: mercadoPagoData.preferenceId
+        },
+        render: {
+          container: '.wallet-container',
+          label: 'Pagar con Mercado Pago',
+        },
+        theme: {
+          elementsColor: '#4f46e5',
+          headerColor: '#3730a3',
+        },
+        autoOpen: true,
+      });
+
+      console.log('✅ Checkout Pro inicializado');
+      
+    } catch (error) {
+      console.error('❌ Error inicializando Checkout Pro:', error);
+      setError('Error al cargar el sistema de pago');
+    }
+  }, [mp, mercadoPagoData]);
+
+  useEffect(() => {
+    if (mercadoPagoData?.preferenceId) {
+      initializeCheckoutPro();
+    }
+  }, [mercadoPagoData, initializeCheckoutPro]);
+
   useEffect(() => {
     const createOrderAndPreference = async () => {
       if (step === 3 && !orderCreated && !isProcessingPayment && !mercadoPagoData) {
-        // Si ya tenemos orderId del storage, solo crear preferencia
         if (orderFromStorageRef.current) {
           setOrderId(orderFromStorageRef.current);
           setOrderCreated(true);
@@ -1371,7 +1383,7 @@ const CheckoutPage = () => {
                               </h3>
                               <div className="checkout-form-grid">
                                 <div className="checkout-form-group">
-                                  <label htmlFor="address">Dirección Completa</label>
+                                  <label htmlFor="address">Dirección Completa *</label>
                                   <input
                                     id="address"
                                     type="text"
@@ -1379,11 +1391,12 @@ const CheckoutPage = () => {
                                     placeholder="Calle 123 #45-67, Apto 301"
                                     value={newAddress.address}
                                     onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
+                                    required
                                   />
                                 </div>
                                 <div className="checkout-form-grid-2">
                                   <div className="checkout-form-group">
-                                    <label htmlFor="city">Ciudad</label>
+                                    <label htmlFor="city">Ciudad *</label>
                                     <input
                                       id="city"
                                       type="text"
@@ -1391,10 +1404,11 @@ const CheckoutPage = () => {
                                       placeholder="Bogotá"
                                       value={newAddress.city}
                                       onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
+                                      required
                                     />
                                   </div>
                                   <div className="checkout-form-group">
-                                    <label htmlFor="state">Departamento</label>
+                                    <label htmlFor="state">Departamento *</label>
                                     <input
                                       id="state"
                                       type="text"
@@ -1402,11 +1416,12 @@ const CheckoutPage = () => {
                                       placeholder="Cundinamarca"
                                       value={newAddress.state}
                                       onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
+                                      required
                                     />
                                   </div>
                                 </div>
                                 <div className="checkout-form-group">
-                                  <label htmlFor="country">País</label>
+                                  <label htmlFor="country">País *</label>
                                   <input
                                     id="country"
                                     type="text"
@@ -1414,6 +1429,7 @@ const CheckoutPage = () => {
                                     placeholder="Colombia"
                                     value={newAddress.country}
                                     onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
+                                    required
                                   />
                                 </div>
                                 <div className="checkout-form-actions">
@@ -1622,16 +1638,18 @@ const CheckoutPage = () => {
                           </div>
                           <div className="checkout-payment-status-row">
                             <span>Estado Orden:</span>
-                            <span className={`checkout-payment-status-badge ${paymentStatus.orderStatus === 'PENDIENTE' ? 'pending' : paymentStatus.orderStatus === 'APROBADO' ? 'approved' : 'rejected'}`}>
-                              {paymentStatus.orderStatus}
+                            <span className={`checkout-payment-status-badge ${paymentStatus.status === 'PENDIENTE' ? 'pending' : paymentStatus.status === 'APROBADO' ? 'approved' : 'rejected'}`}>
+                              {paymentStatus.status}
                             </span>
                           </div>
-                          <div className="checkout-payment-status-row">
-                            <span>Estado MercadoPago:</span>
-                            <span className={`checkout-payment-status-badge ${paymentStatus.mpStatus === 'pending' ? 'pending' : paymentStatus.mpStatus === 'approved' ? 'approved' : 'rejected'}`}>
-                              {paymentStatus.mpStatus || 'Pendiente'}
-                            </span>
-                          </div>
+                          {paymentStatus.mercadoPagoStatus && (
+                            <div className="checkout-payment-status-row">
+                              <span>Estado MercadoPago:</span>
+                              <span className={`checkout-payment-status-badge ${paymentStatus.mercadoPagoStatus === 'pending' ? 'pending' : paymentStatus.mercadoPagoStatus === 'approved' ? 'approved' : 'rejected'}`}>
+                                {paymentStatus.mercadoPagoStatus}
+                              </span>
+                            </div>
+                          )}
                           {paymentStatus.paymentMethod && (
                             <div className="checkout-payment-status-row">
                               <span>Método:</span>
@@ -1642,7 +1660,7 @@ const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {/* 🔴 SECCIÓN DE CHECKOUT PRO - COMPONENTE WALLET */}
+                    {/* 🔴 CHECKOUT PRO - MODO PRODUCCIÓN */}
                     {orderCreated && mercadoPagoData && !mercadoPagoLoading && (
                       <div className="checkout-payment-action">
                         <div className="checkout-payment-ready">
@@ -1650,52 +1668,52 @@ const CheckoutPage = () => {
                             <Check className="checkout-icon" />
                             <h4>¡Listo para pagar!</h4>
                           </div>
-                          <p>Tu orden ha sido creada. Haz clic en el botón para completar el pago seguro.</p>
+                          <p>Tu orden ha sido creada. Completa el pago seguro con Mercado Pago.</p>
                           
                           <div className="checkout-payment-buttons">
-                            <div className="mercado-pago-wallet-container">
-  {publicKey && mercadoPagoData.preferenceId ? (
-    // 🔴 ESTA ES LA CONFIGURACIÓN CORRECTA:
-// 🔴 CONFIGURACIÓN MÍNIMA FUNCIONAL:
-<Wallet
-  initialization={{
-    preferenceId: mercadoPagoData.preferenceId,
-    redirectMode: "self"
-  }}
-  // 🔴 SIN customization o con configuración básica
-/>
-  ) : (
-    <button
-      className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
-      onClick={() => {
-        if (mercadoPagoData?.initPoint) {
-          window.open(mercadoPagoData.initPoint, '_blank');
-        }
-      }}
-      disabled={mercadoPagoLoading}
-    >
-      {mercadoPagoLoading ? (
-        <>
-          <Loader2 className="checkout-icon spinning" />
-          Procesando...
-        </>
-      ) : (
-        <>
-          <CreditCard className="checkout-icon" />
-          Pagar con MercadoPago
-        </>
-      )}
-    </button>
-  )}
-</div>
+                            <div className="wallet-container" ref={walletRef}>
+                              {/* Checkout Pro se inicializará aquí automáticamente */}
+                            </div>
                             
-                            <p className="checkout-payment-note">
-                              <small>
-                                💳 Pagos seguros con Mercado Pago.<br />
-                                🔒 Tus datos están protegidos.<br />
-                                ⚡ Pago rápido y sencillo.
-                              </small>
-                            </p>
+                            {/* Botón de fallback si el checkout no se carga */}
+                            {!mp && (
+                              <button
+                                className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
+                                onClick={() => {
+                                  if (mercadoPagoData.initPoint) {
+                                    window.open(mercadoPagoData.initPoint, '_blank');
+                                  }
+                                }}
+                                disabled={mercadoPagoLoading}
+                              >
+                                {mercadoPagoLoading ? (
+                                  <>
+                                    <Loader2 className="checkout-icon spinning" />
+                                    Procesando...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard className="checkout-icon" />
+                                    Pagar con MercadoPago
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            
+                            <div className="checkout-security-badges">
+                              <div className="checkout-security-badge">
+                                <Lock className="checkout-icon" size={14} />
+                                <span>Pago 100% seguro</span>
+                              </div>
+                              <div className="checkout-security-badge">
+                                <Check className="checkout-icon" size={14} />
+                                <span>Certificado SSL</span>
+                              </div>
+                              <div className="checkout-security-badge">
+                                <Shield size={14} />
+                                <span>Protegido por Mercado Pago</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1866,5 +1884,12 @@ const CheckoutPage = () => {
     </div>
   );
 };
+
+// Componente Shield para icono de seguridad
+const Shield = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
 
 export default CheckoutPage;
