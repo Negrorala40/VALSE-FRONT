@@ -1378,9 +1378,9 @@ const Admin = () => {
         <div className={styles.infoItem}>
           <strong>ℹ️ Información:</strong>
           <p>• Productos inhabilitados no son visibles al público</p>
-          <p>• Stock 0 = Producto agotado</p>
+          <p>• Stock 0 = Producto agotado = No se compra</p>
           <p>• Colores/tallas con órdenes no se pueden editar</p>
-          <p>• Precios en dólares (USD)</p>
+          <p>• Precios en  (COP)</p>
         </div>
         <div className={styles.infoItem}>
           <strong>📝 Notas:</strong>

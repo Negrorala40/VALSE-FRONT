@@ -29,7 +29,15 @@ import {
   Gift,
   ShieldCheck,
   ShoppingCart,
-  ExternalLink
+  ExternalLink,
+  ChevronRight,
+  Smartphone,
+  Tablet,
+  Laptop,
+  Monitor,
+  FileText,
+  MessageSquare,
+  Star
 } from 'lucide-react';
 import './PaymentResult.css';
 
@@ -76,9 +84,11 @@ const PaymentResult = () => {
   const [pollingCount, setPollingCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [paymentDetails, setPaymentDetails] = useState<PaymentStatusResponse | null>(null);
+  const [screenSize, setScreenSize] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   
   const orderRef = useRef<HTMLDivElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isFirstLoad = useRef(true);
   
   const orderId = searchParams.get('orderId');
   const preferenceId = searchParams.get('preference_id');
@@ -89,20 +99,97 @@ const PaymentResult = () => {
   const paymentType = searchParams.get('payment_type');
   const merchantOrderId = searchParams.get('merchant_order_id');
 
-  // Verificar autenticación
+  // 🔴 IDÉNTICA A LA DEL CHECKOUT PAGE
+  const getSessionId = useCallback(() => {
+    // 1. Intentar desde localStorage (igual que Checkout)
+    let sessionId = localStorage.getItem('cartSessionId');
+    
+    // 2. Si no existe, buscar con el mismo nombre que Checkout
+    if (!sessionId) {
+      sessionId = localStorage.getItem('cart_session_id');
+    }
+    
+    // 3. Si todavía no existe, crear uno nuevo (misma lógica que Checkout)
+    if (!sessionId) {
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('cartSessionId', sessionId);
+      localStorage.setItem('cart_session_id', sessionId);
+      console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
+    } else {
+      console.log('🔁 SessionId existente:', sessionId.substring(0, 8) + '...');
+    }
+    
+    // 4. También guardar en sessionStorage (igual que Checkout)
+    sessionStorage.setItem('cartSessionId', sessionId);
+    sessionStorage.setItem('cart_session_id', sessionId);
+    
+    return sessionId;
+  }, []);
+
+  // 🔴 IDÉNTICA A LA DEL CHECKOUT PAGE
+  const getHeaders = useCallback(() => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache'
+    };
+
+    // Agregar token si existe (igual que Checkout)
+    const token = localStorage.getItem('token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // 🔴 ENVIAR SESSION ID EN HEADER (EXACTAMENTE IGUAL QUE CHECKOUT)
+    const currentSessionId = getSessionId();
+    headers['X-Cart-Session-Id'] = currentSessionId;
+    
+    // DEBUG
+    console.log('📤 PaymentResult Headers:', {
+      'X-Cart-Session-Id': currentSessionId.substring(0, 8) + '...',
+      'Authorization': token ? 'Presente' : 'No',
+      'Timestamp': new Date().toISOString()
+    });
+
+    return headers;
+  }, [getSessionId]);
+
+  // Detectar tamaño de pantalla para responsive
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 768) {
+        setScreenSize('mobile');
+      } else if (width < 1024) {
+        setScreenSize('tablet');
+      } else {
+        setScreenSize('desktop');
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Verificar autenticación y obtener sessionId
   useEffect(() => {
     const token = localStorage.getItem('token');
     setIsAuthenticated(!!token);
     
-    // Debug: Mostrar parámetros de URL
-    console.log('🔍 Parámetros de URL recibidos:');
+    // OBTENER SESSION ID (CRÍTICO - IGUAL QUE CHECKOUT)
+    const sessionId = getSessionId();
+    console.log('🔍 PaymentResult Inicializado:');
     console.log('   orderId:', orderId);
-    console.log('   preference_id:', preferenceId);
-    console.log('   payment_id:', paymentId);
-    console.log('   external_reference:', externalReference);
-    console.log('   collection_status:', collectionStatus);
-    console.log('   Autenticado:', !!token);
-  }, []);
+    console.log('   sessionId:', sessionId?.substring(0, 8) + '...');
+    console.log('   autenticado:', !!token);
+    console.log('   screenSize:', screenSize);
+    
+    // Verificar si hay pending order en localStorage
+    const pendingOrderId = localStorage.getItem('pendingOrderId');
+    if (pendingOrderId) {
+      console.log('📦 PendingOrderId encontrado:', pendingOrderId);
+    }
+  }, [getSessionId, orderId, screenSize]);
 
   // Formateadores
   const formatPrice = useCallback((price: number) => {
@@ -141,37 +228,24 @@ const PaymentResult = () => {
     return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   }, []);
 
-  // Función para obtener headers con autenticación y sessionId del carrito
-  const getHeaders = useCallback(() => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache'
-    };
-
-    const token = localStorage.getItem('token');
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    // Agregar el sessionId del carrito si está disponible
-    const sessionId = localStorage.getItem('cartSessionId');
-    if (sessionId) {
-      headers['X-Cart-Session-Id'] = sessionId;
-      console.log('🛒 SessionId del carrito incluido en headers:', sessionId);
-    }
-
-    return headers;
-  }, []);
-
-  // Cargar datos de la orden
+  // Cargar datos de la orden - CORREGIDO
   const loadOrderData = useCallback(async () => {
+    // Prevenir múltiples cargas simultáneas
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+    } else {
+      return;
+    }
+
     try {
       if (!orderId) {
-        // Intentar obtener orderId de localStorage si no está en URL
+        console.log('❌ No hay orderId en URL');
+        
+        // Intentar obtener orderId de localStorage
         const pendingOrderId = localStorage.getItem('pendingOrderId');
         if (pendingOrderId) {
-          console.log('📦 Usando orderId de localStorage:', pendingOrderId);
-          window.history.replaceState(null, '', `/checkout/success?orderId=${pendingOrderId}`);
+          console.log('📦 Usando pendingOrderId de localStorage:', pendingOrderId);
+          router.replace(`/checkout/success?orderId=${pendingOrderId}`);
           return;
         }
         
@@ -182,23 +256,35 @@ const PaymentResult = () => {
 
       console.log('🔍 Cargando orden ID:', orderId);
       
+      const headers = getHeaders();
+      console.log('📤 Headers para fetch:', headers);
+      
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'GET',
-        credentials: 'include', // IMPORTANTE: Envía cookies automáticamente
-        headers: getHeaders()
+        credentials: 'include',
+        headers: headers
       });
 
       console.log('📥 Response status:', response.status);
-      console.log('🛒 Headers enviados:', getHeaders());
+      
+      // Verificar headers de respuesta
+      const responseSessionId = response.headers.get('X-Cart-Session-Id');
+      if (responseSessionId) {
+        console.log('🔄 SessionId recibido del servidor:', responseSessionId.substring(0, 8) + '...');
+        localStorage.setItem('cartSessionId', responseSessionId);
+      }
 
       if (response.status === 403) {
+        const errorText = await response.text();
+        console.error('❌ Acceso denegado:', errorText);
         setError('No tienes acceso a esta orden.');
         setPaymentStatus('error');
         return;
       }
 
       if (response.status === 404) {
-        // Intentar con parámetros de MercadoPago
+        console.error('❌ Orden no encontrada');
+        
         if (externalReference || preferenceId) {
           setError('Orden no encontrada. Es posible que el pago aún se esté procesando.');
           setPaymentStatus('pending');
@@ -211,6 +297,7 @@ const PaymentResult = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('❌ Error en la respuesta:', errorText);
         throw new Error(`Error ${response.status}: ${errorText || 'No se pudo cargar la orden'}`);
       }
 
@@ -222,12 +309,14 @@ const PaymentResult = () => {
       // Determinar estado basado en status de la orden
       if (orderData.status === 'PAGO_APROBADO' || orderData.status === 'APROBADO') {
         setPaymentStatus('approved');
+        setSuccessMessage('✅ ¡Pago confirmado exitosamente!');
         // Limpiar localStorage cuando el pago es exitoso
         localStorage.removeItem('pendingOrderId');
         localStorage.removeItem('pendingOrderData');
         localStorage.removeItem('pendingPreferenceId');
       } else if (orderData.status === 'PAGO_RECHAZADO' || orderData.status === 'RECHAZADO') {
         setPaymentStatus('rejected');
+        setError('❌ El pago fue rechazado. Por favor intenta con otro método de pago.');
       } else if (orderData.status === 'PENDIENTE') {
         setPaymentStatus('pending');
       } else {
@@ -235,12 +324,12 @@ const PaymentResult = () => {
       }
 
     } catch (err: unknown) {
-      console.error('❌ Error loading order:', err);
+      console.error('❌ Error cargando orden:', err);
       const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      setError(errorMessage || 'Error al cargar los detalles de la orden');
+      setError(`Error al cargar los detalles: ${errorMessage}`);
       setPaymentStatus('error');
     }
-  }, [orderId, externalReference, preferenceId, getHeaders]);
+  }, [orderId, externalReference, preferenceId, getHeaders, router]);
 
   // Verificar estado del pago en MercadoPago
   const checkPaymentStatus = useCallback(async () => {
@@ -255,8 +344,6 @@ const PaymentResult = () => {
         headers: getHeaders()
       });
 
-      console.log('📊 Estado del pago - Headers enviados:', getHeaders());
-
       if (!response.ok) {
         console.log('❌ Error verificando estado:', response.status);
         return;
@@ -268,20 +355,17 @@ const PaymentResult = () => {
       setPaymentDetails(data);
       setPollingCount(prev => prev + 1);
 
-      // Actualizar estado según respuesta
       if (data.orderStatus === 'APROBADO' || data.mpStatus === 'approved') {
         setPaymentStatus('approved');
-        setSuccessMessage('✅ ¡Pago confirmado exitosamente!');
-        // Recargar datos de la orden
+        setSuccessMessage('✅ ¡Pago confirmado!');
         await loadOrderData();
-        // Detener polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
       } else if (data.orderStatus === 'RECHAZADO' || data.mpStatus === 'rejected') {
         setPaymentStatus('rejected');
-        setError('❌ El pago fue rechazado. Por favor intenta con otro método de pago.');
+        setError('❌ Pago rechazado');
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
@@ -296,19 +380,15 @@ const PaymentResult = () => {
   // Polling automático para órdenes pendientes
   useEffect(() => {
     if (paymentStatus === 'pending' && orderId && !pollingIntervalRef.current) {
-      // Verificar inmediatamente
       checkPaymentStatus();
-      
-      // Configurar polling cada 5 segundos
       pollingIntervalRef.current = setInterval(checkPaymentStatus, 5000);
       
-      // Detener después de 2 minutos (120 segundos)
       setTimeout(() => {
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
           if (paymentStatus === 'pending') {
-            setError('⚠️ Tiempo de espera agotado. Si realizaste el pago, contáctanos.');
+            setError('⚠️ Tiempo de espera agotado');
           }
         }
       }, 120000);
@@ -324,12 +404,13 @@ const PaymentResult = () => {
 
   // Cargar datos iniciales
   useEffect(() => {
-    loadOrderData();
-  }, [loadOrderData]);
+    if (orderId) {
+      loadOrderData();
+    }
+  }, [orderId, loadOrderData]);
 
-  // Manejar parámetros de MercadoPago en la URL
+  // Manejar parámetros de MercadoPago
   useEffect(() => {
-    // Si hay parámetros de MercadoPago pero no orderId, buscar en localStorage
     if ((preferenceId || externalReference) && !orderId) {
       const pendingOrderId = localStorage.getItem('pendingOrderId');
       if (pendingOrderId) {
@@ -338,7 +419,6 @@ const PaymentResult = () => {
       }
     }
 
-    // Si tenemos collection_status de MercadoPago, actualizar estado
     if (collectionStatus === 'approved' && paymentStatus !== 'approved') {
       setPaymentStatus('approved');
       setSuccessMessage('✅ ¡Pago aprobado por MercadoPago!');
@@ -368,7 +448,6 @@ const PaymentResult = () => {
     
     setTimeout(() => {
       setGeneratingPDF(false);
-      showToast('PDF generado exitosamente', 'success');
       
       const printContent = `
         <html>
@@ -468,6 +547,98 @@ const PaymentResult = () => {
       router.push('/checkout');
     }
   }, [router]);
+
+  // Renderizar estado loading (con skeleton)
+  const renderLoadingSkeleton = () => (
+    <div className="payment-result-container loading">
+      {/* Header skeleton */}
+      <header className="status-header status-loading">
+        <div className="skeleton-circle skeleton-icon"></div>
+        <div className="skeleton-title"></div>
+        <div className="skeleton-subtitle shorter"></div>
+        <div className="loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </header>
+
+      {/* Content skeleton */}
+      <main className="payment-result-main">
+        <div className="payment-result-grid">
+          <div className="payment-result-left">
+            {/* Order code skeleton */}
+            <div className="order-code-section">
+              <div className="order-code-header">
+                <div className="skeleton-circle small"></div>
+                <div className="skeleton-title medium"></div>
+              </div>
+              <div className="skeleton-code"></div>
+              <div className="skeleton-text small"></div>
+            </div>
+
+            {/* Order card skeleton */}
+            <div className="order-card">
+              <div className="order-card-header">
+                <div className="skeleton-circle small"></div>
+                <div className="order-card-title-section">
+                  <div className="skeleton-title"></div>
+                  <div className="skeleton-subtitle small"></div>
+                </div>
+              </div>
+              <div className="order-card-content">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="order-section">
+                    <div className="skeleton-title with-icon">
+                      <div className="skeleton-circle small"></div>
+                      <div className="skeleton-text medium"></div>
+                    </div>
+                    <div className="skeleton-subtitle"></div>
+                    <div className="skeleton-text"></div>
+                    <div className="skeleton-text long"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="payment-result-right">
+            {/* Action panel skeleton */}
+            <div className="action-panel">
+              <div className="skeleton-title with-icon">
+                <div className="skeleton-circle small"></div>
+                <div className="skeleton-text medium"></div>
+              </div>
+              <div className="action-buttons-grid">
+                {[...Array(3)].map((_, i) => (
+                  <button key={i} className="skeleton-button" disabled></button>
+                ))}
+              </div>
+            </div>
+
+            {/* Support panel skeleton */}
+            <div className="support-panel">
+              <div className="skeleton-title with-icon">
+                <div className="skeleton-circle small"></div>
+                <div className="skeleton-text medium"></div>
+              </div>
+              <div className="support-options">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="support-option">
+                    <div className="skeleton-circle small"></div>
+                    <div>
+                      <div className="skeleton-text medium"></div>
+                      <div className="skeleton-text small"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 
   // Renderizar estado aprobado
   const renderApprovedStatus = () => (
@@ -580,21 +751,14 @@ const PaymentResult = () => {
 
   // Renderizar header según estado
   const renderStatusHeader = () => {
+    if (paymentStatus === 'loading') return null;
+    
     switch (paymentStatus) {
       case 'approved': return renderApprovedStatus();
       case 'rejected': return renderRejectedStatus();
       case 'pending': return renderPendingStatus();
       case 'error': return renderErrorStatus();
-      default:
-        return (
-          <header className="status-header status-loading">
-            <div className="spinner-large"></div>
-            <h1 className="status-title">Cargando información de tu pedido...</h1>
-            <p className="status-subtitle">
-              Preparando los detalles de tu compra.
-            </p>
-          </header>
-        );
+      default: return null;
     }
   };
 
@@ -609,6 +773,18 @@ const PaymentResult = () => {
 
     return (
       <div className="order-details-section">
+        {/* Device indicator for debug */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="device-indicator">
+            <div className="device-icon">
+              {screenSize === 'mobile' && <Smartphone className="icon" />}
+              {screenSize === 'tablet' && <Tablet className="icon" />}
+              {screenSize === 'desktop' && <Laptop className="icon" />}
+            </div>
+            <span>Vista: {screenSize === 'mobile' ? 'Móvil' : screenSize === 'tablet' ? 'Tablet' : 'Desktop'}</span>
+          </div>
+        )}
+
         {!isAuthenticated && (
           <div className="guest-warning-banner">
             <div className="guest-warning-content">
@@ -626,7 +802,7 @@ const PaymentResult = () => {
           </div>
         )}
 
-        {/* Código de orden */}
+        {/* Código de orden - Responsive */}
         <div className="order-code-section">
           <div className="order-code-header">
             <Receipt className="icon" />
@@ -643,9 +819,10 @@ const PaymentResult = () => {
                 onClick={copyOrderNumber}
                 className={`order-code-copy ${copied ? 'copied' : ''}`}
                 title={copied ? '¡Copiado!' : 'Copiar al portapapeles'}
+                aria-label={copied ? 'Número copiado' : 'Copiar número de orden'}
               >
                 {copied ? <CheckCircle2 className="icon" /> : <Copy className="icon" />}
-                <span>{copied ? 'Copiado' : 'Copiar'}</span>
+                <span className="copy-text">{copied ? 'Copiado' : 'Copiar'}</span>
               </button>
             </div>
           </div>
@@ -655,7 +832,7 @@ const PaymentResult = () => {
           </p>
         </div>
 
-        {/* Tarjeta de resumen */}
+        {/* Tarjeta de resumen - Responsive */}
         <div className="order-card" ref={orderRef}>
           <div className="order-card-header">
             <div className="order-card-icon">
@@ -700,7 +877,7 @@ const PaymentResult = () => {
               </div>
             </div>
 
-            {/* Resumen de productos */}
+            {/* Resumen de productos - Responsive */}
             <div className="order-section">
               <h3 className="order-section-title">
                 <ShoppingCart className="icon" />
@@ -713,15 +890,17 @@ const PaymentResult = () => {
                       <div className="order-item-simple-header">
                         <span className="order-item-simple-name">
                           <Gift className="icon-xs" />
-                          Pijama infantil #{index + 1}
-                          {item.productVariantId && ` · Variante ${item.productVariantId}`}
+                          <span className="product-name-text">
+                            Pijama infantil #{index + 1}
+                            {item.productVariantId && ` · Variante ${item.productVariantId}`}
+                          </span>
                         </span>
                         <span className="order-item-simple-quantity">
                           x{item.quantity}
                         </span>
                       </div>
                       <div className="order-item-simple-price">
-                        <span>{formatPrice(item.price)} unidad</span>
+                        <span className="unit-price">{formatPrice(item.price)} unidad</span>
                         <span className="order-item-simple-total">
                           {formatPrice(item.price * item.quantity)}
                         </span>
@@ -767,7 +946,7 @@ const PaymentResult = () => {
               </div>
             </div>
 
-            {/* Información de pago */}
+            {/* Información de pago - Responsive */}
             <div className="order-section">
               <h3 className="order-section-title">
                 <CreditCard className="icon" />
@@ -822,14 +1001,25 @@ const PaymentResult = () => {
             onClick={generatePDF}
             disabled={generatingPDF}
             className="action-btn action-btn-primary"
+            aria-label={generatingPDF ? 'Generando documento PDF' : 'Guardar comprobante en PDF'}
           >
-            <Download className="icon" />
-            {generatingPDF ? 'Generando documento...' : 'Guardar comprobante'}
+            {generatingPDF ? (
+              <>
+                <div className="spinner-small"></div>
+                Generando...
+              </>
+            ) : (
+              <>
+                <FileText className="icon" />
+                Guardar comprobante
+              </>
+            )}
           </button>
           
           <button 
             onClick={() => window.print()}
             className="action-btn action-btn-secondary"
+            aria-label="Imprimir detalles del pedido"
           >
             <Printer className="icon" />
             Imprimir detalles
@@ -838,8 +1028,9 @@ const PaymentResult = () => {
           <button 
             onClick={shareViaWhatsApp}
             className="action-btn action-btn-success"
+            aria-label="Compartir pedido por WhatsApp"
           >
-            <Share2 className="icon" />
+            <MessageSquare className="icon" />
             Compartir pedido
           </button>
           
@@ -847,6 +1038,7 @@ const PaymentResult = () => {
             <Link 
               href="/"
               className="action-btn action-btn-outline"
+              aria-label="Volver al inicio"
             >
               <Home className="icon" />
               Volver al inicio
@@ -934,7 +1126,7 @@ const PaymentResult = () => {
   };
 
   const renderFloatingMenu = () => {
-    if (!showFloatingMenu || !order || paymentStatus === 'error') {
+    if (!showFloatingMenu || !order || paymentStatus === 'error' || screenSize === 'mobile') {
       return null;
     }
 
@@ -946,6 +1138,7 @@ const PaymentResult = () => {
           <button 
             onClick={() => setShowFloatingMenu(false)}
             className="floating-menu-close"
+            aria-label="Cerrar menú flotante"
           >
             ×
           </button>
@@ -969,9 +1162,10 @@ const PaymentResult = () => {
           <button 
             onClick={generatePDF}
             className="floating-menu-action"
+            disabled={generatingPDF}
           >
             <Download className="icon" />
-            <span>Guardar comprobante</span>
+            <span>{generatingPDF ? 'Generando...' : 'Guardar comprobante'}</span>
           </button>
           <button 
             onClick={shareViaWhatsApp}
@@ -984,6 +1178,70 @@ const PaymentResult = () => {
       </div>
     );
   };
+
+  const renderBottomNavigation = () => {
+    if (screenSize !== 'mobile' || paymentStatus === 'loading') return null;
+
+    return (
+      <div className="mobile-bottom-nav">
+        <button 
+          className="mobile-nav-btn"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Ir al inicio de la página"
+        >
+          <ArrowLeft className="icon" />
+          <span>Inicio</span>
+        </button>
+        
+        {order && paymentStatus === 'approved' && (
+          <button 
+            className="mobile-nav-btn primary"
+            onClick={shareViaWhatsApp}
+            aria-label="Compartir pedido"
+          >
+            <Share2 className="icon" />
+            <span>Compartir</span>
+          </button>
+        )}
+        
+        <Link 
+          href="/products" 
+          className="mobile-nav-btn"
+          aria-label="Continuar comprando"
+        >
+          <ShoppingCart className="icon" />
+          <span>Comprar</span>
+        </Link>
+      </div>
+    );
+  };
+
+  const renderDebugButton = () => {
+    if (process.env.NODE_ENV !== 'development') return null;
+
+    return (
+      <button 
+        onClick={() => {
+          console.log('🔧 === DEBUG PAYMENT RESULT ===');
+          console.log('Order:', order);
+          console.log('Payment Status:', paymentStatus);
+          console.log('SessionId:', getSessionId()?.substring(0, 8) + '...');
+          console.log('Headers:', getHeaders());
+          console.log('Screen Size:', screenSize);
+          alert(`Debug: Status: ${paymentStatus}\nOrder: ${order?.id || 'none'}`);
+        }}
+        className="debug-button"
+        aria-label="Información de depuración"
+      >
+        🐛 Debug
+      </button>
+    );
+  };
+
+  // Mostrar skeleton loading mientras carga
+  if (paymentStatus === 'loading' && !order) {
+    return renderLoadingSkeleton();
+  }
 
   return (
     <div className="payment-result-container">
@@ -1002,11 +1260,11 @@ const PaymentResult = () => {
         </div>
       )}
 
-      {/* Botón para volver atrás */}
+      {/* Botón para volver atrás - Responsive */}
       <div className="back-button-container">
         <Link href="/" className="back-button">
           <ArrowLeft className="icon" />
-          Regresar al inicio
+          <span className="back-button-text">Regresar al inicio</span>
         </Link>
       </div>
 
@@ -1025,7 +1283,7 @@ const PaymentResult = () => {
             {renderActionPanel()}
             {renderNextSteps()}
 
-            {/* Soporte y ayuda */}
+            {/* Soporte y ayuda - Responsive */}
             <div className="support-panel">
               <h3 className="support-title">
                 <Shield className="icon" />
@@ -1073,10 +1331,13 @@ const PaymentResult = () => {
         </div>
       </main>
 
-      {/* Menú flotante */}
+      {/* Menú flotante (solo desktop/tablet) */}
       {renderFloatingMenu()}
 
-      {/* Footer */}
+      {/* Navegación inferior móvil */}
+      {renderBottomNavigation()}
+
+      {/* Footer - Responsive */}
       <footer className="payment-result-footer">
         <div className="footer-content">
           <div className="footer-brand">
@@ -1093,11 +1354,11 @@ const PaymentResult = () => {
           <div className="footer-actions">
             <Link href="/products" className="btn btn-primary btn-lg">
               <ShoppingCart className="icon" />
-              Seguir comprando
+              <span>Seguir comprando</span>
             </Link>
             <Link href="/" className="btn btn-outline btn-lg">
               <Home className="icon" />
-              Volver al inicio
+              <span>Volver al inicio</span>
             </Link>
           </div>
           <p className="footer-motto">
@@ -1105,6 +1366,9 @@ const PaymentResult = () => {
           </p>
         </div>
       </footer>
+
+      {/* Botón debug (solo desarrollo) */}
+      {renderDebugButton()}
     </div>
   );
 };
