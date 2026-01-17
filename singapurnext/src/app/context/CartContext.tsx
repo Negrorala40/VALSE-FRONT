@@ -1,9 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import axios from 'axios';
 import { ADD_TO_CART, CLEAR_CART, CART, GET_CART_COUNT, MIGRATE_CART } from '../utils/Api';
-import Cookies from 'js-cookie';
 
 interface CartItem {
   id: number;
@@ -44,18 +43,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartCount, setCartCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Inicializar sessionId si no existe
-  useEffect(() => {
-    const initializeSession = () => {
-      const sessionId = Cookies.get('cart_session_id');
-      if (!sessionId) {
-        // El backend creará la cookie automáticamente en la primera petición
-        console.log('Esperando sessionId del backend...');
-      }
-    };
-    initializeSession();
-  }, []);
-
   const getAuthHeaders = () => {
     const token = localStorage.getItem('token');
     const headers: Record<string, string> = {
@@ -67,13 +54,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return headers;
   };
 
-  // Obtener carrito - usando useCallback para memoizar la función
-  const getCart = useCallback(async () => {
+  // Obtener carrito
+  const getCart = async () => {
     setLoading(true);
     try {
       const response = await axios.get(CART, {
         headers: getAuthHeaders(),
-        withCredentials: true // Importante para cookies
+        withCredentials: true
       });
       setCartItems(response.data);
       
@@ -83,12 +70,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         withCredentials: true
       });
       setCartCount(countResponse.data.count || 0);
-    } catch (error) {
-      console.error('Error obteniendo carrito:', error);
+    } catch (error: any) {
+      if (error.response?.status !== 404 && error.response?.status !== 400) {
+        console.error('Error obteniendo carrito:', error);
+      }
+      // 404 o 400 significa carrito vacío o sin sesión - es normal
     } finally {
       setLoading(false);
     }
-  }, []); // Nota: getAuthHeaders también podría cambiar, pero es una función pura
+  };
 
   // Agregar al carrito
   const addToCart = async (productVariantId: number, quantity: number) => {
@@ -119,8 +109,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         withCredentials: true
       });
       await getCart();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error eliminando del carrito:', error);
+      if (error.response?.status === 400) {
+        throw new Error('No hay sesión de carrito');
+      }
     }
   };
 
@@ -133,8 +126,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         withCredentials: true
       });
       await getCart();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error actualizando cantidad:', error);
+      if (error.response?.status === 400) {
+        throw new Error('No hay sesión de carrito');
+      }
     }
   };
 
@@ -147,8 +143,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       });
       setCartItems([]);
       setCartCount(0);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error vaciando carrito:', error);
+      if (error.response?.status === 400) {
+        throw new Error('No hay sesión de carrito');
+      }
     }
   };
 
@@ -165,17 +164,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         withCredentials: true
       });
       
-      // Recargar carrito después de migrar
       await getCart();
     } catch (error) {
       console.error('Error migrando carrito:', error);
     }
   };
-
-  // Cargar carrito al iniciar - ahora incluye getCart en las dependencias
-  useEffect(() => {
-    getCart();
-  }, [getCart]); // getCart está memoizado con useCallback
 
   const value = {
     cartItems,

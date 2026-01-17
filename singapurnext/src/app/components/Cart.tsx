@@ -43,7 +43,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
   const [isFetching, setIsFetching] = useState(false);
-  const [hasFetched, setHasFetched] = useState(false); // Nueva bandera
+  const [hasFetched, setHasFetched] = useState(false); // Nuevo: controlar si ya se fetcheó
 
   const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
@@ -53,6 +53,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     setTimeout(() => {
       onClose();
       setIsClosing(false);
+      setHasFetched(false); // Resetear cuando se cierra
     }, 400);
   }, [onClose]);
 
@@ -74,68 +75,32 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen, handleClose]);
 
-  // Mover fetchCart fuera del useEffect para mejor control
+  // Obtener carrito cuando se abre - USAR useCallback con dependencias correctas
   const fetchCart = useCallback(async () => {
     if (isFetching || hasFetched) return;
     
     setIsFetching(true);
     const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
-
-    console.log('🛒 Fetching cart - Token:', !!token, 'UserId:', userId, 'hasFetched:', hasFetched);
 
     try {
-      if (token && userId) {
-        // Usuario autenticado
-        const res = await fetch(`${CART}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+      const res = await fetch(CART, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
 
-        if (!res.ok) throw new Error('Error al obtener el carrito');
-        const data: ApiCartItem[] = await res.json();
+      console.log('🛒 Fetch cart - Status:', res.status, 'Auth:', !!token);
 
-        console.log('🛒 Carrito obtenido (autenticado):', data.length, 'items');
-
-        const transformedItems: CartItem[] = data.map((item) => ({
-          id: item.id.toString(),
-          image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
-          name: item.productName?.trim() || 'Producto sin nombre',
-          price: item.price,
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          stock: item.stock || 100,
-        }));
-
-        setCartItems(transformedItems);
+      if (res.status === 404 || res.status === 400) {
+        // Carrito vacío o sin sesión - esto es normal
+        setCartItems([]);
+      } else if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
       } else {
-        // Usuario NO autenticado - usar cookies automáticamente
-        const res = await fetch(`${CART}`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-
-        console.log('🛒 Response status:', res.status);
-        
-        if (!res.ok) {
-          if (res.status === 404) {
-            console.log('🛒 Carrito vacío (404)');
-            setCartItems([]);
-            setHasFetched(true);
-            return;
-          }
-          throw new Error(`Error ${res.status} al obtener el carrito`);
-        }
-        
         const data: ApiCartItem[] = await res.json();
-        console.log('🛒 Carrito obtenido (no autenticado):', data.length, 'items');
-
+        
         const transformedItems: CartItem[] = data.map((item) => ({
           id: item.id.toString(),
           image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
@@ -151,53 +116,20 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       }
       setHasFetched(true); // Marcar como ya fetcheado
     } catch (err) {
-      console.error('🛑 Error al cargar el carrito:', err);
-      // Fallback a localStorage
-      const pending = localStorage.getItem('pendingCartItem');
-      if (pending) {
-        try {
-          const parsed = JSON.parse(pending);
-          const validatedItem: CartItem = {
-            id: parsed.id?.toString() || `pending-${Date.now()}`,
-            image: parsed.imageUrl?.trim() || parsed.image?.trim() || '/images/placeholder.png',
-            name: parsed.productName?.trim() || parsed.name?.trim() || 'Producto sin nombre',
-            price: parsed.price || 0,
-            size: parsed.size || '',
-            color: parsed.color || '',
-            quantity: parsed.quantity || 1,
-            stock: parsed.stock || 100,
-          };
-          setCartItems([validatedItem]);
-        } catch {
-          console.error('Error al parsear pendingCartItem');
-          setCartItems([]);
-        }
-      } else {
-        setCartItems([]);
-      }
+      console.error('Error al cargar el carrito:', err);
+      setCartItems([]);
       setHasFetched(true);
     } finally {
       setIsFetching(false);
     }
-  }, [setCartItems, isFetching, hasFetched]); // Incluir hasFetched
+  }, [setCartItems, isFetching, hasFetched]); // Dependencias correctas
 
+  // Este useEffect SOLO se ejecuta cuando isOpen cambia
   useEffect(() => {
-    // Solo fetch cuando el carrito se abre y no ha sido fetcheado
     if (isOpen && !hasFetched && !isFetching) {
       fetchCart();
     }
-  }, [isOpen, hasFetched, isFetching, fetchCart]);
-
-  // Resetear hasFetched cuando el carrito se cierra
-  useEffect(() => {
-    if (!isOpen) {
-      // Esperar un poco antes de resetear para evitar fetch inmediato al reabrir
-      const timer = setTimeout(() => {
-        setHasFetched(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
+  }, [isOpen]); // SOLO isOpen como dependencia
 
   const updateQuantity = useCallback(async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
@@ -211,32 +143,22 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     }
 
     const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
     
     try {
-      if (token && userId) {
-        // Usuario autenticado
-        const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+      const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
+        method: 'PUT',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
 
-        if (!res.ok) throw new Error('Error actualizando cantidad');
-      } else {
-        // Usuario no autenticado
-        const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-
-        if (!res.ok) throw new Error('Error actualizando cantidad');
+      if (!res.ok) {
+        if (res.status === 400) {
+          throw new Error('No hay sesión de carrito. Agrega un producto primero.');
+        }
+        throw new Error('Error actualizando cantidad');
       }
 
       // Actualizar UI localmente
@@ -245,47 +167,37 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       );
       setCartItems(updatedCart);
     } catch (err) {
-      console.error('🛑 Error actualizando cantidad:', err);
-      alert('Error al actualizar la cantidad');
+      console.error('Error actualizando cantidad:', err);
+      alert(err instanceof Error ? err.message : 'Error al actualizar la cantidad');
     }
   }, [cartItems, setCartItems]);
 
   const removeItem = useCallback(async (itemId: string) => {
     const token = localStorage.getItem('token');
-    const userId = localStorage.getItem('userId');
     
     try {
-      if (token && userId) {
-        // Usuario autenticado
-        const res = await fetch(`${CART}/remove/${itemId}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+      const res = await fetch(`${CART}/remove/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
 
-        if (!res.ok) throw new Error('Error eliminando el producto');
-      } else {
-        // Usuario no autenticado
-        const res = await fetch(`${CART}/remove/${itemId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
-
-        if (!res.ok) throw new Error('Error eliminando el producto');
+      if (!res.ok) {
+        if (res.status === 400) {
+          throw new Error('No hay sesión de carrito');
+        }
+        throw new Error('Error eliminando el producto');
       }
 
       // Actualizar UI localmente
       const updatedCart = cartItems.filter(item => item.id !== itemId);
       setCartItems(updatedCart);
     } catch (err) {
-      console.error('🛑 Error eliminando producto:', err);
-      alert('Error al eliminar el producto');
+      console.error('Error eliminando producto:', err);
+      alert(err instanceof Error ? err.message : 'Error al eliminar el producto');
     }
   }, [cartItems, setCartItems]);
 
@@ -295,7 +207,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       return;
     }
     
-    // Redirigir siempre a /checkout (funciona para usuarios autenticados y anónimos)
     router.push('/checkout');
     handleClose();
   }, [cartItems, router, handleClose]);
@@ -457,7 +368,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           </button>
         </div>
 
-        {isFetching && !hasFetched ? (
+        {isFetching ? (
           <div className="cart-loading">
             <div className="loading-spinner"></div>
             <p>Cargando carrito...</p>
