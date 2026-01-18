@@ -28,6 +28,14 @@ interface CartItem {
   stock?: number;
 }
 
+interface CartTotals {
+  subtotal: number;
+  shippingCost: number;
+  total: number;
+  totalItems: number;
+  itemCount: number;
+}
+
 interface CartProps {
   cartItems: CartItem[];
   setCartItems: React.Dispatch<React.SetStateAction<CartItem[]>>;
@@ -46,14 +54,28 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const [hasFetched, setHasFetched] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [cartTotals, setCartTotals] = useState<CartTotals>({
+    subtotal: 0,
+    shippingCost: 0,
+    total: 0,
+    totalItems: 0,
+    itemCount: 0
+  });
   const maxRetries = 2;
 
   // Constante para header
   const CART_SESSION_HEADER = 'X-Cart-Session-Id';
   const CART_SESSION_KEY = 'cartSessionId';
 
-  const totalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
-  const totalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+  // Calcular totales locales (como respaldo)
+  const localTotalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+  const localTotalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
+
+  // Usar totales del backend o calcular localmente
+  const subtotal = cartTotals.subtotal || localTotalPrice;
+  const shippingCost = cartTotals.shippingCost || 0;
+  const total = cartTotals.total || (localTotalPrice + shippingCost);
+  const totalItems = cartTotals.totalItems || localTotalItems;
 
   // Obtener sessionId desde localStorage
   const getSessionId = () => {
@@ -153,16 +175,17 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen, handleClose]);
 
-  // Obtener carrito cuando se abre
+  // Obtener carrito cuando se abre (usando el nuevo endpoint con totales)
   const fetchCart = useCallback(async (forceRefresh = false) => {
     if (isFetching && !forceRefresh) return;
     
     setIsFetching(true);
     
     try {
-      console.log('🛒 Obteniendo carrito...');
+      console.log('🛒 Obteniendo carrito con totales...');
       
-      const response = await fetchWithSession(CART);
+      // Usar el nuevo endpoint que incluye totales
+      const response = await fetchWithSession(`${CART}/with-totals`);
       
       console.log('🛒 Fetch cart - Status:', response.status);
       console.log('🛒 SessionId actual:', getSessionId());
@@ -171,6 +194,13 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         // Carrito vacío o sin sesión - esto es normal
         console.log('📭 Carrito vacío o sin sesión');
         setCartItems([]);
+        setCartTotals({
+          subtotal: 0,
+          shippingCost: 0,
+          total: 0,
+          totalItems: 0,
+          itemCount: 0
+        });
         setRetryCount(0);
       } else if (response.status === 401) {
         console.log('🔐 No autorizado, intentando sin token...');
@@ -180,6 +210,13 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           console.log('🔄 Token encontrado, pero falló la autorización');
         }
         setCartItems([]);
+        setCartTotals({
+          subtotal: 0,
+          shippingCost: 0,
+          total: 0,
+          totalItems: 0,
+          itemCount: 0
+        });
       } else if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Error en respuesta:', errorText);
@@ -194,10 +231,11 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           throw new Error(`Error ${response.status}: ${errorText}`);
         }
       } else {
-        const data: ApiCartItem[] = await response.json();
-        console.log('✅ Carrito obtenido:', data.length, 'ítems');
+        const data = await response.json();
+        console.log('✅ Carrito obtenido con totales:', data);
         
-        const transformedItems: CartItem[] = data.map((item) => ({
+        // Transformar items del carrito
+        const transformedItems: CartItem[] = data.items.map((item: ApiCartItem) => ({
           id: item.id.toString(),
           image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || 'Producto sin nombre',
@@ -209,12 +247,29 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         }));
 
         setCartItems(transformedItems);
+        
+        // Establecer totales del backend
+        setCartTotals({
+          subtotal: data.subtotal || 0,
+          shippingCost: data.shippingCost || 0,
+          total: data.total || 0,
+          totalItems: data.totalItems || 0,
+          itemCount: data.itemCount || 0
+        });
+        
         setRetryCount(0);
       }
       setHasFetched(true);
     } catch (err) {
       console.error('Error al cargar el carrito:', err);
       setCartItems([]);
+      setCartTotals({
+        subtotal: 0,
+        shippingCost: 0,
+        total: 0,
+        totalItems: 0,
+        itemCount: 0
+      });
       setHasFetched(true);
       
       // Si hay error, limpiar sessionId por si está corrupto
@@ -295,11 +350,14 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       setCartItems(updatedCart);
       
       console.log('✅ Cantidad actualizada');
+      
+      // Refrescar totales después de actualizar
+      fetchCart();
     } catch (err) {
       console.error('Error actualizando cantidad:', err);
       alert(err instanceof Error ? err.message : 'Error al actualizar la cantidad');
     }
-  }, [cartItems, setCartItems]);
+  }, [cartItems, setCartItems, fetchCart]);
 
   const removeItem = useCallback(async (itemId: string) => {
     try {
@@ -321,11 +379,14 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       setCartItems(updatedCart);
       
       console.log('✅ Ítem eliminado');
+      
+      // Refrescar totales después de eliminar
+      fetchCart();
     } catch (err) {
       console.error('Error eliminando producto:', err);
       alert(err instanceof Error ? err.message : 'Error al eliminar el producto');
     }
-  }, [cartItems, setCartItems]);
+  }, [cartItems, setCartItems, fetchCart]);
 
   const handleCheckout = useCallback(() => {
     if (cartItems.length === 0) {
@@ -481,6 +542,14 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     alert(`SessionId: ${currentSessionId ? currentSessionId.substring(0, 8) + '...' : 'No disponible'}\nLocalStorage: ${localStorage.getItem(CART_SESSION_KEY) ? 'Sí' : 'No'}\nCookies: ${allCookies.length > 0 ? 'Sí' : 'No'}`);
   };
 
+  // Función para formatear envío (gratis o con costo)
+  const getShippingDisplay = () => {
+    if (shippingCost === 0) {
+      return <span className="shipping-badge">Gratis</span>;
+    }
+    return <span>${formatPrice(shippingCost)}</span>;
+  };
+
   return (
     <>
       {/* Overlay */}
@@ -534,21 +603,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
               <span className="cart-subtitle">
                 {totalItems === 0 ? 'Vacío' : `${totalItems} producto${totalItems > 1 ? 's' : ''}`}
               </span>
-              {/* {sessionId && (
-                <small className="session-info">
-                  Session: {sessionId.substring(0, 8)}...
-                  <button 
-                    onClick={() => {
-                      navigator.clipboard.writeText(sessionId);
-                      alert('SessionId copiado al portapapeles');
-                    }}
-                    className="copy-session-btn"
-                    title="Copiar sessionId"
-                  >
-                    📋
-                  </button>
-                </small>
-              )} */}
             </div>
           </div>
           <button className="close-btn" onClick={handleClose} aria-label="Cerrar carrito">
@@ -703,16 +757,16 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
             <div className="cart-summary">
               <div className="summary-row summary-subtotal">
                 <span>Subtotal</span>
-                <span>${formatPrice(totalPrice)}</span>
+                <span>${formatPrice(subtotal)}</span>
               </div>
               <div className="summary-row summary-shipping">
                 <span>Envío</span>
-                <span className="shipping-badge">Gratis</span>
+                {getShippingDisplay()}
               </div>
               <div className="summary-divider"></div>
               <div className="cart-total">
                 <span className="total-label">Total</span>
-                <span className="total-amount">${formatPrice(totalPrice)}</span>
+                <span className="total-amount">${formatPrice(total)}</span>
               </div>
 
               <div className="cart-actions">

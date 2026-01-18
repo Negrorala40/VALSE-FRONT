@@ -32,7 +32,8 @@ import {
   Mail,
   Phone,
   AlertCircle,
-  Lock
+  Lock,
+  Shield
 } from 'lucide-react';
 
 // 🔴 IMPORTAR SDK DE MERCADO PAGO CHECKOUT PRO CORRECTAMENTE
@@ -126,10 +127,32 @@ interface PaymentStatusResponse {
   mercadoPagoPreferenceId?: string;
 }
 
+// 🔴 INTERFAZ PARA RESPONSE DEL CARRITO CON TOTALES
+interface CartTotalsResponse {
+  items: Array<{
+    id: number;
+    imageUrls: string[];
+    productName: string;
+    price: number;
+    size: string;
+    color: string;
+    quantity: number;
+    stock?: number;
+  }>;
+  subtotal: number;
+  shippingCost: number;
+  total: number;
+  totalItems: number;
+  itemCount: number;
+}
+
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderId, setOrderId] = useState<string>('');
+  const [subtotal, setSubtotal] = useState<number>(0);
+  const [shippingCost, setShippingCost] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
+  const [totalItems, setTotalItems] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -173,20 +196,20 @@ const CheckoutPage = () => {
   // 🔴 FUNCIÓN PARA OBTENER SESSION ID DESDE MULTIPLES FUENTES
   const getSessionId = useCallback(() => {
     // 1. Intentar desde localStorage
-      let sessionId = localStorage.getItem('cartSessionId');
-    
+    let sessionId = localStorage.getItem('cartSessionId');
+  
     // 2. Si no existe, crear uno nuevo
     if (!sessionId) {
-        sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('cart_session_id', sessionId);
-        console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('cartSessionId', sessionId);
+      console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
     } else {
-        console.log('🔁 SessionId existente:', sessionId.substring(0, 8) + '...');
+      console.log('🔁 SessionId existente:', sessionId.substring(0, 8) + '...');
     }
     
     // 3. También guardar en sessionStorage
-  localStorage.setItem('cart_session_id', sessionId);
-  sessionStorage.setItem('cart_session_id', sessionId);    
+    sessionStorage.setItem('cartSessionId', sessionId);
+    
     setSessionId(sessionId);
     return sessionId;
   }, []);
@@ -268,9 +291,12 @@ const CheckoutPage = () => {
     }).format(price);
   }, []);
 
-  const calculateTotal = useCallback((items: CartItem[]) => {
-    const newTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    setTotal(newTotal);
+  // 🔴 ACTUALIZADO: Calcular totales desde la respuesta del backend
+  const updateTotalsFromResponse = useCallback((data: CartTotalsResponse) => {
+    setSubtotal(data.subtotal || 0);
+    setShippingCost(data.shippingCost || 0);
+    setTotal(data.total || 0);
+    setTotalItems(data.totalItems || 0);
   }, []);
 
   // Verificar si hay una orden pendiente
@@ -297,12 +323,15 @@ const CheckoutPage = () => {
     }
   }, [step]);
 
+  // 🔴 ACTUALIZADO: Obtener carrito con totales desde el nuevo endpoint
   const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
     try {
-      console.log('🛒 Fetching cart data...');
+      console.log('🛒 Fetching cart data with totals...');
       
       const headers = getRequestHeaders(token);
-      const res = await fetch(CART, {
+      
+      // Usar el nuevo endpoint con totales
+      const res = await fetch(`${CART}/with-totals`, {
         headers,
         signal,
         credentials: 'include'
@@ -314,49 +343,71 @@ const CheckoutPage = () => {
         if (res.status === 404 || res.status === 204) {
           console.log('🛒 Carrito vacío');
           setCartItems([]);
-          calculateTotal([]);
+          updateTotalsFromResponse({
+            items: [],
+            subtotal: 0,
+            shippingCost: 0,
+            total: 0,
+            totalItems: 0,
+            itemCount: 0
+          });
           return;
         }
         throw new Error(`Error ${res.status}: ${res.statusText}`);
       }
       
-      const data = await res.json();
+      const data = await res.json() as CartTotalsResponse;
       
-      if (!Array.isArray(data)) {
-        console.error('🛑 La respuesta no es un array:', data);
+      if (!Array.isArray(data.items)) {
+        console.error('🛑 La respuesta no tiene items válidos:', data);
         setCartItems([]);
-        calculateTotal([]);
+        updateTotalsFromResponse({
+          items: [],
+          subtotal: 0,
+          shippingCost: 0,
+          total: 0,
+          totalItems: 0,
+          itemCount: 0
+        });
         return;
       }
       
-      const items: CartItem[] = data.map(
+      // Transformar items del carrito
+      const items: CartItem[] = data.items.map(
         (item: any) => ({
           id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
-          image: item.imageUrls?.[0]?.trim() || item.imageUrl?.trim() || '/images/placeholder.png',
-          name: item.productName?.trim() || item.name?.trim() || 'Producto',
-          price: item.price || item.productVariant?.price || 0,
-          size: item.size || item.productVariant?.size || '',
-          color: item.color || item.productVariant?.color || '',
+          image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
+          name: item.productName?.trim() || 'Producto',
+          price: item.price || 0,
+          size: item.size || '',
+          color: item.color || '',
           quantity: item.quantity || 1,
-          stock: item.stock || item.productVariant?.stock || 100,
+          stock: item.stock || 100,
           productVariantId: item.productVariantId?.toString() || item.id?.toString(),
         })
       );
       
       setCartItems(items);
-      calculateTotal(items);
-      console.log(`✅ Carrito cargado: ${items.length} items`);
+      updateTotalsFromResponse(data);
+      console.log(`✅ Carrito cargado: ${items.length} items, Total: ${formatPrice(data.total)}`);
       
     } catch (error: unknown) {
       const err = error as Error;
       if (err.name !== 'AbortError') {
         console.error('🛑 Error fetching cart:', err);
         setCartItems([]);
-        calculateTotal([]);
+        updateTotalsFromResponse({
+          items: [],
+          subtotal: 0,
+          shippingCost: 0,
+          total: 0,
+          totalItems: 0,
+          itemCount: 0
+        });
         throw err;
       }
     }
-  }, [calculateTotal, getRequestHeaders]);
+  }, [formatPrice, getRequestHeaders, updateTotalsFromResponse]);
 
   const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
@@ -488,11 +539,8 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error actualizando cantidad'}`);
       }
       
-      const updatedItems = cartItems.map((i) =>
-        i.id === itemId ? { ...i, quantity: newQuantity } : i
-      );
-      setCartItems(updatedItems);
-      calculateTotal(updatedItems);
+      // Refrescar carrito completo para obtener los nuevos totales
+      await fetchCart(token);
       
     } catch (err: unknown) {
       const error = err as Error;
@@ -524,9 +572,8 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando producto'}`);
       }
       
-      const updatedItems = cartItems.filter((i) => i.id !== itemId);
-      setCartItems(updatedItems);
-      calculateTotal(updatedItems);
+      // Refrescar carrito completo para obtener los nuevos totales
+      await fetchCart(token);
       
     } catch (err: unknown) {
       const error = err as Error;
@@ -860,7 +907,6 @@ const CheckoutPage = () => {
       }
       
       setMercadoPagoData(data);
-      //setSuccessMessage(`✅ Preferencia de pago creada. ¡Ya puedes pagar!`);
       
       localStorage.setItem('pendingPreferenceId', data.preferenceId);
       localStorage.setItem('mercadoPagoOrderId', orderId);
@@ -951,7 +997,10 @@ const CheckoutPage = () => {
     localStorage.removeItem('mercadoPagoOrderId');
     
     setCartItems([]);
+    setSubtotal(0);
+    setShippingCost(0);
     setTotal(0);
+    setTotalItems(0);
     setOrderCreated(false);
     setOrderId('');
     setMercadoPagoData(null);
@@ -1137,7 +1186,7 @@ const CheckoutPage = () => {
                   </div>
                   <div>
                     <h2 className="checkout-section-title">Tu Carrito</h2>
-                    <p className="checkout-section-subtitle">{cartItems.length} producto(s)</p>
+                    <p className="checkout-section-subtitle">{cartItems.length} producto(s) - {totalItems} unidad(es)</p>
                     {!isAuthenticated && (
                       <p className="checkout-guest-notice">
                         <User className="checkout-icon" size={16} />
@@ -1754,6 +1803,7 @@ const CheckoutPage = () => {
                     <Package className="checkout-icon" />
                     Resumen de Compra
                   </h3>
+                  <span className="checkout-card-header-badge">{totalItems} {totalItems === 1 ? 'producto' : 'productos'}</span>
                 </div>
                 <div className="checkout-card-content">
                   <div className="checkout-summary-items">
@@ -1770,11 +1820,13 @@ const CheckoutPage = () => {
                   <div className="checkout-summary-divider">
                     <div className="checkout-summary-row">
                       <span>Subtotal</span>
-                      <span>{formatPrice(total)}</span>
+                      <span>{formatPrice(subtotal)}</span>
                     </div>
                     <div className="checkout-summary-row">
                       <span>Envío</span>
-                      <span className="free">Gratis</span>
+                      <span className={shippingCost === 0 ? "free" : ""}>
+                        {shippingCost === 0 ? "Gratis" : formatPrice(shippingCost)}
+                      </span>
                     </div>
                   </div>
 
@@ -1796,19 +1848,19 @@ const CheckoutPage = () => {
                         <div className="checkout-trust-badge-icon purple">
                           <Package className="checkout-icon" />
                         </div>
-                        <span>Envío Gratis</span>
+                        <span>Envío Rápido</span>
                       </div>
                       <div className="checkout-trust-badge">
                         <div className="checkout-trust-badge-icon orange">
                           <Star className="checkout-icon" />
                         </div>
-                        <span>Entrega Rápida</span>
+                        <span>Calidad Garantizada</span>
                       </div>
                       <div className="checkout-trust-badge">
                         <div className="checkout-trust-badge-icon coral">
-                          <Star className="checkout-icon" />
+                          <Shield size={14} />
                         </div>
-                        <span>100% Garantía</span>
+                        <span>100% Seguro</span>
                       </div>
                     </div>
                   </div>
@@ -1884,12 +1936,5 @@ const CheckoutPage = () => {
     </div>
   );
 };
-
-// Componente Shield para icono de seguridad
-const Shield = ({ size = 16 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </svg>
-);
 
 export default CheckoutPage;
