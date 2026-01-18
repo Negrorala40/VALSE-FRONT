@@ -90,12 +90,20 @@ const PaymentResult = () => {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFirstLoad = useRef(true);
   
-  const orderId = searchParams.get('orderId');
+  // 🔴 CORRECCIÓN CRÍTICA: Leer external_reference (lo que envía MercadoPago)
+  const externalReference = searchParams.get('external_reference');
+  const order_id = searchParams.get('order_id');
+  const orderParam = searchParams.get('order');
+  const orderIdParam = searchParams.get('orderId');
+  
+  // 🔴 Orden de prioridad: external_reference (MercadoPago) > order_id > order > orderId
+  const orderId = externalReference || order_id || orderParam || orderIdParam;
+  
+  // Parámetros de MercadoPago
   const preferenceId = searchParams.get('preference_id');
   const paymentId = searchParams.get('payment_id');
   const collectionId = searchParams.get('collection_id');
   const collectionStatus = searchParams.get('collection_status');
-  const externalReference = searchParams.get('external_reference');
   const paymentType = searchParams.get('payment_type');
   const merchantOrderId = searchParams.get('merchant_order_id');
 
@@ -179,17 +187,33 @@ const PaymentResult = () => {
     // OBTENER SESSION ID (CRÍTICO - IGUAL QUE CHECKOUT)
     const sessionId = getSessionId();
     console.log('🔍 PaymentResult Inicializado:');
-    console.log('   orderId:', orderId);
+    console.log('   external_reference:', externalReference);
+    console.log('   order_id:', order_id);
+    console.log('   order:', orderParam);
+    console.log('   orderId (param):', orderIdParam);
+    console.log('   orderId (final):', orderId);
     console.log('   sessionId:', sessionId?.substring(0, 8) + '...');
     console.log('   autenticado:', !!token);
     console.log('   screenSize:', screenSize);
+    console.log('   collection_status:', collectionStatus);
     
     // Verificar si hay pending order en localStorage
     const pendingOrderId = localStorage.getItem('pendingOrderId');
     if (pendingOrderId) {
       console.log('📦 PendingOrderId encontrado:', pendingOrderId);
     }
-  }, [getSessionId, orderId, screenSize]);
+    
+    // Si viene de MercadoPago con estado aprobado, establecer inmediato
+    if (collectionStatus === 'approved' && paymentStatus === 'loading') {
+      console.log('✅ MercadoPago indica pago aprobado');
+      setPaymentStatus('approved');
+      setSuccessMessage('✅ ¡Pago aprobado por MercadoPago!');
+    } else if (collectionStatus === 'rejected' && paymentStatus === 'loading') {
+      console.log('❌ MercadoPago indica pago rechazado');
+      setPaymentStatus('rejected');
+      setError('❌ Pago rechazado por MercadoPago');
+    }
+  }, [getSessionId, orderId, screenSize, externalReference, order_id, orderParam, orderIdParam, collectionStatus, paymentStatus]);
 
   // Formateadores
   const formatPrice = useCallback((price: number) => {
@@ -245,8 +269,28 @@ const PaymentResult = () => {
         const pendingOrderId = localStorage.getItem('pendingOrderId');
         if (pendingOrderId) {
           console.log('📦 Usando pendingOrderId de localStorage:', pendingOrderId);
-          router.replace(`/checkout/success?orderId=${pendingOrderId}`);
+          // Redirigir con external_reference (lo que usa MercadoPago)
+          router.replace(`/checkout/success?external_reference=${pendingOrderId}`);
           return;
+        }
+        
+        // También verificar preferenceId de MercadoPago
+        if (preferenceId) {
+          console.log('🔄 Intentando obtener orderId desde preferenceId:', preferenceId);
+          // Puedes hacer una llamada al backend para buscar order por preferenceId
+          const response = await fetch(`/api/payments/find-by-preference/${preferenceId}`, {
+            method: 'GET',
+            headers: getHeaders()
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.orderId) {
+              console.log('✅ Orden encontrada por preferenceId:', data.orderId);
+              router.replace(`/checkout/success?external_reference=${data.orderId}`);
+              return;
+            }
+          }
         }
         
         setError('No se encontró número de orden');
@@ -402,12 +446,20 @@ const PaymentResult = () => {
     };
   }, [paymentStatus, orderId, checkPaymentStatus]);
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales cuando orderId esté disponible
   useEffect(() => {
     if (orderId) {
       loadOrderData();
+    } else {
+      // Si no hay orderId en la URL, verificar localStorage
+      const pendingOrderId = localStorage.getItem('pendingOrderId');
+      if (pendingOrderId && isFirstLoad.current) {
+        console.log('📦 Redirigiendo con pendingOrderId de localStorage');
+        // Usar external_reference que es lo que MercadoPago envía
+        router.replace(`/checkout/success?external_reference=${pendingOrderId}`);
+      }
     }
-  }, [orderId, loadOrderData]);
+  }, [orderId, loadOrderData, router]);
 
   // Manejar parámetros de MercadoPago
   useEffect(() => {
@@ -415,7 +467,8 @@ const PaymentResult = () => {
       const pendingOrderId = localStorage.getItem('pendingOrderId');
       if (pendingOrderId) {
         console.log('🔄 Redirigiendo con orderId desde localStorage:', pendingOrderId);
-        router.replace(`/checkout/success?orderId=${pendingOrderId}`);
+        // Usar external_reference que es lo que MercadoPago usa
+        router.replace(`/checkout/success?external_reference=${pendingOrderId}`);
       }
     }
 
@@ -1228,7 +1281,14 @@ const PaymentResult = () => {
           console.log('SessionId:', getSessionId()?.substring(0, 8) + '...');
           console.log('Headers:', getHeaders());
           console.log('Screen Size:', screenSize);
-          alert(`Debug: Status: ${paymentStatus}\nOrder: ${order?.id || 'none'}`);
+          console.log('URL Parameters:', {
+              external_reference: externalReference, // Cambia esto
+            order_id,
+            order: orderParam,
+            orderId: orderIdParam,
+            collection_status: collectionStatus
+          });
+          alert(`Debug: Status: ${paymentStatus}\nOrder: ${order?.id || 'none'}\nParams: external_reference=${externalReference}`);
         }}
         className="debug-button"
         aria-label="Información de depuración"
