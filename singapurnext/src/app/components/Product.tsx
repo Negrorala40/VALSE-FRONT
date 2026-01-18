@@ -295,13 +295,14 @@
       );
 
       if (!variante || !producto) {
-        showNotification('Variante no encontrada', 'error');
+        showNotification('Color no encontrado', 'error');
         return;
       }
 
       try {
         // Usar el contexto del carrito
-        await addToCart(variante.id, cantidad);
+            await addToCart(variante.id, cantidad, producto.name);
+
         
         showNotification('¡Agregado al carrito!', 'success');
         

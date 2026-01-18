@@ -25,13 +25,16 @@ interface CartContextType {
   cartItems: CartItem[];
   cartCount: number;
   loading: boolean;
-  addToCart: (productVariantId: number, quantity: number) => Promise<void>;
+  showCartNotification: boolean;
+  lastAddedProduct: string | null;
+  addToCart: (productVariantId: number, quantity: number, productName?: string) => Promise<void>;
   removeFromCart: (cartItemId: number) => Promise<void>;
   updateQuantity: (cartItemId: number, quantity: number) => Promise<void>;
   clearCart: () => Promise<void>;
   getCart: () => Promise<void>;
   migrateCart: () => Promise<void>;
   refreshCart: () => Promise<void>;
+  hideCartNotification: () => void;
   sessionId: string | null;
 }
 
@@ -50,6 +53,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartCount, setCartCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [showCartNotification, setShowCartNotification] = useState<boolean>(false);
+  const [lastAddedProduct, setLastAddedProduct] = useState<string | null>(null);
+  const [tempCartCount, setTempCartCount] = useState<number>(0); // Para actualización inmediata
 
   // Constante para header
   const CART_SESSION_HEADER = 'X-Cart-Session-Id';
@@ -127,6 +133,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         // Carrito vacío - normal
         setCartItems([]);
         setCartCount(0);
+        setTempCartCount(0);
         return;
       }
       
@@ -141,7 +148,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       const countResponse = await fetchWithSession(GET_CART_COUNT);
       if (countResponse.ok) {
         const countData = await countResponse.json();
-        setCartCount(countData.count || 0);
+        const newCount = countData.count || 0;
+        setCartCount(newCount);
+        setTempCartCount(newCount);
       }
       
     } catch (error: any) {
@@ -149,6 +158,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       if (error.message?.includes('404') || error.message?.includes('400')) {
         setCartItems([]);
         setCartCount(0);
+        setTempCartCount(0);
       }
     } finally {
       setLoading(false);
@@ -160,8 +170,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     await getCart();
   };
 
-  // Agregar al carrito
-  const addToCart = async (productVariantId: number, quantity: number) => {
+  // Agregar al carrito - MODIFICADO para aceptar productName
+  const addToCart = async (productVariantId: number, quantity: number, productName?: string) => {
     try {
       const payload = { productVariantId, quantity };
 
@@ -176,12 +186,29 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await response.json();
       
-      // Actualizar carrito después de agregar
+      // Actualizar contador INMEDIATAMENTE (optimistic update)
+      const newCount = tempCartCount + quantity;
+      setTempCartCount(newCount);
+      
+      // Mostrar notificación si hay nombre de producto
+      if (productName) {
+        setLastAddedProduct(productName);
+        setShowCartNotification(true);
+        
+        // Ocultar notificación después de 3 segundos automáticamente
+        setTimeout(() => {
+          hideCartNotification();
+        }, 3000);
+      }
+      
+      // Actualizar carrito completo (llamada real al backend)
       await getCart();
       
       return data;
     } catch (error) {
       console.error('Error agregando al carrito:', error);
+      // Revertir el cambio optimista si hay error
+      setTempCartCount(tempCartCount - quantity);
       throw error;
     }
   };
@@ -235,6 +262,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       
       setCartItems([]);
       setCartCount(0);
+      setTempCartCount(0);
     } catch (error: any) {
       console.error('Error vaciando carrito:', error);
       throw error;
@@ -262,6 +290,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Función para ocultar notificación
+  const hideCartNotification = useCallback(() => {
+    setShowCartNotification(false);
+    setLastAddedProduct(null);
+  }, []);
+
   // Inicializar al cargar la página
   useEffect(() => {
     // Cargar sessionId inicial desde localStorage
@@ -288,10 +322,19 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Sincronizar tempCartCount con cartCount cuando se actualiza
+  useEffect(() => {
+    if (tempCartCount !== cartCount) {
+      setTempCartCount(cartCount);
+    }
+  }, [cartCount]);
+
   const value: CartContextType = {
     cartItems,
-    cartCount,
+    cartCount: tempCartCount, // Usar tempCartCount para actualización inmediata
     loading,
+    showCartNotification,
+    lastAddedProduct,
     addToCart,
     removeFromCart,
     updateQuantity,
@@ -299,6 +342,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     getCart,
     migrateCart,
     refreshCart,
+    hideCartNotification,
     sessionId
   };
 

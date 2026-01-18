@@ -404,7 +404,7 @@ const Menu: React.FC = () => {
     setQuickAddLoading(productId);
     
     try {
-      await addToCart(selectedVariant.id, 1);
+          await addToCart(selectedVariant.id, 1, product.name);
       console.log('Producto agregado al carrito:', productId);
       
       // Mostrar notificación de éxito
