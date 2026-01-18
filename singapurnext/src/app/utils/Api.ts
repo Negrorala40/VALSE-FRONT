@@ -1,11 +1,11 @@
 // src/utils/Api.ts
 
 // Configuración base
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://backendamarte-production.up.railway.app';
 
 // PRODUCTOS
-export const MENU_PRODUCTS = `${API_BASE_URL}/api/products/active`;
-export const PRODUCT_DETAIL = (id: string | number) => `${API_BASE_URL}/api/products/active/${id}`;
+export const MENU_PRODUCTS = `${API_BASE_URL}/api/products`;
+export const PRODUCT_DETAIL = (id: string | number) => `${API_BASE_URL}/api/products/${id}`;
 
 // Login
 export const LOGIN_URL = `${API_BASE_URL}/api/auth/login`;
