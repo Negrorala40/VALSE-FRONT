@@ -534,7 +534,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
               <span className="cart-subtitle">
                 {totalItems === 0 ? 'Vacío' : `${totalItems} producto${totalItems > 1 ? 's' : ''}`}
               </span>
-              {sessionId && (
+              {/* {sessionId && (
                 <small className="session-info">
                   Session: {sessionId.substring(0, 8)}...
                   <button 
@@ -548,7 +548,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                     📋
                   </button>
                 </small>
-              )}
+              )} */}
             </div>
           </div>
           <button className="close-btn" onClick={handleClose} aria-label="Cerrar carrito">
@@ -743,7 +743,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                     <circle cx="5.5" cy="18.5" r="2.5" />
                     <circle cx="18.5" cy="18.5" r="2.5" />
                   </svg>
-                  <span>Envío gratis</span>
+                  <span>Envío Seguro</span>
                 </div>
               </div>
             </div>
