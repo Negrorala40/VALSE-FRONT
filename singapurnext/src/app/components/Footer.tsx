@@ -197,21 +197,21 @@ const Footer = () => {
           {/* Column 1: Brand */}
           <div className="footer-column">
             <h2 className="brand-title">A MARTE</h2>
-            <p className="brand-tagline">Pijamas que llevan a los pequeños a Marte</p>
+            <p className="brand-tagline">Abriga su libertad</p>
             <p className="brand-description">
-              Descubre nuestra colección de pijamas diseñadas con amor y calidad para los más pequeños de la casa.
+              Pijamas pensadas para soñar, moverse y explorar sin límites.
             </p>
             <div className="social-section">
-              <a href="https://facebook.com/amartepijamas" aria-label="Facebook" target="_blank" rel="noopener noreferrer" className="social-icon">
+              <a href="https://www.facebook.com/profile.php?id=100087160562926" aria-label="Facebook" target="_blank" rel="noopener noreferrer" className="social-icon">
                 <FaFacebook />
               </a>
-              <a href="https://instagram.com/amartepijamas" aria-label="Instagram" target="_blank" rel="noopener noreferrer" className="social-icon">
+              <a href="https://www.instagram.com/amartekids.co/" aria-label="Instagram" target="_blank" rel="noopener noreferrer" className="social-icon">
                 <FaInstagram />
               </a>
-              <a href="https://twitter.com/amartepijamas" aria-label="Twitter" target="_blank" rel="noopener noreferrer" className="social-icon">
+              {/* <a href="https://twitter.com/amartepijamas" aria-label="Twitter" target="_blank" rel="noopener noreferrer" className="social-icon">
                 <FaTwitter />
-              </a>
-              <a href="https://wa.me/573001234567" aria-label="WhatsApp" target="_blank" rel="noopener noreferrer" className="social-icon">
+              </a> */}
+              <a href="https://wa.me/573143853248" aria-label="WhatsApp" target="_blank" rel="noopener noreferrer" className="social-icon">
                 <FaWhatsapp />
               </a>
             </div>
@@ -246,28 +246,28 @@ const Footer = () => {
               <div className="contact-item">
                 <FaPhone className="contact-icon" />
                 <div>
-                  <span className="contact-text">+57 300 123 4567</span>
+                  <span className="contact-text">+57 3143853248</span>
                   <span className="contact-label">Ventas</span>
                 </div>
               </div>
               <div className="contact-item">
                 <FaWhatsapp className="contact-icon" />
                 <div>
-                  <span className="contact-text">+57 310 987 6543</span>
+                  <span className="contact-text">+57 3143853248</span>
                   <span className="contact-label">WhatsApp</span>
                 </div>
               </div>
               <div className="contact-item">
                 <FaEnvelope className="contact-icon" />
                 <div>
-                  <span className="contact-text">info@amarte.com</span>
+                  <span className="contact-text">CORREO</span>
                   <span className="contact-label">Información</span>
                 </div>
               </div>
               <div className="contact-item">
                 <FaHeadset className="contact-icon" />
                 <div>
-                  <span className="contact-text">ventas@amarte.com</span>
+                  <span className="contact-text">CORREO@gmail.com</span>
                   <span className="contact-label">Soporte</span>
                 </div>
               </div>
@@ -308,7 +308,6 @@ const Footer = () => {
               <span className="payment-icon">Mastercard</span>
               <span className="payment-icon">Nequi</span>
               <span className="payment-icon">Daviplata</span>
-              <span className="payment-icon">Efecty</span>
             </div>
           </div>
 
