@@ -181,35 +181,56 @@ export default function ProductConfigPage() {
     }
   };
 
-  if (loading) return <div className="loading">Cargando producto...</div>;
+  if (loading) return <div>Cargando producto...</div>;
   if (!product) return <div>Producto no encontrado</div>;
 
+  // CÁLCULOS CORREGIDOS - LA CLAVE ESTÁ AQUÍ
   const availableVariants = product.variants.filter(v => v.stock > 0);
   const unavailableVariants = product.variants.filter(v => v.stock === 0);
+  const lowStockVariants = product.variants.filter(v => v.stock > 0 && v.stock < 10);
+  
+  // Stock total REAL (suma de todas las variantes con stock > 0)
+  const totalRealStock = product.variants.reduce((sum, variant) => sum + variant.stock, 0);
+  
+  // ¿Tiene al menos UNA variante disponible para Meta?
+  // IMPORTANTE: Solo está disponible para Meta si:
+  // 1. El producto está habilitado para Facebook
+  // 2. Y tiene al menos UNA variante con stock > 0
+  const hasAvailableForMeta = product.enabledForFacebook && availableVariants.length > 0;
+  
+  // Stock para Meta (solo variantes con stock > 0)
+  const stockForMeta = availableVariants.reduce((sum, v) => sum + v.stock, 0);
+  
   const uniqueColors = [...new Set(product.variants.map(v => v.color).filter(Boolean))];
 
   return (
-    <div className="product-config-page">
+    <div>
       {/* Header */}
-      <div className="config-header">
-        <button onClick={() => router.push('/meta/products')} className="back-btn">
+      <div>
+        <button onClick={() => router.push('/meta/products')}>
           ← Volver a Productos
         </button>
-        <div className="header-content">
+        <div>
           <h1>⚙️ Configuración Meta: {product.productName}</h1>
-          <div className="header-actions">
+          <div>
             <button 
-              onClick={() => {
-                fetch(`/api/meta-admin/products/${product.productId}/sync-stock`, { method: 'POST' });
-                alert('🔄 Sincronización de stock iniciada');
+              onClick={async () => {
+                try {
+                  await fetch(`/api/meta-admin/products/${product.productId}/sync-stock`, { 
+                    method: 'POST' 
+                  });
+                  alert('🔄 Sincronización de stock iniciada');
+                  // Recargar después de unos segundos
+                  setTimeout(fetchProduct, 2000);
+                } catch (error) {
+                  alert('❌ Error sincronizando stock');
+                }
               }}
-              className="btn secondary"
             >
               🔄 Sincronizar Stock
             </button>
             <button 
               onClick={() => window.open(`/admin/products/${product.productId}`, '_blank')}
-              className="btn secondary"
             >
               ✏️ Editar Producto
             </button>
@@ -217,69 +238,93 @@ export default function ProductConfigPage() {
         </div>
       </div>
 
-      <div className="config-grid">
+      <div>
         {/* Columna Izquierda: Datos Sincronizados */}
-        <div className="config-column">
-          <div className="info-card">
-            <h2 className="card-title">✅ Datos Sincronizados Automáticamente</h2>
+        <div>
+          <div>
+            <h2>✅ Datos Sincronizados Automáticamente</h2>
             
-            <div className="info-grid">
-              <div className="info-item">
+            <div>
+              <div>
                 <label>Nombre del Producto</label>
                 <p>{product.productName}</p>
               </div>
               
-              <div className="info-item">
-                <label>Stock Total</label>
-                <p className={`stock-badge ${product.totalStock > 0 ? 'in-stock' : 'out-of-stock'}`}>
-                  {product.totalStock} unidades
-                  <span className="stock-status">
-                    ({product.totalStock > 0 ? 'Disponible para Meta' : 'Agotado'})
-                  </span>
-                </p>
+              <div>
+                <label>Stock Total en Sistema</label>
+                <div>
+                  <p>
+                    {totalRealStock} unidades totales
+                  </p>
+                  <p>
+                    ({availableVariants.length} variantes con stock, {unavailableVariants.length} sin stock)
+                  </p>
+                </div>
               </div>
               
-              <div className="info-item">
+              <div>
+                <label>Disponible para Meta</label>
+                <div>
+                  {hasAvailableForMeta ? (
+                    <>
+                      <span>✅</span>
+                      <span>Sí ({stockForMeta} unidades disponibles)</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>❌</span>
+                      <span>
+                        {!product.enabledForFacebook ? 'Producto deshabilitado para Meta' : 
+                         availableVariants.length === 0 ? 'Sin variantes con stock' : 
+                         'No disponible'}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              
+              <div>
                 <label>Género</label>
                 <p>{product.productGender || 'No especificado'}</p>
               </div>
               
-              <div className="info-item">
+              <div>
                 <label>Tipo</label>
                 <p>{product.productType || 'No especificado'}</p>
               </div>
               
-              <div className="info-item full-width">
+              <div>
                 <label>Descripción</label>
-                <p className="description">{product.productDescription || 'Sin descripción'}</p>
+                <p>{product.productDescription || 'Sin descripción'}</p>
               </div>
             </div>
           </div>
 
           {/* Variantes */}
-          <div className="info-card">
-            <h2 className="card-title">🎨 Variantes y Stock</h2>
+          <div>
+            <h2>🎨 Variantes y Stock</h2>
             
-            <div className="stock-summary">
-              <div className="summary-item available">
-                <div className="summary-count">{availableVariants.length}</div>
-                <div className="summary-label">Disponibles</div>
+            <div>
+              <div>
+                <div>{availableVariants.length}</div>
+                <div>Con Stock</div>
+                <div>{stockForMeta} unidades</div>
               </div>
-              <div className="summary-item low-stock">
-                <div className="summary-count">
-                  {availableVariants.filter(v => v.stock < 10).length}
-                </div>
-                <div className="summary-label">Bajo Stock</div>
+              <div>
+                <div>{lowStockVariants.length}</div>
+                <div>Bajo Stock (&lt;10)</div>
+                <div>{lowStockVariants.reduce((sum, v) => sum + v.stock, 0)} unidades</div>
               </div>
-              <div className="summary-item out-of-stock">
-                <div className="summary-count">{unavailableVariants.length}</div>
-                <div className="summary-label">Agotadas</div>
+              <div>
+                <div>{unavailableVariants.length}</div>
+                <div>Agotadas</div>
+                <div>0 unidades</div>
               </div>
             </div>
 
             {/* Tabla de Variantes */}
-            <div className="variants-table-container">
-              <table className="variants-table">
+            <div>
+              <table>
                 <thead>
                   <tr>
                     <th>Color</th>
@@ -288,51 +333,66 @@ export default function ProductConfigPage() {
                     <th>Precio</th>
                     <th>Color (Inglés)</th>
                     <th>Estado</th>
+                    <th>Para Meta</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {product.variants.map((variant) => (
-                    <tr key={variant.variantId}>
-                      <td>{variant.color}</td>
-                      <td>{variant.size}</td>
-                      <td>
-                        <span className={`stock-cell ${variant.stock > 10 ? 'good' : variant.stock > 0 ? 'low' : 'out'}`}>
-                          {variant.stock}
-                        </span>
-                      </td>
-                      <td>${variant.price?.toFixed(2) || '0.00'}</td>
-                      <td>
-                        <input
-                          type="text"
-                          value={variant.colorEnglish || ''}
-                          onChange={(e) => updateVariantColor(variant.variantId, e.target.value)}
-                          className="color-input"
-                          placeholder="Inglés..."
-                        />
-                      </td>
-                      <td>
-                        <span className={`status-badge ${variant.availabilityStatus === 'in stock' ? 'success' : 'danger'}`}>
-                          {variant.availabilityStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {product.variants.map((variant) => {
+                    // Una variante está disponible para Meta solo si:
+                    // 1. Tiene stock > 0
+                    // 2. El producto está habilitado para Facebook
+                    const availableForMeta = variant.stock > 0 && product.enabledForFacebook;
+                    
+                    return (
+                      <tr key={variant.variantId}>
+                        <td>{variant.color}</td>
+                        <td>{variant.size}</td>
+                        <td>
+                          <span>
+                            {variant.stock}
+                          </span>
+                        </td>
+                        <td>${variant.price?.toFixed(2) || '0.00'}</td>
+                        <td>
+                          <input
+                            type="text"
+                            value={variant.colorEnglish || ''}
+                            onChange={(e) => updateVariantColor(variant.variantId, e.target.value)}
+                            placeholder="Inglés..."
+                          />
+                        </td>
+                        <td>
+                          <span>
+                            {variant.availabilityStatus}
+                          </span>
+                        </td>
+                        <td>
+                          {availableForMeta ? (
+                            <span>✅ Sí</span>
+                          ) : variant.stock === 0 ? (
+                            <span>❌ Sin stock</span>
+                          ) : (
+                            <span>❌ Producto deshabilitado</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
             {/* Traductor de Colores */}
             {uniqueColors.length > 0 && (
-              <div className="color-translator">
+              <div>
                 <h3>🎨 Traductor de Colores</h3>
-                <p className="translator-help">Colores encontrados en variantes:</p>
+                <p>Colores encontrados en variantes:</p>
                 
-                <div className="color-buttons">
+                <div>
                   {uniqueColors.map((color) => (
                     <button
                       key={color}
                       onClick={() => handleColorSelect(color)}
-                      className={`color-btn ${selectedColor === color ? 'selected' : ''}`}
                     >
                       {color}
                     </button>
@@ -340,21 +400,21 @@ export default function ProductConfigPage() {
                 </div>
                 
                 {selectedColor && colorTranslation && (
-                  <div className="translation-result">
+                  <div>
                     <p>
                       <strong>Traducción sugerida:</strong><br />
                       "{selectedColor}" → "{colorTranslation}"
                     </p>
-                    <button onClick={applyColorToAll} className="btn primary">
+                    <button onClick={applyColorToAll}>
                       Aplicar a Todas las Variantes
                     </button>
-                    <p className="translation-note">
+                    <p>
                       Esta traducción se aplicará a todas las variantes con el color "{selectedColor}"
                     </p>
                   </div>
                 )}
                 
-                <p className="translator-tip">
+                <p>
                   💡 Los colores en inglés mejoran la búsqueda en Facebook/Instagram Shopping
                 </p>
               </div>
@@ -363,43 +423,80 @@ export default function ProductConfigPage() {
         </div>
 
         {/* Columna Derecha: Configuración Meta */}
-        <div className="config-column">
-          <div className="config-card">
-            <h2 className="card-title">⚙️ Configuración para Meta</h2>
+        <div>
+          <div>
+            <h2>⚙️ Configuración para Meta</h2>
             
-            <div className="config-form">
+            <div>
+              {/* Estado del producto - MUY IMPORTANTE */}
+              <div>
+                <div>
+                  {hasAvailableForMeta ? (
+                    <>
+                      <span>✅</span>
+                      <span>DISPONIBLE PARA META</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>⚠️</span>
+                      <span>NO DISPONIBLE PARA META</span>
+                    </>
+                  )}
+                </div>
+                
+                <div>
+                  {hasAvailableForMeta ? (
+                    <>
+                      <p>✅ Producto habilitado para Meta</p>
+                      <p>✅ {availableVariants.length} variantes con stock disponible</p>
+                      <p>✅ Total: {stockForMeta} unidades para venta</p>
+                      {unavailableVariants.length > 0 && (
+                        <p>⚠️ {unavailableVariants.length} variantes sin stock (no se incluirán)</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {!product.enabledForFacebook ? (
+                        <p>❌ Producto deshabilitado en configuración Meta</p>
+                      ) : availableVariants.length === 0 ? (
+                        <p>❌ Ninguna variante tiene stock</p>
+                      ) : (
+                        <p>❌ Revisa la configuración</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+              
               {/* Categorías (REQUERIDAS) */}
-              <div className="form-group required">
+              <div>
                 <label>Categoría Google *</label>
                 <input
                   type="text"
                   value={product.googleProductCategory || ''}
                   onChange={(e) => setProduct({...product, googleProductCategory: e.target.value})}
                   placeholder="Ej: Apparel & Accessories > Clothing"
-                  className="form-input"
                 />
-                <small className="form-help">Requerido por Meta</small>
+                <small>Requerido por Meta</small>
               </div>
               
-              <div className="form-group required">
+              <div>
                 <label>Categoría Facebook *</label>
                 <input
                   type="text"
                   value={product.fbProductCategory || ''}
                   onChange={(e) => setProduct({...product, fbProductCategory: e.target.value})}
                   placeholder="Ej: Clothing & Accessories > Clothing"
-                  className="form-input"
                 />
               </div>
               
               {/* Demografía */}
-              <div className="form-row">
-                <div className="form-group">
+              <div>
+                <div>
                   <label>Grupo de Edad</label>
                   <select
                     value={product.ageGroup || ''}
                     onChange={(e) => setProduct({...product, ageGroup: e.target.value})}
-                    className="form-select"
                   >
                     <option value="">Seleccionar...</option>
                     <option value="newborn">Recién nacido</option>
@@ -411,86 +508,79 @@ export default function ProductConfigPage() {
                   </select>
                 </div>
                 
-                <div className="form-group required">
+                <div>
                   <label>Material (Inglés) *</label>
                   <input
                     type="text"
                     value={product.materialEnglish || ''}
                     onChange={(e) => setProduct({...product, materialEnglish: e.target.value})}
                     placeholder="Ej: 100% cotton, polyester"
-                    className="form-input"
                   />
                 </div>
               </div>
               
               {/* Marca y Detalles */}
-              <div className="form-group">
+              <div>
                 <label>Marca</label>
                 <input
                   type="text"
                   value={product.brand || 'Amarte Colombia'}
                   onChange={(e) => setProduct({...product, brand: e.target.value})}
-                  className="form-input"
                 />
               </div>
               
-              <div className="form-group">
+              <div>
                 <label>Patrón</label>
                 <input
                   type="text"
                   value={product.patternEnglish || ''}
                   onChange={(e) => setProduct({...product, patternEnglish: e.target.value})}
                   placeholder="Ej: plain, striped, floral"
-                  className="form-input"
                 />
               </div>
               
-              <div className="form-group">
+              <div>
                 <label>Estilo</label>
                 <input
                   type="text"
                   value={product.styleEnglish || ''}
                   onChange={(e) => setProduct({...product, styleEnglish: e.target.value})}
                   placeholder="Ej: casual, formal, sport"
-                  className="form-input"
                 />
               </div>
               
               {/* Envíos Colombia */}
-              <div className="form-group">
+              <div>
                 <label>Configuración de Envíos</label>
                 <textarea
                   value={product.shippingDetails || ''}
                   onChange={(e) => setProduct({...product, shippingDetails: e.target.value})}
                   placeholder="CO:::Standard:0.0 COP;CO:Bogota:Express:5000.0 COP"
-                  className="form-textarea"
                   rows={3}
                 />
-                <small className="form-help">
+                <small>
                   Formato: País:Región:Servicio:Precio<br />
                   Ejemplo: CO:::Standard:0.0 COP;CO:Bogota:Express:5000.0 COP
                 </small>
               </div>
               
               {/* Peso */}
-              <div className="form-row">
-                <div className="form-group">
+              <div>
+                <div>
                   <label>Peso</label>
                   <input
                     type="text"
                     value={product.shippingWeight || ''}
                     onChange={(e) => setProduct({...product, shippingWeight: e.target.value})}
                     placeholder="0.5"
-                    className="form-input"
                   />
                 </div>
                 
-                <div className="form-group">
+                <div>
                   <label>Unidad</label>
                   <select
                     value={product.shippingWeightUnit || 'kg'}
                     onChange={(e) => setProduct({...product, shippingWeightUnit: e.target.value})}
-                    className="form-select"
                   >
                     <option value="kg">kg</option>
                     <option value="g">g</option>
@@ -500,53 +590,60 @@ export default function ProductConfigPage() {
               </div>
               
               {/* GTIN */}
-              <div className="form-group">
+              <div>
                 <label>GTIN (Código de barras)</label>
                 <input
                   type="text"
                   value={product.gtin || ''}
                   onChange={(e) => setProduct({...product, gtin: e.target.value})}
                   placeholder="Ej: 8806088573892"
-                  className="form-input"
                 />
               </div>
               
-              {/* Estado Meta */}
-              <div className="form-checkbox">
+              {/* Estado Meta - EL MÁS IMPORTANTE */}
+              <div>
                 <input
                   type="checkbox"
                   id="enabledForFacebook"
                   checked={product.enabledForFacebook}
                   onChange={(e) => setProduct({...product, enabledForFacebook: e.target.checked})}
-                  className="checkbox-input"
                 />
                 <label htmlFor="enabledForFacebook">
-                  Habilitado para Facebook/Instagram Shopping
+                  <span>
+                    {product.enabledForFacebook ? '✅' : '❌'}
+                  </span>
+                  <span>
+                    Habilitado para Facebook/Instagram Shopping
+                    <span>
+                      {product.enabledForFacebook 
+                        ? ' (Aparecerá en el catálogo si tiene al menos una variante con stock)' 
+                        : ' (NO aparecerá en el catálogo)'}
+                    </span>
+                  </span>
                 </label>
               </div>
               
               {/* Botón Guardar */}
-              <div className="form-actions">
+              <div>
                 <button 
                   onClick={saveConfig} 
                   disabled={saving}
-                  className="btn save-btn"
                 >
                   {saving ? '💾 Guardando...' : '💾 Guardar Configuración Meta'}
                 </button>
-                <p className="form-note">
+                <p>
                   * Campos requeridos para publicar en Meta
                 </p>
               </div>
             </div>
           </div>
           
-          {/* Vista Previa CSV */}
-          <div className="preview-card">
-            <h2 className="card-title">👁️ Vista Previa en CSV</h2>
+          {/* Vista Previa CSV - CORREGIDA */}
+          <div>
+            <h2>👁️ Vista Previa en CSV</h2>
             
-            <div className="csv-preview">
-              <div className="csv-header">
+            <div>
+              <div>
                 <span>id</span>
                 <span>title</span>
                 <span>availability</span>
@@ -554,33 +651,71 @@ export default function ProductConfigPage() {
                 <span>quantity_to_sell_on_facebook</span>
               </div>
               
-              {product.variants.slice(0, 3).map((variant) => (
-                <div key={variant.variantId} className="csv-row">
+              {availableVariants.slice(0, 3).map((variant) => (
+                <div key={variant.variantId}>
                   <span>"V{variant.variantId}"</span>
                   <span>"{product.productName} - {variant.colorEnglish || variant.color}"</span>
-                  <span>"{variant.availabilityStatus}"</span>
+                  <span>"in stock"</span>
                   <span>"{variant.price?.toFixed(2)} COP"</span>
-                  <span>{variant.stock > 0 ? variant.stock : ''}</span>
+                  <span>{variant.stock}</span>
                 </div>
               ))}
               
-              {product.variants.length > 3 && (
-                <div className="csv-more">
-                  ... y {product.variants.length - 3} más
+              {availableVariants.length === 0 && (
+                <div>
+                  <span>—</span>
+                  <span>No hay variantes disponibles para Meta</span>
+                  <span>—</span>
+                  <span>—</span>
+                  <span>—</span>
+                </div>
+              )}
+              
+              {availableVariants.length > 3 && (
+                <div>
+                  ... y {availableVariants.length - 3} variantes más
                 </div>
               )}
             </div>
             
-            <div className="preview-status">
-              {product.totalStock > 0 ? (
-                <div className="status-success">
-                  ✅ Este producto aparecerá en el catálogo<br />
-                  <small>{availableVariants.length} variantes disponibles</small>
+            <div>
+              {hasAvailableForMeta ? (
+                <div>
+                  <div>
+                    <span>✅</span>
+                    <span>ESTE PRODUCTO APARECERÁ EN EL CATÁLOGO</span>
+                  </div>
+                  <div>
+                    <p><strong>Resumen:</strong></p>
+                    <ul>
+                      <li>✅ Producto habilitado para Meta</li>
+                      <li>✅ {availableVariants.length} variantes con stock</li>
+                      <li>✅ Total: {stockForMeta} unidades disponibles</li>
+                      <li>❌ {unavailableVariants.length} variantes sin stock (no se incluirán)</li>
+                    </ul>
+                  </div>
                 </div>
               ) : (
-                <div className="status-danger">
-                  ❌ Este producto NO aparecerá en el catálogo<br />
-                  <small>Sin stock disponible</small>
+                <div>
+                  <div>
+                    <span>❌</span>
+                    <span>ESTE PRODUCTO NO APARECERÁ EN EL CATÁLOGO</span>
+                  </div>
+                  <div>
+                    {!product.enabledForFacebook ? (
+                      <p>El producto está <strong>deshabilitado</strong> en la configuración Meta.</p>
+                    ) : availableVariants.length === 0 ? (
+                      <p>Todas las variantes están <strong>sin stock</strong>.</p>
+                    ) : (
+                      <p>Hay {availableVariants.length} variantes con stock, pero revisa la configuración.</p>
+                    )}
+                    <p>
+                      Para que aparezca en el catálogo:
+                      <br />1. Habilitar producto para Meta (checkbox arriba)
+                      <br />2. Tener al menos una variante con stock
+                      <br />3. Completar todos los campos requeridos (*)
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
