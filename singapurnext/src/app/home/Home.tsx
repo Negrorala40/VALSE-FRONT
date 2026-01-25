@@ -202,168 +202,186 @@ const Home = () => {
     <>
       <div className={styles.homeContainer}>
         <main className={styles.mainContent}>
-          {/* NUEVO HERO SECTION - Estilo del ejemplo */}
+          {/* HERO SECTION */}
           <section className={styles.heroSection}>
             {/* Top decorative line */}
             <div className={styles.heroTopLine} />
 
-            {/* SVG Pajama - Main background element floating */}
-            <div className={styles.heroSvgContainer}>
-              <svg
-                className={styles.heroPajamaSvg}
-                viewBox="0 0 300 420"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-label="Ilustración de pijama infantil"
-              >
-                <defs>
-                  <linearGradient id="pajamaBg" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3DB28A" />
-                    <stop offset="100%" stopColor="#2a9b74" />
-                  </linearGradient>
-                  <linearGradient id="sleeveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#3DB28A" />
-                    <stop offset="100%" stopColor="#28a076" />
-                  </linearGradient>
-                  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-                    <feMerge>
-                      <feMergeNode in="coloredBlur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-
-                {/* Main body - pants part */}
-                <path
-                  d="M 100 140 L 90 320 L 110 320 L 110 180 Q 110 160 115 150 L 115 140 Z"
-                  fill="url(#pajamaBg)"
-                  stroke="#103359"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  filter="url(#glow)"
+            {/* Contenedor con imagen de fondo - Comentaremos el SVG después */}
+            <div className={styles.heroImageContainer}>
+              {/* Imagen de fondo con forma de pijama */}
+              <div className={styles.heroBackgroundImageWrapper}>
+                <Image
+                  src="https://res.cloudinary.com/df2vqczm1/image/upload/v1769352232/DSC02953-Editar.jpg_eoykzw.jpg"
+                  alt="Fondo de pijama infantil espacial"
+                  fill
+                  className={styles.heroBackgroundImage}
+                  priority
+                  sizes="(max-width: 768px) 100vw, 1200px"
+                  quality={85}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/images/placeholder.jpg';
+                  }}
                 />
+              </div>
 
-                {/* Right pant leg */}
-                <path
-                  d="M 150 140 L 160 320 L 180 320 L 180 180 Q 180 160 185 150 L 185 140 Z"
-                  fill="url(#pajamaBg)"
-                  stroke="#103359"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  filter="url(#glow)"
-                />
-
-                {/* Main body - shirt part */}
-                <path
-                  d="M 80 70 Q 75 90 75 120 L 75 140 L 185 140 L 185 120 Q 185 90 180 70 Q 150 50 150 50 Q 150 50 120 70 Z"
-                  fill="url(#pajamaBg)"
-                  stroke="#103359"
-                  strokeWidth="3"
-                  filter="url(#glow)"
-                />
-
-                {/* Left sleeve */}
-                <path
-                  d="M 80 90 Q 40 95 25 110 Q 20 115 30 130 L 75 115 Z"
-                  fill="url(#sleeveGrad)"
-                  stroke="#103359"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  filter="url(#glow)"
-                />
-
-                {/* Right sleeve */}
-                <path
-                  d="M 220 90 Q 260 95 275 110 Q 280 115 270 130 L 225 115 Z"
-                  fill="url(#sleeveGrad)"
-                  stroke="#103359"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  filter="url(#glow)"
-                />
-
-                {/* Collar/Neckline - rounded */}
-                <ellipse
-                  cx="150"
-                  cy="65"
-                  rx="28"
-                  ry="18"
-                  fill="#806FF7"
-                  stroke="#103359"
-                  strokeWidth="3"
-                  filter="url(#glow)"
-                />
-
-                {/* Collar detail inner ring */}
-                <ellipse
-                  cx="150"
-                  cy="62"
-                  rx="24"
-                  ry="14"
+              {/*
+                SVG COMENTADO TEMPORALMENTE - DESCOMENTAR CUANDO TENGAS TU SVG
+                <svg
+                  className={styles.heroPajamaSvg}
+                  viewBox="0 0 300 420"
                   fill="none"
-                  stroke="#103359"
-                  strokeWidth="1.5"
-                  opacity="0.4"
-                />
-
-                {/* Front buttons column */}
-                <g filter="url(#glow)">
-                  <circle cx="150" cy="115" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
-                  <circle cx="150" cy="115" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
-                </g>
-
-                <g filter="url(#glow)">
-                  <circle cx="150" cy="155" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
-                  <circle cx="150" cy="155" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
-                </g>
-
-                {/* Decorative stars - chest area */}
-                <g opacity="0.85">
-                  <circle cx="110" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
-                  <circle cx="110" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
-                </g>
-
-                <g opacity="0.85">
-                  <circle cx="190" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
-                  <circle cx="190" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
-                </g>
-
-                {/* Accent stars - lower area */}
-                <g opacity="0.8">
-                  <circle cx="105" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
-                </g>
-
-                <g opacity="0.8">
-                  <circle cx="195" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
-                </g>
-
-                {/* Rocket emoji as accent - centered bottom */}
-                <text
-                  x="150"
-                  y="260"
-                  textAnchor="middle"
-                  fontSize="48"
-                  opacity="0.7"
-                  filter="url(#glow)"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-label="Ilustración de pijama infantil"
                 >
-                  🚀
-                </text>
+                  <defs>
+                    <linearGradient id="pajamaBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#3DB28A" />
+                      <stop offset="100%" stopColor="#2a9b74" />
+                    </linearGradient>
+                    <linearGradient id="sleeveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#3DB28A" />
+                      <stop offset="100%" stopColor="#28a076" />
+                    </linearGradient>
+                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="4" result="coloredBlur" />
+                      <feMerge>
+                        <feMergeNode in="coloredBlur" />
+                        <feMergeNode in="SourceGraphic" />
+                      </feMerge>
+                    </filter>
+                  </defs>
 
-                {/* Pattern circles - decorative scattered */}
-                <g opacity="0.3" stroke="#103359" strokeWidth="1.5" fill="none">
-                  <circle cx="60" cy="140" r="8" />
-                  <circle cx="240" cy="160" r="8" />
-                  <circle cx="70" cy="220" r="6" />
-                  <circle cx="230" cy="240" r="6" />
-                </g>
-              </svg>
+                  <image
+                    href="https://res.cloudinary.com/df2vqczm1/image/upload/v1769352232/DSC02953-Editar.jpg_eoykzw.jpg"
+                    x="0"
+                    y="0"
+                    width="300"
+                    height="420"
+                    preserveAspectRatio="xMidYMid slice"
+                    opacity="0.7"
+                  />
+
+                  <path
+                    d="M 100 140 L 90 320 L 110 320 L 110 180 Q 110 160 115 150 L 115 140 Z"
+                    fill="url(#pajamaBg)"
+                    stroke="#103359"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    filter="url(#glow)"
+                  />
+
+                  <path
+                    d="M 150 140 L 160 320 L 180 320 L 180 180 Q 180 160 185 150 L 185 140 Z"
+                    fill="url(#pajamaBg)"
+                    stroke="#103359"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    filter="url(#glow)"
+                  />
+
+                  <path
+                    d="M 80 70 Q 75 90 75 120 L 75 140 L 185 140 L 185 120 Q 185 90 180 70 Q 150 50 150 50 Q 150 50 120 70 Z"
+                    fill="url(#pajamaBg)"
+                    stroke="#103359"
+                    strokeWidth="3"
+                    filter="url(#glow)"
+                  />
+
+                  <path
+                    d="M 80 90 Q 40 95 25 110 Q 20 115 30 130 L 75 115 Z"
+                    fill="url(#sleeveGrad)"
+                    stroke="#103359"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    filter="url(#glow)"
+                  />
+
+                  <path
+                    d="M 220 90 Q 260 95 275 110 Q 280 115 270 130 L 225 115 Z"
+                    fill="url(#sleeveGrad)"
+                    stroke="#103359"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    filter="url(#glow)"
+                  />
+
+                  <ellipse
+                    cx="150"
+                    cy="65"
+                    rx="28"
+                    ry="18"
+                    fill="#806FF7"
+                    stroke="#103359"
+                    strokeWidth="3"
+                    filter="url(#glow)"
+                  />
+
+                  <ellipse
+                    cx="150"
+                    cy="62"
+                    rx="24"
+                    ry="14"
+                    fill="none"
+                    stroke="#103359"
+                    strokeWidth="1.5"
+                    opacity="0.4"
+                  />
+
+                  <g filter="url(#glow)">
+                    <circle cx="150" cy="115" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
+                    <circle cx="150" cy="115" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
+                  </g>
+
+                  <g filter="url(#glow)">
+                    <circle cx="150" cy="155" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
+                    <circle cx="150" cy="155" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
+                  </g>
+
+                  <g opacity="0.85">
+                    <circle cx="110" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
+                    <circle cx="110" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
+                  </g>
+
+                  <g opacity="0.85">
+                    <circle cx="190" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
+                    <circle cx="190" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
+                  </g>
+
+                  <g opacity="0.8">
+                    <circle cx="105" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
+                  </g>
+
+                  <g opacity="0.8">
+                    <circle cx="195" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
+                  </g>
+
+                  <text
+                    x="150"
+                    y="260"
+                    textAnchor="middle"
+                    fontSize="48"
+                    opacity="0.7"
+                    filter="url(#glow)"
+                  >
+                    🚀
+                  </text>
+
+                  <g opacity="0.3" stroke="#103359" strokeWidth="1.5" fill="none">
+                    <circle cx="60" cy="140" r="8" />
+                    <circle cx="240" cy="160" r="8" />
+                    <circle cx="70" cy="220" r="6" />
+                    <circle cx="230" cy="240" r="6" />
+                  </g>
+                </svg>
+              */}
             </div>
 
             {/* Overlay gradient for readability */}
             <div className={styles.heroOverlay} />
 
-            {/* Content - positioned over SVG */}
+            {/* Content - positioned over image */}
             <div className={styles.heroContent}>
               <div className={styles.heroTextBox}>
                 {/* Small brand indicator */}
