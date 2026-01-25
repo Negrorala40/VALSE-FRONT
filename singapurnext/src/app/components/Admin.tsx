@@ -851,6 +851,12 @@ const Admin = () => {
         <div className={styles.headerActions}>
           <button 
             className={styles.navButton}
+            onClick={() => navigateTo('/meta')}
+          >
+            META
+          </button>
+          <button 
+            className={styles.navButton}
             onClick={() => navigateTo('/orden')}
           >
             📦 Órdenes
