@@ -62,3 +62,22 @@ export const BLOG_TAGS_WITH_COUNT = `${API_BASE_URL}/api/blog/tags/with-count`;
 // ======================= BÚSQUEDA BLOG =======================
 export const BLOG_SEARCH = (query: string) => `${API_BASE_URL}/api/blog/search?q=${encodeURIComponent(query)}`;
 export const BLOG_FILTER = `${API_BASE_URL}/api/blog/filter`;
+
+
+// META Integration
+export const META_PRODUCTS = `${API_BASE_URL}/api/meta/products`;
+export const META_STATS = `${API_BASE_URL}/api/meta/stats`;
+export const META_CSV = `${API_BASE_URL}/api/meta/feed/csv`;
+export const META_MIGRATE = `${API_BASE_URL}/api/meta/migrate`;
+export const META_GENERATE = `${API_BASE_URL}/api/meta/feed/generate`;
+export const META_FILES = `${API_BASE_URL}/api/meta/feed/files`;
+export const META_FILE_DOWNLOAD = (filename: string) => `${API_BASE_URL}/api/meta/feed/files/${filename}`;
+export const META_PRODUCT_UPDATE = (variantId: number) => `${API_BASE_URL}/api/meta/products/${variantId}`;
+export const META_PRODUCT_TOGGLE = (variantId: number) => `${API_BASE_URL}/api/meta/products/${variantId}/enabled`;
+export const META_BATCH_ENABLE = `${API_BASE_URL}/api/meta/products/batch/enable`;
+export const META_BATCH_DISABLE = `${API_BASE_URL}/api/meta/products/batch/disable`;
+export const META_REGENERATE_SKU = (variantId: number) => `${API_BASE_URL}/api/meta/products/${variantId}/regenerate-sku`;
+// META Integration - USAR V2 ENDPOINTS
+export const META_PRODUCTS_V2 = `${API_BASE_URL}/api/meta/v2/products`;
+export const META_PRODUCT_V2 = (productId: number) => `${API_BASE_URL}/api/meta/v2/products/${productId}`;
+export const META_PRODUCT_TOGGLE_V2 = (productId: number) => `${API_BASE_URL}/api/meta/v2/products/${productId}/enabled`;
