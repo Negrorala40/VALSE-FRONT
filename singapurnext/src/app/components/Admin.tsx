@@ -75,6 +75,13 @@ interface ValidationError {
   message: string;
 }
 
+// Colores predefinidos disponibles
+const PREDEFINED_COLORS = [
+  "Rojo", "Azul", "Verde", "Negro", "Blanco", "Gris", "Amarillo", "Naranja",
+  "Rosa", "Morado", "Marrón", "Beige", "Turquesa", "Vino", "Oliva", "Celeste",
+  "Coral", "Lavanda", "Mostaza", "Bordó"
+];
+
 // Servicio de logging
 const logService = {
   info: (message: string, data?: any) => {
@@ -122,6 +129,7 @@ const Admin = () => {
 
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [collapsedColors, setCollapsedColors] = useState<number[]>([]);
+  const [showColorDropdown, setShowColorDropdown] = useState<number | null>(null);
   
   // Referencias para evitar bucles
   const initialImageIdsRef = useRef<Set<string>>(new Set());
@@ -135,7 +143,7 @@ const Admin = () => {
     } else {
       setRole(storedRole);
       fetchProducts();
-      addLog("🔄 Admin Panel inicializado");
+      addLog("Admin Panel inicializado");
     }
   }, [router]);
 
@@ -148,7 +156,7 @@ const Admin = () => {
 
   const fetchProducts = async () => {
     try {
-      addLog("📡 Solicitando lista de productos...");
+      addLog("Solicitando lista de productos...");
       const token = localStorage.getItem("token");
       const response = await fetch(MENU_PRODUCTS, {
         method: "GET",
@@ -159,19 +167,19 @@ const Admin = () => {
       
       if (response.ok) {
         const data = await response.json();
-        addLog(`✅ Productos obtenidos: ${data.length} productos`);
+        addLog(`Productos obtenidos: ${data.length} productos`);
         setProducts(data);
       } else {
-        addLog(`❌ Error al obtener productos: ${response.statusText}`);
+        addLog(`Error al obtener productos: ${response.statusText}`);
         alert("Error al cargar los productos");
       }
     } catch (error) {
-      addLog("❌ Error de conexión al cargar productos", error);
+      addLog("Error de conexión al cargar productos", error);
       alert("Error de conexión al cargar productos");
     }
   };
 
-  const handleColorChange = (colorIndex: number, value: string) => {
+  const handleColorSelect = (colorIndex: number, color: string) => {
     const updatedColors = [...colorVariants];
     
     if (editingProductId) {
@@ -183,7 +191,32 @@ const Admin = () => {
         );
         
         if (hasOrders) {
-          alert(`⚠️ El color "${oldColor}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
+          alert(`El color "${oldColor}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
+          setShowColorDropdown(null);
+          return;
+        }
+      }
+    }
+    
+    updatedColors[colorIndex].color = color;
+    setColorVariants(updatedColors);
+    setShowColorDropdown(null);
+    addLog(`Color seleccionado: ${color}`);
+  };
+
+  const handleCustomColor = (colorIndex: number, value: string) => {
+    const updatedColors = [...colorVariants];
+    
+    if (editingProductId) {
+      const originalProduct = products.find(p => p.id === editingProductId);
+      if (originalProduct) {
+        const oldColor = updatedColors[colorIndex].color;
+        const hasOrders = originalProduct.variants.some(v => 
+          v.color === oldColor && v.hasOrders
+        );
+        
+        if (hasOrders) {
+          alert(`El color "${oldColor}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
           return;
         }
       }
@@ -193,9 +226,13 @@ const Admin = () => {
     setColorVariants(updatedColors);
   };
 
+  const toggleColorDropdown = (colorIndex: number) => {
+    setShowColorDropdown(prev => prev === colorIndex ? null : colorIndex);
+  };
+
   const handleImageUploaded = useCallback((imageData: ImageData, colorIndex?: number, imageIndex?: number) => {
     if (colorIndex === undefined || imageIndex === undefined) {
-      addLog("❌ Índices no definidos en handleImageUploaded");
+      addLog("Índices no definidos en handleImageUploaded");
       return;
     }
 
@@ -222,7 +259,7 @@ const Admin = () => {
           ...imageData
         };
         
-        addLog(`✅ Imagen ${imageIndex + 1} actualizada para color: "${updatedColors[colorIndex].color}"`);
+        addLog(`Imagen ${imageIndex + 1} actualizada para color: "${updatedColors[colorIndex].color}"`);
       }
       
       return updatedColors;
@@ -239,7 +276,7 @@ const Admin = () => {
       largeUrl: ""
     });
     setColorVariants(updatedColors);
-    addLog(`➕ Imagen añadida al color ${colorIndex + 1}`);
+    addLog(`Imagen añadida al color ${colorIndex + 1}`);
   };
 
   const handleRemoveImage = (colorIndex: number, imageIndex: number) => {
@@ -251,7 +288,7 @@ const Admin = () => {
       }
       updatedColors[colorIndex].images.splice(imageIndex, 1);
       setColorVariants(updatedColors);
-      addLog(`➖ Imagen ${imageIndex + 1} eliminada del color ${colorIndex + 1}`);
+      addLog(`Imagen ${imageIndex + 1} eliminada del color ${colorIndex + 1}`);
     }
   };
 
@@ -275,7 +312,7 @@ const Admin = () => {
             );
             
             if (hasOrders) {
-              alert(`⚠️ La talla "${oldSize}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
+              alert(`La talla "${oldSize}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
               return;
             }
           }
@@ -311,7 +348,7 @@ const Admin = () => {
       price: 0 
     });
     setColorVariants(updatedColors);
-    addLog(`➕ Talla añadida al color ${colorIndex + 1}`);
+    addLog(`Talla añadida al color ${colorIndex + 1}`);
   };
 
   const handleRemoveSize = (colorIndex: number, sizeIndex: number) => {
@@ -319,7 +356,7 @@ const Admin = () => {
     if (updatedColors[colorIndex].sizes.length > 1) {
       updatedColors[colorIndex].sizes.splice(sizeIndex, 1);
       setColorVariants(updatedColors);
-      addLog(`➖ Talla ${sizeIndex + 1} eliminada del color ${colorIndex + 1}`);
+      addLog(`Talla ${sizeIndex + 1} eliminada del color ${colorIndex + 1}`);
     }
   };
 
@@ -338,7 +375,7 @@ const Admin = () => {
         sizes: [{ size: "", stock: 0, price: 0 }]
       }
     ]);
-    addLog("🎨 Nuevo color añadido");
+    addLog("Nuevo color añadido");
   };
 
   const handleRemoveColor = (colorIndex: number) => {
@@ -350,7 +387,7 @@ const Admin = () => {
         .filter(index => index !== colorIndex)
         .map(index => index > colorIndex ? index - 1 : index)
       );
-      addLog(`➖ Color "${colorName}" eliminado`);
+      addLog(`Color "${colorName}" eliminado`);
     }
   };
 
@@ -428,18 +465,18 @@ const Admin = () => {
     if (errors.length > 0) {
       setValidationErrors(errors);
       errors.forEach(error => {
-        addLog(`❌ Validación: ${error.message}`);
+        addLog(`Validación: ${error.message}`);
       });
       alert(`Errores de validación:\n${errors.map(e => `• ${e.message}`).join('\n')}`);
       return false;
     }
     
-    addLog("✅ Validación del formulario exitosa");
+    addLog("Validación del formulario exitosa");
     return true;
   };
 
   const transformToProductData = (): Product => {
-    addLog("🔄 Transformando datos para envío...");
+    addLog("Transformando datos para envío...");
     
     const originalProduct = editingProductId 
       ? products.find(p => p.id === editingProductId)
@@ -500,7 +537,7 @@ const Admin = () => {
       enabled: originalProduct?.enabled ?? true
     };
 
-    addLog("📤 Datos listos para enviar", {
+    addLog("Datos listos para enviar", {
       name: productData.name,
       variants: productData.variants.length,
       editing: !!editingProductId,
@@ -516,7 +553,7 @@ const Admin = () => {
     if (!validateForm()) return;
     
     setIsLoading(true);
-    addLog("⏳ Iniciando envío del producto...");
+    addLog("Iniciando envío del producto...");
 
     const productData = transformToProductData();
 
@@ -528,7 +565,7 @@ const Admin = () => {
       
       const method = editingProductId ? "PUT" : "POST";
       
-      addLog(`📤 Enviando datos: ${method} ${url}`);
+      addLog(`Enviando datos: ${method} ${url}`);
 
       const response = await fetch(url, {
         method,
@@ -543,16 +580,16 @@ const Admin = () => {
       
       if (response.ok) {
         const message = editingProductId ? "Producto actualizado exitosamente" : "Producto creado exitosamente";
-        addLog(`✅ ${message}`);
+        addLog(`${message}`);
         alert(message);
         fetchProducts();
         resetForm();
       } else {
-        addLog(`❌ Error en respuesta: ${result.message}`, result);
+        addLog(`Error en respuesta: ${result.message}`, result);
         alert(`Error: ${result.message || "No se pudo guardar"}`);
       }
     } catch (error) {
-      addLog("❌ Error de conexión", error);
+      addLog("Error de conexión", error);
       alert("Error de conexión");
     } finally {
       setIsLoading(false);
@@ -579,12 +616,13 @@ const Admin = () => {
     setEditingProductId(null);
     setCollapsedColors([]);
     setValidationErrors([]);
+    setShowColorDropdown(null);
     initialImageIdsRef.current.clear();
-    addLog("🔄 Formulario reiniciado");
+    addLog("Formulario reiniciado");
   };
 
   const handleEdit = (product: Product) => {
-    addLog(`✏️ Editando producto: ${product.name}`, {
+    addLog(`Editando producto: ${product.name}`, {
       id: product.id,
       variants: product.variants.length,
       enabled: product.enabled
@@ -671,7 +709,7 @@ const Admin = () => {
     prevColorVariantsRef.current = JSON.parse(JSON.stringify(groupedColors));
     isInitializingRef.current = false;
     
-    addLog("✅ Formulario cargado para edición", {
+    addLog("Formulario cargado para edición", {
       colors: groupedColors.length,
       totalImages: groupedColors.reduce((sum, color) => sum + color.images.length, 0),
       totalSizes: groupedColors.reduce((sum, color) => sum + color.sizes.length, 0),
@@ -693,7 +731,7 @@ const Admin = () => {
     if (!window.confirm(confirmationMessage)) return;
 
     setIsToggling(id);
-    addLog(`🔄 Cambiando estado de producto ID ${id}: ${currentStatus ? 'habilitado → inhabilitado' : 'inhabilitado → habilitado'}`);
+    addLog(`Cambiando estado de producto ID ${id}: ${currentStatus ? 'habilitado → inhabilitado' : 'inhabilitado → habilitado'}`);
 
     try {
       const token = localStorage.getItem("token");
@@ -709,90 +747,16 @@ const Admin = () => {
       
       if (response.ok) {
         const newStatus = result.enabled ? 'habilitado' : 'inhabilitado';
-        const message = `✅ Producto ${newStatus}: ${product.name}`;
+        const message = `Producto ${newStatus}: ${product.name}`;
         addLog(message);
         alert(`Producto ${newStatus} exitosamente.`);
         fetchProducts();
       } else {
-        addLog(`❌ Error al cambiar estado: ${result.message}`);
+        addLog(`Error al cambiar estado: ${result.message}`);
         alert(`Error: ${result.message}`);
       }
     } catch (error) {
-      addLog("❌ Error de conexión al cambiar estado", error);
-      alert("Error de conexión");
-    } finally {
-      setIsToggling(null);
-    }
-  };
-
-  const disableProduct = async (id: number) => {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-
-    if (!window.confirm(`¿Inhabilitar el producto "${product.name}"?\n\nEl producto no será visible al público.`)) return;
-
-    setIsToggling(id);
-    addLog(`🚫 Inhabilitando producto ID ${id}: ${product.name}`);
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${MENU_PRODUCTS}/${id}/disable`, {
-        method: "PATCH",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-      });
-
-      const result: ApiResponse = await response.json();
-      
-      if (response.ok) {
-        addLog(`✅ Producto inhabilitado: ${product.name}`);
-        alert("Producto inhabilitado exitosamente.");
-        fetchProducts();
-      } else {
-        addLog(`❌ Error al inhabilitar: ${result.message}`);
-        alert(`Error: ${result.message}`);
-      }
-    } catch (error) {
-      addLog("❌ Error de conexión al inhabilitar", error);
-      alert("Error de conexión");
-    } finally {
-      setIsToggling(null);
-    }
-  };
-
-  const enableProduct = async (id: number) => {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-
-    if (!window.confirm(`¿Habilitar el producto "${product.name}"?\n\nEl producto será visible al público.`)) return;
-
-    setIsToggling(id);
-    addLog(`✅ Habilitando producto ID ${id}: ${product.name}`);
-
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${MENU_PRODUCTS}/${id}/enable`, {
-        method: "PATCH",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-      });
-
-      const result: ApiResponse = await response.json();
-      
-      if (response.ok) {
-        addLog(`✅ Producto habilitado: ${product.name}`);
-        alert("Producto habilitado exitosamente.");
-        fetchProducts();
-      } else {
-        addLog(`❌ Error al habilitar: ${result.message}`);
-        alert(`Error: ${result.message}`);
-      }
-    } catch (error) {
-      addLog("❌ Error de conexión al habilitar", error);
+      addLog("Error de conexión al cambiar estado", error);
       alert("Error de conexión");
     } finally {
       setIsToggling(null);
@@ -802,22 +766,22 @@ const Admin = () => {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
       .then(() => {
-        addLog("📋 URL copiada al portapapeles");
+        addLog("URL copiada al portapapeles");
         alert("URL copiada!");
       })
       .catch(err => {
-        addLog("❌ Error al copiar URL", err);
+        addLog("Error al copiar URL", err);
       });
   };
 
   const navigateTo = (path: string) => {
-    addLog(`📍 Navegando a: ${path}`);
+    addLog(`Navegando a: ${path}`);
     router.push(path);
   };
 
   const clearLogs = () => {
     setLogs([]);
-    addLog("🧹 Logs limpiados");
+    addLog("Logs limpiados");
   };
 
   const downloadLogs = () => {
@@ -831,7 +795,7 @@ const Admin = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    addLog("💾 Logs descargados");
+    addLog("Logs descargados");
   };
 
   if (role !== "ROLE_ADMIN") {
@@ -847,31 +811,37 @@ const Admin = () => {
     <div className={styles.container}>
       {/* Header con navegación */}
       <div className={styles.adminHeader}>
-        <h1 className={styles.adminTitle}>🏪 Panel de Administración</h1>
+        <h1 className={styles.adminTitle}>Panel de Administración</h1>
         <div className={styles.headerActions}>
+          <button 
+            className={styles.navButton}
+            onClick={() => navigateTo('/perfil')}
+          >
+            Perfil
+          </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/meta')}
           >
-            META
+            Meta
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/orden')}
           >
-            📦 Órdenes
+            Órdenes
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/admin/blog')}
           >
-            📝 Blog
+            Blog
           </button>
           <button 
             className={`${styles.logButton} ${showLogPanel ? styles.active : ''}`}
             onClick={() => setShowLogPanel(!showLogPanel)}
           >
-            📋 Logs ({logs.length})
+            Logs ({logs.length})
           </button>
         </div>
       </div>
@@ -880,19 +850,19 @@ const Admin = () => {
       {showLogPanel && (
         <div className={styles.logPanel}>
           <div className={styles.logPanelHeader}>
-            <h3>📋 Registro de Actividad</h3>
+            <h3>Registro de Actividad</h3>
             <div className={styles.logActions}>
               <button onClick={clearLogs} className={styles.smallButton}>
-                🧹 Limpiar
+                Limpiar
               </button>
               <button onClick={downloadLogs} className={styles.smallButton}>
-                💾 Descargar
+                Descargar
               </button>
               <button 
                 onClick={() => setShowLogPanel(false)} 
                 className={styles.smallButton}
               >
-                ✕ Cerrar
+                Cerrar
               </button>
             </div>
           </div>
@@ -911,12 +881,12 @@ const Admin = () => {
       )}
 
       <h2 className={styles.title}>
-        {editingProductId ? "✏️ Editar Producto" : "➕ Agregar Producto"}
+        {editingProductId ? "Editar Producto" : "Agregar Producto"}
       </h2>
       
       {validationErrors.length > 0 && (
         <div className={styles.validationErrors}>
-          <h4>⚠️ Errores de Validación:</h4>
+          <h4>Errores de Validación:</h4>
           <ul>
             {validationErrors.map((error, index) => (
               <li key={index}>{error.message}</li>
@@ -928,7 +898,7 @@ const Admin = () => {
       <form className={styles.form} onSubmit={handleSubmit}>
         {/* Sección de información general */}
         <div className={styles.formSection}>
-          <h3 className={styles.sectionTitle}>📋 Información General</h3>
+          <h3 className={styles.sectionTitle}>Información General</h3>
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
               <label className={styles.label}>
@@ -957,9 +927,9 @@ const Admin = () => {
                 disabled={isLoading}
               >
                 <option value="">Seleccionar género...</option>
-                <option value="NIÑOS">👦 NIÑOS</option>
-                <option value="NIÑAS">👧 NIÑAS</option>
-                <option value="UNISEX">👥 UNISEX</option>
+                <option value="NIÑOS">NIÑOS</option>
+                <option value="NIÑAS">NIÑAS</option>
+                <option value="UNISEX">UNISEX</option>
               </select>
             </div>
           </div>
@@ -981,7 +951,7 @@ const Admin = () => {
           </div>
 
           <div className={styles.typeInfo}>
-            <span className={styles.typeBadge}>👕 SUPERIOR</span>
+            <span className={styles.typeBadge}>SUPERIOR</span>
             <span className={styles.typeNote}>Tipo de producto fijo</span>
           </div>
         </div>
@@ -992,7 +962,7 @@ const Admin = () => {
         <div className={styles.formSection}>
           <div className={styles.sectionHeader}>
             <h3 className={styles.sectionTitle}>
-              🎨 Colores y Variantes 
+              Colores y Variantes 
               <span className={styles.sectionSubtitle}>
                 ({colorVariants.length} color{colorVariants.length !== 1 ? 'es' : ''})
               </span>
@@ -1003,7 +973,7 @@ const Admin = () => {
               onClick={handleAddColor}
               disabled={isLoading}
             >
-              ➕ Agregar Color
+              Agregar Color
             </button>
           </div>
           
@@ -1019,16 +989,64 @@ const Admin = () => {
                   {collapsedColors.includes(colorIndex) ? "▶" : "▼"}
                 </button>
                 
-                <div className={styles.colorNameSection}>
-                  <input
-                    className={styles.colorInput}
-                    type="text"
-                    value={colorVariant.color}
-                    onChange={(e) => handleColorChange(colorIndex, e.target.value)}
-                    required
-                    disabled={isLoading}
-                    placeholder="Nombre del color (ej: Rojo, Azul, Negro...)"
-                  />
+                <div className={styles.colorInputContainer}>
+                  <div className={styles.colorInputWrapper}>
+                    <input
+                      className={styles.colorInput}
+                      type="text"
+                      value={colorVariant.color}
+                      onChange={(e) => handleCustomColor(colorIndex, e.target.value)}
+                      onClick={() => toggleColorDropdown(colorIndex)}
+                      required
+                      disabled={isLoading}
+                      placeholder="Seleccionar o escribir color..."
+                      readOnly={false}
+                    />
+                    <button
+                      type="button"
+                      className={styles.colorDropdownButton}
+                      onClick={() => toggleColorDropdown(colorIndex)}
+                      disabled={isLoading}
+                    >
+                      ▼
+                    </button>
+                  </div>
+                  
+                  {showColorDropdown === colorIndex && (
+                    <div className={styles.colorDropdown}>
+                      <div className={styles.colorDropdownHeader}>
+                        <span>Colores disponibles</span>
+                        <button
+                          type="button"
+                          className={styles.closeDropdownButton}
+                          onClick={() => setShowColorDropdown(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className={styles.colorOptions}>
+                        {PREDEFINED_COLORS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={`${styles.colorOption} ${
+                              colorVariant.color === color ? styles.selected : ''
+                            }`}
+                            onClick={() => handleColorSelect(colorIndex, color)}
+                          >
+                            <span className={styles.colorDot} style={{ 
+                              backgroundColor: getColorHex(color) 
+                            }} />
+                            {color}
+                          </button>
+                        ))}
+                      </div>
+                      <div className={styles.customColorNote}>
+                        <small>O escribe un color personalizado arriba</small>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className={styles.colorStats}>
                     <span className={styles.colorCount}>
                       {colorVariant.sizes.length} talla{colorVariant.sizes.length !== 1 ? 's' : ''}
@@ -1048,7 +1066,7 @@ const Admin = () => {
                       disabled={isLoading}
                       title="Eliminar color"
                     >
-                      ✕ Eliminar
+                      Eliminar
                     </button>
                   )}
                 </div>
@@ -1094,7 +1112,7 @@ const Admin = () => {
                                   onClick={() => copyToClipboard(img.imageUrl)}
                                   title="Copiar URL"
                                 >
-                                  📋
+                                  Copiar
                                 </button>
                                 {colorVariant.images.length > 1 && (
                                   <button
@@ -1103,7 +1121,7 @@ const Admin = () => {
                                     onClick={() => handleRemoveImage(colorIndex, imgIndex)}
                                     title="Eliminar imagen"
                                   >
-                                    ✕
+                                    ×
                                   </button>
                                 )}
                               </div>
@@ -1119,7 +1137,7 @@ const Admin = () => {
                         onClick={() => handleAddImage(colorIndex)}
                         disabled={isLoading}
                       >
-                        ➕ Agregar otra imagen
+                        Agregar otra imagen
                       </button>
                     )}
                   </div>
@@ -1188,7 +1206,7 @@ const Admin = () => {
                               disabled={isLoading}
                               title="Eliminar talla"
                             >
-                              ✕
+                              ×
                             </button>
                           )}
                         </div>
@@ -1200,7 +1218,7 @@ const Admin = () => {
                       onClick={() => handleAddSize(colorIndex)}
                       disabled={isLoading}
                     >
-                      ➕ Agregar otra talla
+                      Agregar otra talla
                     </button>
                   </div>
                 </div>
@@ -1221,9 +1239,9 @@ const Admin = () => {
                 Procesando...
               </>
             ) : editingProductId ? (
-              '💾 Actualizar Producto'
+              'Actualizar Producto'
             ) : (
-              '🚀 Crear Producto'
+              'Crear Producto'
             )}
           </button>
 
@@ -1234,7 +1252,7 @@ const Admin = () => {
               onClick={resetForm}
               disabled={isLoading}
             >
-              ↩️ Cancelar Edición
+              Cancelar Edición
             </button>
           )}
           
@@ -1244,7 +1262,7 @@ const Admin = () => {
             onClick={resetForm}
             disabled={isLoading || (!name && !description && !gender && colorVariants[0].color === "")}
           >
-            🧹 Limpiar Formulario
+            Limpiar Formulario
           </button>
         </div>
       </form>
@@ -1253,21 +1271,20 @@ const Admin = () => {
       <div className={styles.productsSection}>
         <div className={styles.productsHeader}>
           <h2 className={styles.title}>
-            📦 Productos ({products.length})
+            Productos ({products.length})
             <button 
               onClick={fetchProducts} 
               className={styles.refreshButton}
               disabled={isLoading}
               title="Actualizar lista"
             >
-              🔄 Actualizar
+              Actualizar
             </button>
           </h2>
         </div>
         
         {products.length === 0 ? (
           <div className={styles.emptyState}>
-            <span className={styles.emptyIcon}>📭</span>
             <p>No hay productos registrados.</p>
             <p className={styles.emptySubtitle}>Crea tu primer producto usando el formulario superior</p>
           </div>
@@ -1293,33 +1310,32 @@ const Admin = () => {
                           <strong>{product.name}</strong>
                           {!product.enabled && (
                             <span className={styles.disabledBadge} title="Producto inhabilitado">
-                              🚫 Inhabilitado
+                              Inhabilitado
                             </span>
                           )}
                         </div>
                         <small>{product.description.substring(0, 60)}...</small>
                         {product.hasOrders && (
                           <span className={styles.orderBadge} title="Tiene órdenes asociadas">
-                            📦 Con órdenes
+                            Con órdenes
                           </span>
                         )}
                       </div>
                     </td>
                     <td>
                       <span className={`${styles.badge} ${styles.genderBadge} ${styles[product.gender.toLowerCase()]}`}>
-                        {product.gender === 'NIÑAS' ? '👧' : 
-                         product.gender === 'NIÑOS' ? '👦' : '👥'} {product.gender}
+                        {product.gender}
                       </span>
                     </td>
                     <td>
                       <div className={styles.statusCell}>
                         {product.enabled ? (
                           <span className={styles.statusEnabled}>
-                            ✅ Habilitado
+                            Habilitado
                           </span>
                         ) : (
                           <span className={styles.statusDisabled}>
-                            ❌ Inhabilitado
+                            Inhabilitado
                           </span>
                         )}
                       </div>
@@ -1352,7 +1368,7 @@ const Admin = () => {
                           disabled={isLoading || isToggling !== null}
                           title="Editar producto"
                         >
-                          ✏️ Editar
+                          Editar
                         </button>
                         
                         <button 
@@ -1364,9 +1380,9 @@ const Admin = () => {
                           {isToggling === product.id ? (
                             <span className={styles.smallSpinner}></span>
                           ) : product.enabled ? (
-                            '🚫 Inhabilitar'
+                            'Inhabilitar'
                           ) : (
-                            '✅ Habilitar'
+                            'Habilitar'
                           )}
                         </button>
                       </div>
@@ -1382,14 +1398,14 @@ const Admin = () => {
       {/* Footer informativo */}
       <div className={styles.infoFooter}>
         <div className={styles.infoItem}>
-          <strong>ℹ️ Información:</strong>
+          <strong>Información:</strong>
           <p>• Productos inhabilitados no son visibles al público</p>
           <p>• Stock 0 = Producto agotado = No se compra</p>
           <p>• Colores/tallas con órdenes no se pueden editar</p>
           <p>• Precios en  (COP)</p>
         </div>
         <div className={styles.infoItem}>
-          <strong>📝 Notas:</strong>
+          <strong>Notas:</strong>
           <p>• Guarda cambios frecuentemente</p>
           <p>• Verifica imágenes antes de publicar</p>
           <p>• Mantén stock actualizado</p>
@@ -1400,4 +1416,32 @@ const Admin = () => {
   );
 };
 
-export default Admin;
+// Función para obtener el código hexadecimal de un color
+const getColorHex = (colorName: string): string => {
+  const colorMap: { [key: string]: string } = {
+    "Rojo": "#FF0000",
+    "Azul": "#0000FF",
+    "Verde": "#008000",
+    "Negro": "#000000",
+    "Blanco": "#FFFFFF",
+    "Gris": "#808080",
+    "Amarillo": "#FFFF00",
+    "Naranja": "#FFA500",
+    "Rosa": "#FFC0CB",
+    "Morado": "#800080",
+    "Marrón": "#A52A2A",
+    "Beige": "#F5F5DC",
+    "Turquesa": "#40E0D0",
+    "Vino": "#722F37",
+    "Oliva": "#808000",
+    "Celeste": "#87CEEB",
+    "Coral": "#FF7F50",
+    "Lavanda": "#E6E6FA",
+    "Mostaza": "#FFDB58",
+    "Bordó": "#800000"
+  };
+  
+  return colorMap[colorName] || "#CCCCCC";
+};
+
+export default Admin; 

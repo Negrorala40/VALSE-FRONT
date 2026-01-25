@@ -546,13 +546,15 @@ const MetaDashboard = () => {
           <li><strong>URL Producto:</strong> https://www.amartekids.com/product?id=ID_PRODUCTO</li>
           <li><strong>SKU Base:</strong> {`MARTE-{ID_PRODUCTO}`} (las variantes tienen SKU derivado)</li>
           <li><strong>Migración:</strong> Los productos sin metadata se pueden migrar automáticamente</li>
+          <li><strong>Envío (shipping):</strong> Formato: <code>País:Región:Servicio:PrecioMoneda</code></li>
+          <li><strong>Ejemplo Envío:</strong> <code>CO::::0.0 COP</code> (gratis) o <code>CO:Medellin:Express:12000.0 COP</code></li>
         </ul>
       </div>
     </div>
   );
 };
 
-// Modal de edición actualizado
+// Modal de edición actualizado CON SHIPPING CORREGIDO
 interface EditMetaModalProps {
   product: MetaProductResponse;
   onClose: () => void;
@@ -560,7 +562,13 @@ interface EditMetaModalProps {
 }
 
 const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave }) => {
-  // Corrección: especificar tipos explícitos para shippingWeight y salePrice
+  // Estados para shipping formateado
+  const [shippingCountry, setShippingCountry] = useState('CO');
+  const [shippingRegion, setShippingRegion] = useState('');
+  const [shippingService, setShippingService] = useState('Standard');
+  const [shippingPrice, setShippingPrice] = useState('0.0');
+  const [shippingCurrency, setShippingCurrency] = useState('COP');
+  
   const [formData, setFormData] = useState<{
     enabledForMeta: boolean;
     metaTitle: string;
@@ -571,9 +579,9 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
     pattern: string;
     style: string;
     gtin: string;
-    shipping: string;
-    shippingWeight?: number;  // Cambiado a number | undefined
-    salePrice?: number;       // Cambiado a number | undefined
+    shipping?: string;
+    shippingWeight?: number;
+    salePrice?: number;
     salePriceStartDate: string;
     salePriceEndDate: string;
     videoUrl: string;
@@ -600,13 +608,74 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
   });
 
   const [saving, setSaving] = useState(false);
+  const [shippingError, setShippingError] = useState('');
+
+  // Parsear shipping existente al cargar
+  useEffect(() => {
+    if (formData.shipping) {
+      parseShippingString(formData.shipping);
+    }
+  }, []);
+
+  const parseShippingString = (shippingStr: string) => {
+    if (!shippingStr) return;
+    
+    // Formato esperado: CO:Medellin:Standard:12000.0 COP
+    const parts = shippingStr.split(':');
+    
+    if (parts.length >= 4) {
+      setShippingCountry(parts[0] || 'CO');
+      setShippingRegion(parts[1] || '');
+      setShippingService(parts[2] || 'Standard');
+      
+      // Extraer precio y moneda
+      const priceCurrency = parts[3] || '0.0 COP';
+      const priceMatch = priceCurrency.match(/(\d+\.?\d*)\s*([A-Z]{3})/);
+      
+      if (priceMatch) {
+        setShippingPrice(priceMatch[1]);
+        setShippingCurrency(priceMatch[2]);
+      } else {
+        setShippingPrice('0.0');
+        setShippingCurrency('COP');
+      }
+    }
+  };
+
+  const formatShippingString = () => {
+    // Validar precio
+    const priceNum = parseFloat(shippingPrice);
+    if (isNaN(priceNum)) {
+      setShippingError('El precio debe ser un número válido');
+      return null;
+    }
+    
+    // Formato META: País:Región:Servicio:PrecioMoneda
+    const regionPart = shippingRegion ? shippingRegion : ''; // Si está vacío, se deja vacío
+    const shippingFormatted = `${shippingCountry}:${regionPart}:${shippingService}:${priceNum.toFixed(1)} ${shippingCurrency}`;
+    
+    return shippingFormatted;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setShippingError('');
+    
+    // Validar y formatear shipping
+    const formattedShipping = formatShippingString();
+    if (!formattedShipping) {
+      return;
+    }
+    
     setSaving(true);
     
     try {
-      const success = await onSave(product.productId, formData);
+      const dataToSend = {
+        ...formData,
+        shipping: formattedShipping
+      };
+      
+      const success = await onSave(product.productId, dataToSend);
       if (success) {
         onClose();
       }
@@ -616,6 +685,26 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
       setSaving(false);
     }
   };
+
+  // Opciones de servicio de envío
+  const shippingServices = [
+    { value: 'Standard', label: 'Estándar (4-7 días)' },
+    { value: 'Express', label: 'Express (1-3 días)' },
+    { value: 'NextDay', label: 'Próximo día' },
+    { value: 'Free', label: 'Gratis' }
+  ];
+
+  // Opciones de región para Colombia
+  const colombiaRegions = [
+    { value: '', label: 'Todo el país' },
+    { value: 'Medellin', label: 'Medellín' },
+    { value: 'Bogota', label: 'Bogotá' },
+    { value: 'Cali', label: 'Cali' },
+    { value: 'Barranquilla', label: 'Barranquilla' },
+    { value: 'Cartagena', label: 'Cartagena' },
+    { value: 'Pereira', label: 'Pereira' },
+    { value: 'Manizales', label: 'Manizales' }
+  ];
 
   return (
     <div className="modal-overlay">
@@ -750,7 +839,93 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
             
             <div className="form-section">
               <h3>Envío y Precios</h3>
-              <div className="form-grid">
+              <div className="form-grid shipping-grid">
+                <div className="form-group">
+                  <label>País Envío</label>
+                  <select
+                    value={shippingCountry}
+                    onChange={(e) => setShippingCountry(e.target.value)}
+                    className="shipping-select"
+                  >
+                    <option value="CO">Colombia</option>
+                    <option value="US">Estados Unidos</option>
+                    <option value="MX">México</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Región (opcional)</label>
+                  <select
+                    value={shippingRegion}
+                    onChange={(e) => setShippingRegion(e.target.value)}
+                    className="shipping-select"
+                  >
+                    {colombiaRegions.map(region => (
+                      <option key={region.value} value={region.value}>
+                        {region.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Servicio</label>
+                  <select
+                    value={shippingService}
+                    onChange={(e) => setShippingService(e.target.value)}
+                    className="shipping-select"
+                  >
+                    {shippingServices.map(service => (
+                      <option key={service.value} value={service.value}>
+                        {service.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Precio Envío</label>
+                  <div className="price-input-group">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={shippingPrice}
+                      onChange={(e) => setShippingPrice(e.target.value)}
+                      placeholder="0.0"
+                      className={`price-input ${shippingError ? 'error' : ''}`}
+                    />
+                    <select
+                      value={shippingCurrency}
+                      onChange={(e) => setShippingCurrency(e.target.value)}
+                      className="currency-select"
+                    >
+                      <option value="COP">COP</option>
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                  </div>
+                  {shippingError && (
+                    <div className="error-message">{shippingError}</div>
+                  )}
+                  <small className="help-text">
+                    Usa 0.0 para envío gratis. Ejemplo: 12000.0 COP
+                  </small>
+                </div>
+                
+                <div className="form-group full-width">
+                  <label>Formato Shipping META</label>
+                  <div className="shipping-preview">
+                    <code>
+                      {formatShippingString() || 'CO::::0.0 COP'}
+                    </code>
+                    <small className="help-text">
+                      Formato: <strong>País:Región:Servicio:PrecioMoneda</strong><br/>
+                      Ejemplos: <code>CO::::0.0 COP</code> (gratis nacional) o <code>CO:Medellin:Express:12000.0 COP</code>
+                    </small>
+                  </div>
+                </div>
+                
                 <div className="form-group">
                   <label>Peso Envío (kg)</label>
                   <input
@@ -765,16 +940,6 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
                       });
                     }}
                     placeholder="0.5"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Info Envío</label>
-                  <input
-                    type="text"
-                    value={formData.shipping || ''}
-                    onChange={(e) => setFormData({...formData, shipping: e.target.value})}
-                    placeholder="Ej: Envío gratis a todo Colombia"
                   />
                 </div>
                 
