@@ -105,19 +105,18 @@ interface MercadoPagoResponse {
   publicKey: string;
   orderId: string;
   externalReference: string;
-  notificationUrl?: string;
-  backUrls?: {
-    success: string;
-    failure: string;
-    pending: string;
-  };
+  totalAmount?: number;
+  shippingCost?: number;
+  validation?: string;
+  hasExistingPreference?: boolean;
+  message?: string;
 }
 
 interface PaymentStatusResponse {
   success: boolean;
   orderId: number;
-  status: string; // Estado de la orden
-  mercadoPagoStatus?: string; // Estado de MercadoPago
+  status: string;
+  mercadoPagoStatus?: string;
   paymentId?: string;
   paymentMethod?: string;
   lastUpdated?: string;
@@ -125,9 +124,12 @@ interface PaymentStatusResponse {
   preferenceId?: string;
   totalPrice?: number;
   mercadoPagoPreferenceId?: string;
+  stockReservedAt?: string;
+  stockReservationExpired?: boolean;
+  stockReservationMinutesLeft?: number;
+  paymentInfo?: any;
 }
 
-// 🔴 INTERFAZ PARA RESPONSE DEL CARRITO CON TOTALES
 interface CartTotalsResponse {
   items: Array<{
     id: number;
@@ -389,7 +391,7 @@ const CheckoutPage = () => {
       
       setCartItems(items);
       updateTotalsFromResponse(data);
-      console.log(`✅ Carrito cargado: ${items.length} items, Total: ${formatPrice(data.total)}`);
+      console.log(`✅ Carrito cargado: ${items.length} items, Subtotal: ${formatPrice(data.subtotal)}, Envío: ${formatPrice(data.shippingCost)}, Total: ${formatPrice(data.total)}`);
       
     } catch (error: unknown) {
       const err = error as Error;
@@ -750,6 +752,7 @@ const CheckoutPage = () => {
     setError('');
   };
 
+  // 🔴 FUNCIÓN CORREGIDA: Crear orden con validación de totales
   const createOrder = useCallback(async (): Promise<OrderResponse | null> => {
     if (cartItems.length === 0) {
       setError('Carrito vacío');
@@ -761,6 +764,12 @@ const CheckoutPage = () => {
       return null;
     }
 
+    // 🔴 VALIDAR TOTALES ANTES DE CREAR ORDEN
+    if (total <= 0) {
+      setError('Error en el cálculo del total. Por favor, recarga la página.');
+      return null;
+    }
+
     try {
       setIsProcessingPayment(true);
       setError('');
@@ -769,6 +778,9 @@ const CheckoutPage = () => {
       console.log('🚀 Creando orden...');
       console.log('📤 SessionId enviado:', sessionId?.substring(0, 8) + '...');
       console.log('👤 Autenticado:', isAuthenticated);
+      console.log('💰 Total calculado:', total);
+      console.log('🚚 Costo de envío:', shippingCost);
+      console.log('🧮 Subtotal:', subtotal);
       
       let orderResponse: OrderResponse;
       
@@ -799,6 +811,7 @@ const CheckoutPage = () => {
 
         orderResponse = await orderRes.json() as OrderResponse;
         console.log('✅ Orden autenticada creada:', orderResponse.id);
+        console.log('💰 Total de la orden (backend):', orderResponse.totalPrice);
         
       } else {
         if (!anonymousUserInfo.email) {
@@ -837,10 +850,20 @@ const CheckoutPage = () => {
 
         orderResponse = await orderRes.json() as OrderResponse;
         console.log('✅ Orden anónima creada:', orderResponse.id);
+        console.log('💰 Total de la orden (backend):', orderResponse.totalPrice);
       }
 
       if (!orderResponse.id) {
         throw new Error('No se pudo obtener el ID de la orden');
+      }
+
+      // 🔴 VALIDAR QUE EL TOTAL DE LA ORDEN COINCIDA
+      const expectedTotal = total; // Total que el frontend calculó
+      const actualTotal = orderResponse.totalPrice;
+      
+      if (Math.abs(expectedTotal - actualTotal) > 1) {
+        console.warn(`⚠️ Diferencia en totales: Frontend ${expectedTotal} vs Backend ${actualTotal}`);
+        // No fallamos aquí, pero lo registramos
       }
 
       // Guardar orden en localStorage
@@ -848,7 +871,8 @@ const CheckoutPage = () => {
       localStorage.setItem('pendingOrderData', JSON.stringify({
         shippingAddress: selectedAddress,
         customerInfo: isAuthenticated ? userData : anonymousUserInfo,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        total: orderResponse.totalPrice
       }));
 
       setOrderId(orderResponse.id.toString());
@@ -870,8 +894,9 @@ const CheckoutPage = () => {
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, sessionId]);
+  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, sessionId, total, shippingCost, subtotal]);
 
+  // 🔴 FUNCIÓN CORREGIDA: Crear preferencia con totalAmount correcto
   const createMercadoPagoPreference = async (orderId: string) => {
     try {
       setMercadoPagoLoading(true);
@@ -879,16 +904,25 @@ const CheckoutPage = () => {
       
       console.log('💳 Creando preferencia MercadoPago para orden:', orderId);
       console.log('📤 SessionId enviado:', sessionId?.substring(0, 8) + '...');
+      console.log('💰 Total con envío:', total);
+      console.log('🚚 Costo de envío:', shippingCost);
+      console.log('🧮 Subtotal:', subtotal);
       
       const token = localStorage.getItem('token');
       const headers = getRequestHeaders(token);
+      
+      // 🔴 CRÍTICO: Enviar totalAmount como BigDecimal (string para precisión)
+      const totalAmount = total; // Ya incluye envío
       
       const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
         headers,
         credentials: 'include',
         body: JSON.stringify({
-          orderId: parseInt(orderId)
+          orderId: parseInt(orderId),
+          totalAmount: totalAmount, // 🔴 ESTO ES OBLIGATORIO Y DEBE COINCIDIR
+          paymentMethod: "MERCADO_PAGO",
+          shippingAmount: shippingCost
         }),
       });
 
@@ -896,11 +930,31 @@ const CheckoutPage = () => {
       
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText || 'Error creando preferencia'}`);
+        console.error('❌ Error response:', errorText);
+        
+        let errorMessage = `Error ${response.status}: ${errorText || 'Error creando preferencia'}`;
+        
+        // Intentar parsear como JSON
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error) {
+            errorMessage = errorJson.error;
+          }
+        } catch {}
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json() as MercadoPagoResponse;
       console.log('✅ Preferencia creada:', data.preferenceId);
+      console.log('💰 Total validado:', data.totalAmount);
+      console.log('🚚 Envío validado:', data.shippingCost);
+      console.log('✅ Validación:', data.validation);
+      
+      if (data.hasExistingPreference) {
+        console.log('🔄 Usando preferencia existente');
+        setSuccessMessage(data.message || 'Ya tienes un pago en proceso');
+      }
       
       if (!data.success) {
         throw new Error('No se pudo crear la preferencia de pago');
@@ -916,7 +970,48 @@ const CheckoutPage = () => {
     } catch (err: unknown) {
       const error = err as Error;
       console.error('🛑 Error creando preferencia MercadoPago:', error);
-      setError(`Error al crear el pago: ${error.message || 'Error desconocido'}`);
+      
+      // 🔴 ERROR DE VALIDACIÓN DE MONTO - MOSTRAR MENSAJE ESPECÍFICO
+      if (error.message.includes('no coincide') || 
+          error.message.includes('monto') || 
+          error.message.includes('PAYMENT_VALIDATION_FAILED') ||
+          error.message.includes('manipulación')) {
+        
+        setError(`⚠️ Error de validación: ${error.message}. Por favor, recarga la página e intenta nuevamente.`);
+        
+        // Limpiar datos y reintentar
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+        localStorage.removeItem('pendingPreferenceId');
+        setOrderCreated(false);
+        setOrderId('');
+        setMercadoPagoData(null);
+        
+        // Forzar recarga del carrito
+        const token = localStorage.getItem('token');
+        await fetchCart(token);
+        
+      } else if (error.message.includes('Acceso denegado') || error.message.includes('no tienes permiso')) {
+        setError('No tienes permiso para acceder a esta orden. Por favor, inicia sesión nuevamente.');
+        
+        // Limpiar sesión
+        localStorage.removeItem('token');
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+        setIsAuthenticated(false);
+        
+      } else if (error.message.includes('ya fue procesada')) {
+        setError('Esta orden ya fue procesada. Por favor, crea una nueva orden.');
+        
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+        setOrderCreated(false);
+        setOrderId('');
+        
+      } else {
+        setError(`Error al crear el pago: ${error.message || 'Error desconocido'}`);
+      }
+      
       return null;
     } finally {
       setMercadoPagoLoading(false);
@@ -942,18 +1037,42 @@ const CheckoutPage = () => {
       }
 
       const data = await response.json() as PaymentStatusResponse;
-      console.log('📊 Estado del pago:', data);
+      console.log('📊 Estado del pago:', {
+        orderStatus: data.status,
+        mpStatus: data.mercadoPagoStatus,
+        hasPayment: data.hasPayment,
+        reservationMinutesLeft: data.stockReservationMinutesLeft
+      });
       
       setPaymentStatus(data);
       
-      if (data.status === 'APROBADO' || data.mercadoPagoStatus === 'approved') {
+      if (data.status === 'PAGO_APROBADO' || data.mercadoPagoStatus === 'approved') {
         handleSuccessfulPayment(orderId);
         return data;
       }
       
-      if (data.status === 'RECHAZADO' || data.mercadoPagoStatus === 'rejected') {
+      if (data.status === 'PAGO_RECHAZADO' || data.mercadoPagoStatus === 'rejected') {
         setError('El pago fue rechazado. Por favor intenta con otro método de pago.');
         return data;
+      }
+      
+      if (data.status === 'CANCELADO') {
+        setError('La orden fue cancelada. Por favor, crea una nueva orden.');
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+        setOrderCreated(false);
+        return data;
+      }
+      
+      // 🔴 VERIFICAR RESERVA DE STOCK
+      if (data.stockReservationMinutesLeft !== undefined && data.stockReservationMinutesLeft <= 0) {
+        console.warn('⚠️ Reserva de stock expirada');
+        if (!data.stockReservationExpired) {
+          setError('La reserva de stock ha expirado. Por favor, crea una nueva orden.');
+          localStorage.removeItem('pendingOrderId');
+          localStorage.removeItem('pendingOrderData');
+          setOrderCreated(false);
+        }
       }
       
       return data;
@@ -975,6 +1094,7 @@ const CheckoutPage = () => {
       checkPaymentStatus(orderId);
     }, 5000);
     
+    // Detener después de 5 minutos
     setTimeout(() => {
       if (paymentStatusIntervalRef.current) {
         clearInterval(paymentStatusIntervalRef.current);
@@ -995,6 +1115,7 @@ const CheckoutPage = () => {
     localStorage.removeItem('pendingOrderData');
     localStorage.removeItem('pendingPreferenceId');
     localStorage.removeItem('mercadoPagoOrderId');
+    localStorage.removeItem('cartSessionId');
     
     setCartItems([]);
     setSubtotal(0);
@@ -1005,7 +1126,7 @@ const CheckoutPage = () => {
     setOrderId('');
     setMercadoPagoData(null);
     
-    setSuccessMessage(`✅ ¡Pago exitoso! Tu orden #${orderId} ha sido confirmada.`);
+    setSuccessMessage(`✅ ¡Pago exitoso! Tu orden #${orderId} ha sido confirmada. Redirigiendo...`);
     
     setTimeout(() => {
       window.location.href = `/checkout/success?orderId=${orderId}`;
@@ -1018,62 +1139,143 @@ const CheckoutPage = () => {
       return;
     }
     
+    // 🔴 LIMPIAR DATOS ANTERIORES COMPLETAMENTE
+    localStorage.removeItem('pendingPreferenceId');
+    setMercadoPagoData(null);
+    setError('');
+    
+    // 🔴 ACTUALIZAR CARRITO ANTES DE REINTENTAR
+    try {
+      const token = localStorage.getItem('token');
+      await fetchCart(token);
+      
+      // Pequeño delay para asegurar que los totales se actualicen
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log('🔄 Recalculando totales después de recargar carrito...');
+      console.log('💰 Nuevo total:', total);
+      console.log('🚚 Nuevo envío:', shippingCost);
+      console.log('🧮 Nuevo subtotal:', subtotal);
+      
+    } catch (error) {
+      console.error('Error actualizando carrito:', error);
+    }
+    
     await createMercadoPagoPreference(orderId);
   };
 
   // 🔴 INICIALIZAR CHECKOUT PRO
   const initializeCheckoutPro = useCallback(() => {
     if (!mp || !mercadoPagoData?.preferenceId || !walletRef.current) {
+      console.log('⏳ Esperando datos para Checkout Pro:', {
+        mp: !!mp,
+        preferenceId: mercadoPagoData?.preferenceId,
+        walletRef: !!walletRef.current
+      });
       return;
     }
 
     try {
       console.log('🔄 Inicializando Checkout Pro...');
+      console.log('🎫 Preference ID:', mercadoPagoData.preferenceId);
       
       // Limpiar contenedor primero
       if (walletRef.current) {
         walletRef.current.innerHTML = '';
       }
 
-      const checkoutButton = mp.checkout({
-        preference: {
-          id: mercadoPagoData.preferenceId
+      // 🔴 INICIALIZAR CON BOTÓN PERSONALIZADO
+      const bricksBuilder = mp.bricks();
+      
+      bricksBuilder.create("wallet", "wallet-container", {
+        initialization: {
+          preferenceId: mercadoPagoData.preferenceId,
         },
-        render: {
-          container: '.wallet-container',
-          label: 'Pagar con Mercado Pago',
+        customization: {
+          visual: {
+            buttonBackground: "black",
+            borderRadius: "8px",
+            valuePropColor: "gray",
+          },
+          texts: {
+            valueProp: "security",
+            action: "pay",
+            valuePropRedirect: "Pagar con Mercado Pago es más seguro",
+          },
         },
-        theme: {
-          elementsColor: '#4f46e5',
-          headerColor: '#3730a3',
+        callbacks: {
+          onReady: () => {
+            console.log("✅ Wallet brick ready");
+          },
+          onError: (error: any) => {
+            console.error("❌ Wallet brick error:", error);
+            // Fallback a initPoint si el brick falla
+            if (mercadoPagoData.initPoint) {
+              console.log("🔄 Usando initPoint como fallback");
+              const fallbackBtn = document.createElement('button');
+              fallbackBtn.className = 'checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full';
+              fallbackBtn.innerHTML = `
+                <CreditCard class="checkout-icon" />
+                Pagar con MercadoPago
+              `;
+              fallbackBtn.onclick = () => {
+                window.open(mercadoPagoData.initPoint, '_blank');
+              };
+              if (walletRef.current) {
+                walletRef.current.appendChild(fallbackBtn);
+              }
+            }
+          },
         },
-        autoOpen: true,
       });
-
+      
       console.log('✅ Checkout Pro inicializado');
       
     } catch (error) {
       console.error('❌ Error inicializando Checkout Pro:', error);
-      setError('Error al cargar el sistema de pago');
+      
+      // Fallback al initPoint
+      if (mercadoPagoData.initPoint && walletRef.current) {
+        const fallbackBtn = document.createElement('button');
+        fallbackBtn.className = 'checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full';
+        fallbackBtn.innerHTML = `
+          <CreditCard class="checkout-icon" />
+          Pagar con MercadoPago
+        `;
+        fallbackBtn.onclick = () => {
+          window.open(mercadoPagoData.initPoint, '_blank');
+        };
+        walletRef.current.appendChild(fallbackBtn);
+      }
     }
   }, [mp, mercadoPagoData]);
 
   useEffect(() => {
-    if (mercadoPagoData?.preferenceId) {
-      initializeCheckoutPro();
+    if (mercadoPagoData?.preferenceId && step === 3) {
+      // Pequeño delay para asegurar que el DOM esté listo
+      const timer = setTimeout(() => {
+        initializeCheckoutPro();
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
-  }, [mercadoPagoData, initializeCheckoutPro]);
+  }, [mercadoPagoData, step, initializeCheckoutPro]);
 
   useEffect(() => {
     const createOrderAndPreference = async () => {
       if (step === 3 && !orderCreated && !isProcessingPayment && !mercadoPagoData) {
+        console.log('🔄 Step 3: Creando orden y preferencia...');
+        
         if (orderFromStorageRef.current) {
+          console.log('📦 Usando orden almacenada:', orderFromStorageRef.current);
           setOrderId(orderFromStorageRef.current);
           setOrderCreated(true);
           await createMercadoPagoPreference(orderFromStorageRef.current);
         } else {
+          console.log('📦 Creando nueva orden...');
           const order = await createOrder();
           if (order) {
+            console.log('💳 Creando preferencia para nueva orden...');
             await createMercadoPagoPreference(order.id.toString());
           }
         }
@@ -1081,19 +1283,21 @@ const CheckoutPage = () => {
     };
     
     createOrderAndPreference();
-  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder]);
+  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder, createMercadoPagoPreference]);
 
   useEffect(() => {
-    if (step === 3 && orderId && !mercadoPagoLoading) {
+    if (step === 3 && orderId && !mercadoPagoLoading && orderCreated) {
+      console.log('📊 Iniciando polling para orden:', orderId);
       startPaymentStatusPolling(orderId);
     }
     
     return () => {
       if (paymentStatusIntervalRef.current) {
         clearInterval(paymentStatusIntervalRef.current);
+        paymentStatusIntervalRef.current = null;
       }
     };
-  }, [step, orderId, mercadoPagoLoading]);
+  }, [step, orderId, mercadoPagoLoading, orderCreated]);
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -1360,13 +1564,6 @@ const CheckoutPage = () => {
                               required
                             />
                           </div>
-                        </div>
-                        
-                        <div className="checkout-guest-notice">
-                          {/* <small>
-                            ⚠️ Como invitado, tu pedido se vinculará a tu email. 
-                            Puedes registrarte después para ver el historial de tus órdenes.
-                          </small> */}
                         </div>
                       </div>
                     )}
@@ -1687,7 +1884,7 @@ const CheckoutPage = () => {
                           </div>
                           <div className="checkout-payment-status-row">
                             <span>Estado Orden:</span>
-                            <span className={`checkout-payment-status-badge ${paymentStatus.status === 'PENDIENTE' ? 'pending' : paymentStatus.status === 'APROBADO' ? 'approved' : 'rejected'}`}>
+                            <span className={`checkout-payment-status-badge ${paymentStatus.status === 'PENDIENTE' ? 'pending' : paymentStatus.status === 'PAGO_APROBADO' ? 'approved' : 'rejected'}`}>
                               {paymentStatus.status}
                             </span>
                           </div>
@@ -1699,10 +1896,14 @@ const CheckoutPage = () => {
                               </span>
                             </div>
                           )}
-                          {paymentStatus.paymentMethod && (
+                          {paymentStatus.stockReservationMinutesLeft !== undefined && (
                             <div className="checkout-payment-status-row">
-                              <span>Método:</span>
-                              <span>{paymentStatus.paymentMethod}</span>
+                              <span>Tiempo reserva:</span>
+                              <span className={paymentStatus.stockReservationMinutesLeft > 0 ? 'text-green-600' : 'text-red-600'}>
+                                {paymentStatus.stockReservationMinutesLeft > 0 
+                                  ? `${paymentStatus.stockReservationMinutesLeft} minutos` 
+                                  : 'Expirada'}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -1710,7 +1911,7 @@ const CheckoutPage = () => {
                     )}
 
                     {/* 🔴 CHECKOUT PRO - MODO PRODUCCIÓN */}
-                    {orderCreated && mercadoPagoData && !mercadoPagoLoading && (
+                    {orderCreated && mercadoPagoData && !mercadoPagoLoading && !isProcessingPayment && (
                       <div className="checkout-payment-action">
                         <div className="checkout-payment-ready">
                           <div className="checkout-payment-ready-header">
@@ -1725,7 +1926,7 @@ const CheckoutPage = () => {
                             </div>
                             
                             {/* Botón de fallback si el checkout no se carga */}
-                            {!mp && (
+                            {(!mp || !mercadoPagoData.preferenceId) && mercadoPagoData.initPoint && (
                               <button
                                 className="checkout-btn checkout-btn-success checkout-btn-lg checkout-btn-full"
                                 onClick={() => {
