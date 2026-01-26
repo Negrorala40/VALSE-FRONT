@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_BASE_URL } from '@/app/utils/Api';
-import './meta.css';
+import styles from './meta.module.css';
 
 // Tipos de datos ACTUALIZADOS para V2
 interface MetaVariantInfo {
@@ -70,8 +70,6 @@ const MetaDashboard = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showOnlyEnabled, setShowOnlyEnabled] = useState(false);
-  const [batchMode, setBatchMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -314,256 +312,401 @@ const MetaDashboard = () => {
     return product.variants.filter(v => v.stock > 0).length;
   };
 
-  if (loading) return <div className="loading">Cargando...</div>;
-  if (error) return <div className="error">Error: {error}</div>;
+  if (loading) return (
+    <div className={styles.loadingState}>
+      <div className={styles.spinner}></div>
+      <p>Cargando dashboard META...</p>
+    </div>
+  );
+  
+  if (error) return (
+    <div className={styles.errorAlert}>
+      <div className={styles.errorContent}>
+        <span className={styles.errorIcon}>⚠️</span>
+        <div className={styles.errorText}>
+          <strong>Error:</strong> {error}
+        </div>
+      </div>
+      <button onClick={loadMetaData} className={styles.retryButton}>
+        <span className={styles.buttonIcon}>🔄</span>
+        Reintentar
+      </button>
+    </div>
+  );
 
   return (
-    <div className="meta-container">
+    <div className={styles.container}>
       {/* Barra de navegación */}
-      <div className="navigation-bar">
-        <div className="nav-buttons">
+      <div className={styles.adminHeader}>
+        <div className={styles.headerLeft}>
+          <h1 className={styles.adminTitle}>Panel de Administración</h1>
+          <div className={styles.headerMeta}>
+            <span className={styles.pageBadge}>META</span>
+            <span className={styles.productCount}>{totalElements} productos</span>
+          </div>
+        </div>
+        <div className={styles.headerActions}>
           <button 
-            className="navButton"
+            className={styles.navButton}
             onClick={() => navigateTo('/admin')}
           >
             Admin
           </button>
           <button 
-            className="navButton"
+            className={styles.navButton}
             onClick={() => navigateTo('/perfil')}
           >
             Perfil
           </button>
           <button 
-            className="navButton"
+            className={`${styles.navButton} ${styles.active}`}
             onClick={() => navigateTo('/meta')}
           >
-            Meta
+            META
           </button>
           <button 
-            className="navButton"
+            className={styles.navButton}
             onClick={() => navigateTo('/orden')}
           >
             Órdenes
           </button>
           <button 
-            className="navButton"
+            className={styles.navButton}
             onClick={() => navigateTo('/admin/blog')}
           >
             Blog
           </button>
         </div>
       </div>
-      
-      {/* Header */}
-      <header className="meta-header">
-        <h1>📱 Dashboard META (Facebook/Instagram)</h1>
-        <p>Administra tus productos para Facebook e Instagram Shopping</p>
-      </header>
 
-      {/* Estadísticas */}
-      {stats && (
-        <div className="stats-grid">
-          <div className="stat-card">
-            <h3>Total Productos</h3>
-            <p className="stat-number">{stats.totalProducts}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Total Variantes</h3>
-            <p className="stat-number">{stats.totalVariants}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Habilitados para META</h3>
-            <p className="stat-number">{stats.metaEnabledProducts}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Disponibles para Feed</h3>
-            <p className="stat-number">{stats.eligibleForFeed}</p>
-            <small>(Con stock y habilitados)</small>
-          </div>
-          <div className="stat-card">
-            <h3>Sin Stock</h3>
-            <p className="stat-number">{stats.outOfStock}</p>
-          </div>
-          <div className="stat-card">
-            <h3>Deshabilitados</h3>
-            <p className="stat-number">{stats.disabledProducts}</p>
+      {/* Panel de control */}
+      <div className={styles.controlPanel}>
+        <div className={styles.panelHeader}>
+          <h2 className={styles.panelTitle}>
+            <span className={styles.panelIcon}>📱</span>
+            Dashboard META Commerce
+          </h2>
+          <div className={styles.panelSubtitle}>
+            Gestiona tus productos para Facebook e Instagram Shopping
           </div>
         </div>
-      )}
-
-      {/* Barra de acciones */}
-      <div className="action-bar">
-        <div className="search-box">
-          <input
-            type="text"
-            placeholder="Buscar por nombre, SKU o color..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button className="search-btn">🔍</button>
+        
+        <div className={styles.statsContainer}>
+          <div className={styles.statCard}>
+            <div className={styles.statIconWrapper}>
+              <span className={styles.statIcon}>📦</span>
+            </div>
+            <div className={styles.statContent}>
+              <span className={styles.statNumber}>{stats?.totalProducts || 0}</span>
+              <span className={styles.statLabel}>Productos Totales</span>
+            </div>
+          </div>
+          
+          <div className={styles.statCard}>
+            <div className={styles.statIconWrapper}>
+              <span className={styles.statIcon}>🔢</span>
+            </div>
+            <div className={styles.statContent}>
+              <span className={styles.statNumber}>{stats?.totalVariants || 0}</span>
+              <span className={styles.statLabel}>Total Variantes</span>
+            </div>
+          </div>
+          
+          <div className={styles.statCard}>
+            <div className={styles.statIconWrapper}>
+              <span className={styles.statIcon}>✅</span>
+            </div>
+            <div className={styles.statContent}>
+              <span className={styles.statNumber}>{stats?.metaEnabledProducts || 0}</span>
+              <span className={styles.statLabel}>Habilitados META</span>
+            </div>
+          </div>
+          
+          <div className={styles.statCard}>
+            <div className={styles.statIconWrapper}>
+              <span className={styles.statIcon}>📤</span>
+            </div>
+            <div className={styles.statContent}>
+              <span className={styles.statNumber}>{stats?.eligibleForFeed || 0}</span>
+              <span className={styles.statLabel}>Disponibles Feed</span>
+            </div>
+          </div>
+          
+          <div className={styles.statCard}>
+            <div className={styles.statIconWrapper}>
+              <span className={styles.statIcon}>⛔</span>
+            </div>
+            <div className={styles.statContent}>
+              <span className={styles.statNumber}>{stats?.outOfStock || 0}</span>
+              <span className={styles.statLabel}>Sin Stock</span>
+            </div>
+          </div>
+          
+          <div className={styles.statCard}>
+            <div className={styles.statIconWrapper}>
+              <span className={styles.statIcon}>🚫</span>
+            </div>
+            <div className={styles.statContent}>
+              <span className={styles.statNumber}>{stats?.disabledProducts || 0}</span>
+              <span className={styles.statLabel}>Deshabilitados</span>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div className="filter-controls">
-          <label>
+      {/* Barra de acciones principales */}
+      <div className={styles.actionBar}>
+        <div className={styles.searchContainer}>
+          <div className={styles.searchBox}>
             <input
-              type="checkbox"
-              checked={showOnlyEnabled}
-              onChange={(e) => setShowOnlyEnabled(e.target.checked)}
+              type="text"
+              placeholder="Buscar producto, SKU o color..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={styles.searchInput}
             />
-            Solo habilitados para META
-          </label>
+            <button className={styles.searchButton}>
+              <span className={styles.buttonIcon}>🔍</span>
+            </button>
+          </div>
+          
+          <div className={styles.filterControls}>
+            <label className={styles.filterLabel}>
+              <input
+                type="checkbox"
+                checked={showOnlyEnabled}
+                onChange={(e) => setShowOnlyEnabled(e.target.checked)}
+                className={styles.filterCheckbox}
+              />
+              <span className={styles.filterText}>Solo habilitados para META</span>
+            </label>
+          </div>
         </div>
-
-        <div className="action-buttons">
-          <button onClick={loadMetaData} className="btn refresh">
-            🔄 Actualizar
+        
+        <div className={styles.actionButtons}>
+          <button onClick={loadMetaData} className={`${styles.actionButton} ${styles.refreshButton}`}>
+            <span className={styles.buttonIcon}>🔄</span>
+            Actualizar
           </button>
-          <button onClick={migrateProducts} className="btn migrate">
-            ⚡ Migrar Productos
+          <button onClick={migrateProducts} className={`${styles.actionButton} ${styles.migrateButton}`}>
+            <span className={styles.buttonIcon}>⚡</span>
+            Migrar Productos
           </button>
-          <button onClick={generateCSV} className="btn download">
-            📥 Descargar CSV
+          <button onClick={generateCSV} className={`${styles.actionButton} ${styles.downloadButton}`}>
+            <span className={styles.buttonIcon}>📥</span>
+            Descargar CSV
           </button>
-          <button onClick={generateFeed} className="btn generate">
-            ⚙️ Generar Feed
+          <button onClick={generateFeed} className={`${styles.actionButton} ${styles.generateButton}`}>
+            <span className={styles.buttonIcon}>⚙️</span>
+            Generar Feed
           </button>
         </div>
       </div>
 
       {/* Paginación */}
-      <div className="pagination">
-        <button 
-          onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-          disabled={currentPage === 0}
-          className="btn-pagination"
-        >
-          ← Anterior
-        </button>
-        
-        <span className="page-info">
-          Página {currentPage + 1} de {totalPages} ({totalElements} productos)
-        </span>
-        
-        <button 
-          onClick={() => setCurrentPage(prev => prev + 1)}
-          disabled={currentPage >= totalPages - 1}
-          className="btn-pagination"
-        >
-          Siguiente →
-        </button>
+      <div className={styles.paginationContainer}>
+        <div className={styles.paginationInfo}>
+          Mostrando página {currentPage + 1} de {totalPages} ({totalElements} productos totales)
+        </div>
+        <div className={styles.paginationButtons}>
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+            disabled={currentPage === 0}
+            className={styles.paginationButton}
+          >
+            <span className={styles.buttonIcon}>←</span>
+            Anterior
+          </button>
+          <button 
+            onClick={() => setCurrentPage(prev => prev + 1)}
+            disabled={currentPage >= totalPages - 1}
+            className={styles.paginationButton}
+          >
+            Siguiente
+            <span className={styles.buttonIcon}>→</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabla de productos */}
-      <div className="products-table-container">
-        <table className="products-table">
-          <thead>
-            <tr>
-              <th>SKU Base</th>
-              <th>Producto</th>
-              <th>Variantes</th>
-              <th>Habilitado META</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProducts.length === 0 ? (
+      <div className={styles.productsTableContainer}>
+        <div className={styles.tableHeader}>
+          <h3 className={styles.tableTitle}>
+            <span className={styles.tableIcon}>📋</span>
+            Productos en Catálogo META
+          </h3>
+          <div className={styles.tableStats}>
+            <span className={styles.tableStat}>
+              {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''} mostrado{filteredProducts.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+        
+        <div className={styles.tableWrapper}>
+          <table className={styles.productsTable}>
+            <thead>
               <tr>
-                <td colSpan={5} className="empty">
-                  No hay productos que coincidan con los filtros
-                </td>
+                <th className={styles.tableHeaderCell}>SKU Base</th>
+                <th className={styles.tableHeaderCell}>Producto</th>
+                <th className={styles.tableHeaderCell}>Variantes</th>
+                <th className={styles.tableHeaderCell}>Estado META</th>
+                <th className={styles.tableHeaderCell}>Acciones</th>
               </tr>
-            ) : (
-              filteredProducts.map(product => (
-                <tr key={product.productId} className={!product.enabledForMeta ? 'disabled-row' : ''}>
-                  <td>
-                    <code>{product.sku}</code>
-                  </td>
-                  <td>
-                    <strong>{product.productName}</strong>
-                    <div className="product-info">
-                      <small>ID: {product.productId}</small>
-                      {product.metaTitle && (
-                        <div className="meta-title">{product.metaTitle}</div>
-                      )}
+            </thead>
+            <tbody>
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className={styles.emptyCell}>
+                    <div className={styles.emptyState}>
+                      <span className={styles.emptyIcon}>📦</span>
+                      <p>No hay productos que coincidan con los filtros seleccionados</p>
                     </div>
                   </td>
-                  <td>
-                    <div className="variants-info">
-                      <div className="variant-stats">
-                        <span className="stat-label">Total:</span>
-                        <span className="stat-value">{countTotalVariants(product)}</span>
-                        
-                        <span className="stat-label">Con Stock:</span>
-                        <span className="stat-value">{countVariantsWithStock(product)}</span>
-                        
-                        <span className="stat-label">Para META:</span>
-                        <span className={`stat-value ${countEnabledVariants(product) > 0 ? 'positive' : 'negative'}`}>
-                          {countEnabledVariants(product)}
-                        </span>
+                </tr>
+              ) : (
+                filteredProducts.map(product => (
+                  <tr 
+                    key={product.productId} 
+                    className={`${styles.tableRow} ${!product.enabledForMeta ? styles.disabledRow : ''}`}
+                  >
+                    <td className={styles.skuCell}>
+                      <code className={styles.skuCode}>{product.sku}</code>
+                      <div className={styles.skuInfo}>ID: {product.productId}</div>
+                    </td>
+                    
+                    <td className={styles.productCell}>
+                      <strong className={styles.productName}>{product.productName}</strong>
+                      {product.metaTitle && (
+                        <div className={styles.metaTitle}>{product.metaTitle}</div>
+                      )}
+                      <div className={styles.productDescription}>
+                        {product.productDescription.substring(0, 100)}...
+                      </div>
+                    </td>
+                    
+                    <td className={styles.variantsCell}>
+                      <div className={styles.variantStats}>
+                        <div className={styles.variantStatItem}>
+                          <span className={styles.statLabel}>Total:</span>
+                          <span className={styles.statValue}>{countTotalVariants(product)}</span>
+                        </div>
+                        <div className={styles.variantStatItem}>
+                          <span className={styles.statLabel}>Con stock:</span>
+                          <span className={styles.statValue}>{countVariantsWithStock(product)}</span>
+                        </div>
+                        <div className={styles.variantStatItem}>
+                          <span className={styles.statLabel}>Para META:</span>
+                          <span className={`${styles.statValue} ${countEnabledVariants(product) > 0 ? styles.statPositive : styles.statNegative}`}>
+                            {countEnabledVariants(product)}
+                          </span>
+                        </div>
                       </div>
                       
-                      <details className="variants-details">
-                        <summary>Ver variantes ({product.variants.length})</summary>
-                        <div className="variants-list">
+                      <details className={styles.variantsDetails}>
+                        <summary className={styles.variantsSummary}>
+                          Ver variantes ({product.variants.length})
+                        </summary>
+                        <div className={styles.variantsList}>
                           {product.variants.map(variant => (
-                            <div key={variant.variantId} className="variant-item">
-                              <span className="variant-color">{variant.color}</span>
-                              <span className="variant-size">{variant.size}</span>
-                              <span className={`variant-stock ${variant.stock > 0 ? 'in-stock' : 'out-of-stock'}`}>
+                            <div key={variant.variantId} className={styles.variantItem}>
+                              <span className={styles.variantColor}>{variant.color}</span>
+                              <span className={styles.variantSize}>{variant.size}</span>
+                              <span className={`${styles.variantStock} ${variant.stock > 0 ? styles.inStock : styles.outOfStock}`}>
                                 Stock: {variant.stock}
                               </span>
-                              <span className={`variant-status ${variant.variantEnabledForMeta ? 'enabled' : 'disabled'}`}>
+                              <span className={`${styles.variantStatus} ${variant.variantEnabledForMeta ? styles.statusEnabled : styles.statusDisabled}`}>
                                 {variant.variantEnabledForMeta ? '✅' : '❌'}
                               </span>
                             </div>
                           ))}
                         </div>
                       </details>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="status-container">
-                      <span className={`status ${product.enabledForMeta ? 'enabled' : 'disabled'}`}>
-                        {product.enabledForMeta ? '✅ Activado' : '❌ Desactivado'}
-                      </span>
-                      <div className="status-details">
-                        {countEnabledVariants(product) > 0 ? (
-                          <span className="positive">
-                            {countEnabledVariants(product)} variante(s) en feed
-                          </span>
-                        ) : (
-                          <span className="negative">
-                            Ninguna variante en feed
-                          </span>
-                        )}
+                    </td>
+                    
+                    <td className={styles.statusCell}>
+                      <div className={styles.statusContainer}>
+                        <span className={`${styles.statusBadge} ${product.enabledForMeta ? styles.statusEnabled : styles.statusDisabled}`}>
+                          {product.enabledForMeta ? '✅ Activado' : '❌ Desactivado'}
+                        </span>
+                        <div className={styles.statusDetails}>
+                          {countEnabledVariants(product) > 0 ? (
+                            <span className={styles.statusPositive}>
+                              {countEnabledVariants(product)} variante(s) en feed
+                            </span>
+                          ) : (
+                            <span className={styles.statusNegative}>
+                              Ninguna variante en feed
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="action-buttons-small">
-                      <button
-                        onClick={() => toggleMetaEnabled(product.productId, !product.enabledForMeta)}
-                        className={`btn-sm ${product.enabledForMeta ? 'disable' : 'enable'}`}
-                      >
-                        {product.enabledForMeta ? 'Desactivar' : 'Activar'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedProduct(product);
-                          setShowEditModal(true);
-                        }}
-                        className="btn-sm edit"
-                      >
-                        Editar Metadata
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    </td>
+                    
+                    <td className={styles.actionsCell}>
+                      <div className={styles.actionButtonsSmall}>
+                        <button
+                          onClick={() => toggleMetaEnabled(product.productId, !product.enabledForMeta)}
+                          className={`${styles.actionButtonSmall} ${product.enabledForMeta ? styles.disableButton : styles.enableButton}`}
+                        >
+                          {product.enabledForMeta ? 'Desactivar' : 'Activar'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setShowEditModal(true);
+                          }}
+                          className={`${styles.actionButtonSmall} ${styles.editButton}`}
+                        >
+                          Editar Metadata
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Información importante */}
+      <div className={styles.infoSection}>
+        <h3 className={styles.infoTitle}>
+          <span className={styles.infoIcon}>ℹ️</span>
+          Información Importante sobre META Commerce
+        </h3>
+        <div className={styles.infoGrid}>
+          <div className={styles.infoCard}>
+            <h4 className={styles.infoCardTitle}>📋 Requisitos Feed META</h4>
+            <ul className={styles.infoList}>
+              <li>Producto habilitado para META</li>
+              <li>Metadata correctamente configurada</li>
+              <li>Variante habilitada para feed</li>
+              <li>Stock disponible (mayor a 0)</li>
+              <li>Precio configurado correctamente</li>
+            </ul>
+          </div>
+          
+          <div className={styles.infoCard}>
+            <h4 className={styles.infoCardTitle}>🔧 Configuración Shipping</h4>
+            <ul className={styles.infoList}>
+              <li><strong>Formato:</strong> <code>País:Región:Servicio:PrecioMoneda</code></li>
+              <li><strong>Ejemplo gratis:</strong> <code>CO::::0.0 COP</code></li>
+              <li><strong>Ejemplo con costo:</strong> <code>CO:Medellin:Express:12000.0 COP</code></li>
+              <li><strong>Recomendado:</strong> Usar 12000 COP como costo de envío estándar</li>
+            </ul>
+          </div>
+          
+          <div className={styles.infoCard}>
+            <h4 className={styles.infoCardTitle}>📊 Formatos Exportación</h4>
+            <ul className={styles.infoList}>
+              <li><strong>CSV Feed:</strong> 27 campos específicos para META</li>
+              <li><strong>URL Producto:</strong> https://www.tudominio.com/product?id=ID</li>
+              <li><strong>SKU Base:</strong> {`MARTE-{ID_PRODUCTO}`}</li>
+              <li><strong>Migración:</strong> Automática para productos sin metadata</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       {/* Modal de edición */}
@@ -580,25 +723,11 @@ const MetaDashboard = () => {
           }}
         />
       )}
-
-      {/* Footer info */}
-      <div className="info-box">
-        <h3>📋 Información sobre el Feed META</h3>
-        <ul>
-          <li><strong>CSV Generado:</strong> Archivo con 27 campos específicos para META</li>
-          <li><strong>Requisitos para feed:</strong> Producto habilitado + Metadata habilitado + Variante habilitada + Stock &gt; 0</li>
-          <li><strong>URL Producto:</strong> https://www.amartekids.com/product?id=ID_PRODUCTO</li>
-          <li><strong>SKU Base:</strong> {`MARTE-{ID_PRODUCTO}`} (las variantes tienen SKU derivado)</li>
-          <li><strong>Migración:</strong> Los productos sin metadata se pueden migrar automáticamente</li>
-          <li><strong>Envío (shipping):</strong> Formato: <code>País:Región:Servicio:PrecioMoneda</code></li>
-          <li><strong>Ejemplo Envío:</strong> <code>CO::::0.0 COP</code> (gratis) o <code>CO:Medellin:Express:12000.0 COP</code></li>
-        </ul>
-      </div>
     </div>
   );
 };
 
-// Modal de edición actualizado CON SHIPPING CORREGIDO
+// Modal de edición con validación mejorada
 interface EditMetaModalProps {
   product: MetaProductResponse;
   onClose: () => void;
@@ -606,13 +735,6 @@ interface EditMetaModalProps {
 }
 
 const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave }) => {
-  // Estados para shipping formateado
-  const [shippingCountry, setShippingCountry] = useState('CO');
-  const [shippingRegion, setShippingRegion] = useState('');
-  const [shippingService, setShippingService] = useState('Standard');
-  const [shippingPrice, setShippingPrice] = useState('0.0');
-  const [shippingCurrency, setShippingCurrency] = useState('COP');
-  
   const [formData, setFormData] = useState<{
     enabledForMeta: boolean;
     metaTitle: string;
@@ -651,6 +773,12 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
     customLabels: product.customLabels || '',
   });
 
+  const [shippingCountry, setShippingCountry] = useState('CO');
+  const [shippingRegion, setShippingRegion] = useState('');
+  const [shippingService, setShippingService] = useState('Standard');
+  const [shippingPrice, setShippingPrice] = useState('12000.0'); // VALOR POR DEFECTO 12000
+  const [shippingCurrency, setShippingCurrency] = useState('COP');
+  
   const [saving, setSaving] = useState(false);
   const [shippingError, setShippingError] = useState('');
 
@@ -658,13 +786,15 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
   useEffect(() => {
     if (formData.shipping) {
       parseShippingString(formData.shipping);
+    } else {
+      // Si no hay shipping, usar valor por defecto
+      setShippingPrice('12000.0');
     }
   }, []);
 
   const parseShippingString = (shippingStr: string) => {
     if (!shippingStr) return;
     
-    // Formato esperado: CO:Medellin:Standard:12000.0 COP
     const parts = shippingStr.split(':');
     
     if (parts.length >= 4) {
@@ -672,7 +802,6 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
       setShippingRegion(parts[1] || '');
       setShippingService(parts[2] || 'Standard');
       
-      // Extraer precio y moneda
       const priceCurrency = parts[3] || '0.0 COP';
       const priceMatch = priceCurrency.match(/(\d+\.?\d*)\s*([A-Z]{3})/);
       
@@ -680,23 +809,23 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
         setShippingPrice(priceMatch[1]);
         setShippingCurrency(priceMatch[2]);
       } else {
-        setShippingPrice('0.0');
+        setShippingPrice('12000.0');
         setShippingCurrency('COP');
       }
     }
   };
 
   const formatShippingString = () => {
-    // Validar precio
-    const priceNum = parseFloat(shippingPrice);
-    if (isNaN(priceNum)) {
-      setShippingError('El precio debe ser un número válido');
+    // Validar y limpiar el precio
+    const cleanedPrice = shippingPrice.replace(/[^0-9.]/g, '');
+    const priceNum = parseFloat(cleanedPrice);
+    
+    if (isNaN(priceNum) || priceNum < 0) {
+      setShippingError('El precio debe ser un número válido mayor o igual a 0');
       return null;
     }
     
-    // Formato META: País:Región:Servicio:PrecioMoneda
-    const regionPart = shippingRegion ? shippingRegion : ''; // Si está vacío, se deja vacío
-    const shippingFormatted = `${shippingCountry}:${regionPart}:${shippingService}:${priceNum.toFixed(1)} ${shippingCurrency}`;
+    const shippingFormatted = `${shippingCountry}:${shippingRegion}:${shippingService}:${priceNum.toFixed(1)} ${shippingCurrency}`;
     
     return shippingFormatted;
   };
@@ -705,7 +834,6 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
     e.preventDefault();
     setShippingError('');
     
-    // Validar y formatear shipping
     const formattedShipping = formatShippingString();
     if (!formattedShipping) {
       return;
@@ -730,179 +858,185 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
     }
   };
 
-  // Opciones de servicio de envío
+  const handlePriceChange = (value: string) => {
+    // Solo permitir números y punto decimal
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    // Evitar múltiples puntos decimales
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      setShippingPrice(parts[0] + '.' + parts.slice(1).join(''));
+    } else {
+      setShippingPrice(cleaned);
+    }
+    setShippingError('');
+  };
+
   const shippingServices = [
     { value: 'Standard', label: 'Estándar (4-7 días)' },
     { value: 'Express', label: 'Express (1-3 días)' },
-    { value: 'NextDay', label: 'Próximo día' },
     { value: 'Free', label: 'Gratis' }
   ];
 
-  // Opciones de región para Colombia
   const colombiaRegions = [
     { value: '', label: 'Todo el país' },
     { value: 'Medellin', label: 'Medellín' },
     { value: 'Bogota', label: 'Bogotá' },
     { value: 'Cali', label: 'Cali' },
-    { value: 'Barranquilla', label: 'Barranquilla' },
-    { value: 'Cartagena', label: 'Cartagena' },
-    { value: 'Pereira', label: 'Pereira' },
-    { value: 'Manizales', label: 'Manizales' }
+    { value: 'Barranquilla', label: 'Barranquilla' }
   ];
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <div className="modal-header">
-          <h2>✏️ Editar Metadata para META</h2>
-          <button onClick={onClose} className="close-btn">×</button>
+    <div className={styles.modalOverlay}>
+      <div className={styles.modalContent}>
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitleContainer}>
+            <h3 className={styles.modalTitle}>✏️ Editar Metadata META</h3>
+            <div className={styles.modalSubtitle}>
+              Producto: <strong>{product.productName}</strong> (ID: {product.productId})
+            </div>
+          </div>
+          <button onClick={onClose} className={styles.closeButton}>×</button>
         </div>
         
-        <div className="modal-body">
-          <div className="product-info-summary">
-            <p><strong>Producto:</strong> {product.productName} (ID: {product.productId})</p>
-            <p><strong>SKU Base:</strong> {product.sku}</p>
-            <p><strong>Variantes:</strong> {product.variants.length} (Habilitadas para feed: {product.variants.filter(v => v.variantEnabledForMeta).length})</p>
+        <div className={styles.modalBody}>
+          <div className={styles.productSummary}>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>SKU Base:</span>
+              <code className={styles.summaryValue}>{product.sku}</code>
+            </div>
+            <div className={styles.summaryItem}>
+              <span className={styles.summaryLabel}>Variantes:</span>
+              <span className={styles.summaryValue}>
+                {product.variants.length} total • {product.variants.filter(v => v.variantEnabledForMeta).length} para META
+              </span>
+            </div>
           </div>
           
           <form onSubmit={handleSubmit}>
-            <div className="form-section">
-              <h3>Estado META</h3>
-              <div className="form-group">
-                <label className="checkbox-label">
+            {/* Sección: Estado META */}
+            <div className={styles.formSection}>
+              <h4 className={styles.sectionTitle}>
+                <span className={styles.sectionIcon}>⚡</span>
+                Estado META
+              </h4>
+              <div className={styles.formGroup}>
+                <label className={styles.checkboxLabel}>
                   <input
                     type="checkbox"
                     checked={formData.enabledForMeta}
                     onChange={(e) => setFormData({...formData, enabledForMeta: e.target.checked})}
+                    className={styles.checkbox}
                   />
-                  <span>Habilitar producto para META</span>
+                  <span className={styles.checkboxText}>Habilitar producto para META Commerce</span>
                 </label>
-                <small className="help-text">
-                  Si está desactivado, NINGUNA variante aparecerá en el feed, aunque tengan stock.
-                </small>
+                <div className={styles.helpText}>
+                  Si está desactivado, NINGUNA variante aparecerá en el feed META
+                </div>
               </div>
             </div>
-            
-            <div className="form-section">
-              <h3>Información Básica</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Título META *</label>
+
+            {/* Sección: Información Básica */}
+            <div className={styles.formSection}>
+              <h4 className={styles.sectionTitle}>
+                <span className={styles.sectionIcon}>📝</span>
+                Información Básica
+              </h4>
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>
+                    Título META <span className={styles.required}>*</span>
+                  </label>
                   <input
                     type="text"
                     value={formData.metaTitle}
                     onChange={(e) => setFormData({...formData, metaTitle: e.target.value})}
-                    placeholder="Título optimizado para META (máx 150 chars)"
+                    className={styles.input}
+                    placeholder="Título optimizado para META (150 caracteres máx)"
                     maxLength={150}
                     required
                   />
+                  <div className={styles.charCount}>
+                    {formData.metaTitle.length}/150 caracteres
+                  </div>
                 </div>
                 
-                <div className="form-group full-width">
-                  <label>Descripción META</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Descripción META</label>
                   <textarea
                     value={formData.metaDescription}
                     onChange={(e) => setFormData({...formData, metaDescription: e.target.value})}
-                    placeholder="Descripción optimizada para META (máx 5000 chars)"
+                    className={`${styles.input} ${styles.textarea}`}
+                    placeholder="Descripción optimizada (5000 caracteres máx)"
                     rows={3}
                     maxLength={5000}
                   />
+                  <div className={styles.charCount}>
+                    {formData.metaDescription.length}/5000 caracteres
+                  </div>
                 </div>
               </div>
             </div>
-            
-            <div className="form-section">
-              <h3>Categorías</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Categoría Google</label>
+
+            {/* Sección: Categorías */}
+            <div className={styles.formSection}>
+              <h4 className={styles.sectionTitle}>
+                <span className={styles.sectionIcon}>🏷️</span>
+                Categorías
+              </h4>
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Categoría Google</label>
                   <input
                     type="text"
                     value={formData.googleProductCategory}
                     onChange={(e) => setFormData({...formData, googleProductCategory: e.target.value})}
-                    placeholder="Ej: Apparel & Accessories > Clothing > Dresses"
+                    className={styles.input}
+                    placeholder="Apparel & Accessories > Clothing > Dresses"
                   />
                 </div>
                 
-                <div className="form-group">
-                  <label>Categoría Facebook</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Categoría Facebook</label>
                   <input
                     type="text"
                     value={formData.fbProductCategory}
                     onChange={(e) => setFormData({...formData, fbProductCategory: e.target.value})}
-                    placeholder="Ej: Clothing"
+                    className={styles.input}
+                    placeholder="Clothing"
                   />
                 </div>
               </div>
             </div>
-            
-            <div className="form-section">
-              <h3>Características del Producto</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Material</label>
-                  <input
-                    type="text"
-                    value={formData.material}
-                    onChange={(e) => setFormData({...formData, material: e.target.value})}
-                    placeholder="Ej: Algodón 100%"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Patrón</label>
-                  <input
-                    type="text"
-                    value={formData.pattern}
-                    onChange={(e) => setFormData({...formData, pattern: e.target.value})}
-                    placeholder="Ej: Rayas, Flores, Sólido"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>Estilo</label>
-                  <input
-                    type="text"
-                    value={formData.style}
-                    onChange={(e) => setFormData({...formData, style: e.target.value})}
-                    placeholder="Ej: Casual, Formal, Deportivo"
-                  />
-                </div>
-                
-                <div className="form-group">
-                  <label>GTIN (Código Barras)</label>
-                  <input
-                    type="text"
-                    value={formData.gtin}
-                    onChange={(e) => setFormData({...formData, gtin: e.target.value})}
-                    placeholder="Ej: 123456789012"
-                  />
-                </div>
-              </div>
-            </div>
-            
-            <div className="form-section">
-              <h3>Envío y Precios</h3>
-              <div className="form-grid shipping-grid">
-                <div className="form-group">
-                  <label>País Envío</label>
+
+            {/* Sección: Envío */}
+            <div className={styles.formSection}>
+              <h4 className={styles.sectionTitle}>
+                <span className={styles.sectionIcon}>🚚</span>
+                Configuración de Envío
+                <span className={styles.sectionHelp}>
+                  Formato: <code>País:Región:Servicio:PrecioMoneda</code>
+                </span>
+              </h4>
+              
+              <div className={styles.shippingGrid}>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>País</label>
                   <select
                     value={shippingCountry}
                     onChange={(e) => setShippingCountry(e.target.value)}
-                    className="shipping-select"
+                    className={styles.select}
                   >
                     <option value="CO">Colombia</option>
                     <option value="US">Estados Unidos</option>
-                    <option value="MX">México</option>
                   </select>
                 </div>
                 
-                <div className="form-group">
-                  <label>Región (opcional)</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Región (opcional)</label>
                   <select
                     value={shippingRegion}
                     onChange={(e) => setShippingRegion(e.target.value)}
-                    className="shipping-select"
+                    className={styles.select}
                   >
                     {colombiaRegions.map(region => (
                       <option key={region.value} value={region.value}>
@@ -912,12 +1046,12 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
                   </select>
                 </div>
                 
-                <div className="form-group">
-                  <label>Servicio</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Servicio</label>
                   <select
                     value={shippingService}
                     onChange={(e) => setShippingService(e.target.value)}
-                    className="shipping-select"
+                    className={styles.select}
                   >
                     {shippingServices.map(service => (
                       <option key={service.value} value={service.value}>
@@ -927,51 +1061,51 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
                   </select>
                 </div>
                 
-                <div className="form-group">
-                  <label>Precio Envío</label>
-                  <div className="price-input-group">
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>
+                    Precio Envío (COP) <span className={styles.required}>*</span>
+                  </label>
+                  <div className={styles.priceInputGroup}>
                     <input
-                      type="number"
-                      step="0.1"
-                      min="0"
+                      type="text"
                       value={shippingPrice}
-                      onChange={(e) => setShippingPrice(e.target.value)}
-                      placeholder="0.0"
-                      className={`price-input ${shippingError ? 'error' : ''}`}
+                      onChange={(e) => handlePriceChange(e.target.value)}
+                      className={`${styles.input} ${styles.priceInput} ${shippingError ? styles.inputError : ''}`}
+                      placeholder="12000.0"
                     />
                     <select
                       value={shippingCurrency}
                       onChange={(e) => setShippingCurrency(e.target.value)}
-                      className="currency-select"
+                      className={styles.currencySelect}
                     >
                       <option value="COP">COP</option>
                       <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
                     </select>
                   </div>
                   {shippingError && (
-                    <div className="error-message">{shippingError}</div>
+                    <div className={styles.errorMessage}>{shippingError}</div>
                   )}
-                  <small className="help-text">
-                    Usa 0.0 para envío gratis. Ejemplo: 12000.0 COP
-                  </small>
-                </div>
-                
-                <div className="form-group full-width">
-                  <label>Formato Shipping META</label>
-                  <div className="shipping-preview">
-                    <code>
-                      {formatShippingString() || 'CO::::0.0 COP'}
-                    </code>
-                    <small className="help-text">
-                      Formato: <strong>País:Región:Servicio:PrecioMoneda</strong><br/>
-                      Ejemplos: <code>CO::::0.0 COP</code> (gratis nacional) o <code>CO:Medellin:Express:12000.0 COP</code>
-                    </small>
+                  <div className={styles.helpText}>
+                    Recomendado: 12000 COP para envío estándar nacional
                   </div>
                 </div>
-                
-                <div className="form-group">
-                  <label>Peso Envío (kg)</label>
+              </div>
+              
+              <div className={styles.formGroup}>
+                <label className={styles.inputLabel}>Vista Previa Formato META</label>
+                <div className={styles.previewBox}>
+                  <code className={styles.previewCode}>
+                    {formatShippingString() || 'CO::::12000.0 COP'}
+                  </code>
+                  <div className={styles.previewHelp}>
+                    Este formato se incluirá automáticamente en el feed META
+                  </div>
+                </div>
+              </div>
+              
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Peso (kg)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -983,12 +1117,13 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
                         shippingWeight: value === '' ? undefined : parseFloat(value)
                       });
                     }}
+                    className={styles.input}
                     placeholder="0.5"
                   />
                 </div>
                 
-                <div className="form-group">
-                  <label>Precio Oferta</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Precio Oferta</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1000,53 +1135,92 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
                         salePrice: value === '' ? undefined : parseFloat(value)
                       });
                     }}
+                    className={styles.input}
                     placeholder="Opcional"
                   />
                 </div>
               </div>
             </div>
-            
-            <div className="form-section">
-              <h3>Multimedia y Etiquetas</h3>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>URL Video</label>
+
+            {/* Sección: Características */}
+            <div className={styles.formSection}>
+              <h4 className={styles.sectionTitle}>
+                <span className={styles.sectionIcon}>🔍</span>
+                Características del Producto
+              </h4>
+              <div className={styles.formGrid}>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Material</label>
                   <input
-                    type="url"
-                    value={formData.videoUrl || ''}
-                    onChange={(e) => setFormData({...formData, videoUrl: e.target.value})}
-                    placeholder="https://..."
+                    type="text"
+                    value={formData.material}
+                    onChange={(e) => setFormData({...formData, material: e.target.value})}
+                    className={styles.input}
+                    placeholder="Ej: Algodón 100%"
                   />
                 </div>
                 
-                <div className="form-group">
-                  <label>Etiqueta Video</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Patrón</label>
                   <input
                     type="text"
-                    value={formData.videoTag || ''}
-                    onChange={(e) => setFormData({...formData, videoTag: e.target.value})}
-                    placeholder="Ej: Tutorial, Unboxing"
+                    value={formData.pattern}
+                    onChange={(e) => setFormData({...formData, pattern: e.target.value})}
+                    className={styles.input}
+                    placeholder="Ej: Sólido, Rayas, Flores"
                   />
                 </div>
                 
-                <div className="form-group full-width">
-                  <label>Etiquetas Personalizadas</label>
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>Estilo</label>
                   <input
                     type="text"
-                    value={formData.customLabels || ''}
-                    onChange={(e) => setFormData({...formData, customLabels: e.target.value})}
-                    placeholder="Etiquetas separadas por coma (máx 10)"
+                    value={formData.style}
+                    onChange={(e) => setFormData({...formData, style: e.target.value})}
+                    className={styles.input}
+                    placeholder="Ej: Casual, Formal, Deportivo"
+                  />
+                </div>
+                
+                <div className={styles.formGroup}>
+                  <label className={styles.inputLabel}>GTIN</label>
+                  <input
+                    type="text"
+                    value={formData.gtin}
+                    onChange={(e) => setFormData({...formData, gtin: e.target.value})}
+                    className={styles.input}
+                    placeholder="Código de barras (opcional)"
                   />
                 </div>
               </div>
             </div>
-            
-            <div className="modal-footer">
-              <button type="button" onClick={onClose} className="btn cancel">
+
+            {/* Botones de acción */}
+            <div className={styles.formActions}>
+              <button
+                type="button"
+                onClick={onClose}
+                className={styles.cancelButton}
+                disabled={saving}
+              >
                 Cancelar
               </button>
-              <button type="submit" className="btn save" disabled={saving}>
-                {saving ? 'Guardando...' : '💾 Guardar Cambios'}
+              <button
+                type="submit"
+                className={styles.saveButton}
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <span className={styles.spinner}></span>
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.buttonIcon}>💾</span>
+                    Guardar Cambios
+                  </>
+                )}
               </button>
             </div>
           </form>
