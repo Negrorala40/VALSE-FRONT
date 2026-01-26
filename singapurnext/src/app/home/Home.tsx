@@ -388,11 +388,11 @@ const Home = () => {
                 <p className={styles.heroBadge}>Colección A MARTE</p>
 
                 {/* Title */}
-                <h1 className={styles.heroTitle}>La magia en cada noche</h1>
+                <h1 className={styles.heroTitle}>Amarte es amor que cuida, abriga y deja explorar.</h1>
 
                 {/* Description */}
                 <p className={styles.heroDescription}>
-                  Pijamas diseñados para hacer soñar. Cada prenda cuenta una historia de aventura, comodidad y amor por los detalles.
+                  Pijamas pensadas para proteger a los más peques mientras viven su mundo con libertad.
                 </p>
 
                 {/* Mirar más link */}
