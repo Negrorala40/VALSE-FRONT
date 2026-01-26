@@ -10,8 +10,7 @@ import {
   BLOG_ADMIN_POSTS_PAGINATED,
   BLOG_CREATE,
   BLOG_UPDATE,
-  BLOG_DELETE,
-  API_BASE_URL
+  BLOG_DELETE
 } from '@/app/utils/Api';
 
 // TIPOS COMPATIBLES con BlogContent
@@ -108,13 +107,17 @@ export default function AdminBlogPage() {
   }]);
   const [featuredImageUrl, setFeaturedImageUrl] = useState('');
 
+  // Función para navegación
+  const navigateTo = (path: string) => {
+    router.push(path);
+  };
+
   const fetchPosts = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
       const token = localStorage.getItem('token');
       
-      // USAR CONSTANTE DE Api.ts
       const response = await fetch(BLOG_ADMIN_POSTS_PAGINATED(0, 100), {
         method: 'GET',
         headers: {
@@ -314,7 +317,6 @@ export default function AdminBlogPage() {
       const postData = preparePostDataForBackend();
       const token = localStorage.getItem('token');
       
-      // USAR CONSTANTES DE Api.ts
       const url = editingPost?.id 
         ? BLOG_UPDATE(editingPost.id)
         : BLOG_CREATE;
@@ -418,7 +420,6 @@ export default function AdminBlogPage() {
     try {
       const token = localStorage.getItem('token');
       
-      // USAR CONSTANTE DE Api.ts
       const response = await fetch(BLOG_DELETE(id), {
         method: 'DELETE',
         headers: {
@@ -483,12 +484,47 @@ export default function AdminBlogPage() {
 
   return (
     <div className={styles.container}>
+      {/* Barra de navegación */}
+      <div className={styles.navigationBar}>
+        <div className={styles.navButtons}>
+          <button 
+            className={styles.navButton}
+            onClick={() => navigateTo('/admin')}
+          >
+            Admin
+          </button>
+          <button 
+            className={styles.navButton}
+            onClick={() => navigateTo('/perfil')}
+          >
+            Perfil
+          </button>
+          <button 
+            className={styles.navButton}
+            onClick={() => navigateTo('/meta')}
+          >
+            Meta
+          </button>
+          <button 
+            className={styles.navButton}
+            onClick={() => navigateTo('/orden')}
+          >
+            Órdenes
+          </button>
+          <button 
+            className={styles.navButton}
+            onClick={() => navigateTo('/admin/blog')}
+          >
+            Blog
+          </button>
+        </div>
+      </div>
+
       <div className={styles.header}>
         <div className={styles.headerTop}>
           <h1 className={styles.title}>
             📝 Administrador de Blog 
             <span className={styles.subtitle}> ({posts.length} posts)</span>
-            <span className={styles.apiInfo}>API: {API_BASE_URL}</span>
           </h1>
           <div className={styles.headerActions}>
             <button 
@@ -561,7 +597,7 @@ export default function AdminBlogPage() {
           <div className={styles.formHeader}>
             <h2 className={styles.formTitle}>
               {editingPost ? (
-               <>
+                <>
                   <i className="fas fa-edit"></i> Editando: &apos;{editingPost.title.substring(0, 50)}...&apos;
                 </>
               ) : (

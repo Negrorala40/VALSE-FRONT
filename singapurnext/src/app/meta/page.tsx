@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { API_BASE_URL } from '@/app/utils/Api';
 import './meta.css';
 
@@ -52,6 +53,13 @@ interface MetaStats {
 }
 
 const MetaDashboard = () => {
+  const router = useRouter();
+  
+  // Función de navegación
+  const navigateTo = (path: string) => {
+    router.push(path);
+  };
+  
   // Estados
   const [products, setProducts] = useState<MetaProductResponse[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<MetaProductResponse[]>([]);
@@ -311,6 +319,42 @@ const MetaDashboard = () => {
 
   return (
     <div className="meta-container">
+      {/* Barra de navegación */}
+      <div className="navigation-bar">
+        <div className="nav-buttons">
+          <button 
+            className="navButton"
+            onClick={() => navigateTo('/admin')}
+          >
+            Admin
+          </button>
+          <button 
+            className="navButton"
+            onClick={() => navigateTo('/perfil')}
+          >
+            Perfil
+          </button>
+          <button 
+            className="navButton"
+            onClick={() => navigateTo('/meta')}
+          >
+            Meta
+          </button>
+          <button 
+            className="navButton"
+            onClick={() => navigateTo('/orden')}
+          >
+            Órdenes
+          </button>
+          <button 
+            className="navButton"
+            onClick={() => navigateTo('/admin/blog')}
+          >
+            Blog
+          </button>
+        </div>
+      </div>
+      
       {/* Header */}
       <header className="meta-header">
         <h1>📱 Dashboard META (Facebook/Instagram)</h1>

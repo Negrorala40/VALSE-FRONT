@@ -260,14 +260,14 @@ const Footer = () => {
               <div className="contact-item">
                 <FaEnvelope className="contact-icon" />
                 <div>
-                  <span className="contact-text">CORREO</span>
+                  <span className="contact-text">orbitaamarte@gmail.com</span>
                   <span className="contact-label">Información</span>
                 </div>
               </div>
               <div className="contact-item">
                 <FaHeadset className="contact-icon" />
                 <div>
-                  <span className="contact-text">CORREO@gmail.com</span>
+                  <span className="contact-text">orbitaamarte@gmail.com</span>
                   <span className="contact-label">Soporte</span>
                 </div>
               </div>
@@ -292,7 +292,7 @@ const Footer = () => {
               </div>
               <div className="service-item">
                 <FaHeadset className="service-icon" />
-                <span>Soporte 24/7</span>
+                <span>Lunes a viernes · 8:00 a. m. – 5:00 p. m.</span>
               </div>
             </div>
           </div>
