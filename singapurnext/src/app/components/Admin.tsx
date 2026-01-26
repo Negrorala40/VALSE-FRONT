@@ -811,36 +811,47 @@ const Admin = () => {
     <div className={styles.container}>
       {/* Header con navegación */}
       <div className={styles.adminHeader}>
-        <h1 className={styles.adminTitle}>Panel de Administración</h1>
+        <div className={styles.headerLeft}>
+          <h1 className={styles.adminTitle}>Panel de Administración</h1>
+          <div className={styles.headerMeta}>
+            <span className={styles.productCount}>{products.length} productos</span>
+            <span className={styles.adminBadge}>Admin</span>
+          </div>
+        </div>
         <div className={styles.headerActions}>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/perfil')}
           >
+            <span className={styles.buttonIcon}>👤</span>
             Perfil
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/meta')}
           >
+            <span className={styles.buttonIcon}>🎯</span>
             Meta
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/orden')}
           >
+            <span className={styles.buttonIcon}>📦</span>
             Órdenes
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/admin/blog')}
           >
+            <span className={styles.buttonIcon}>📝</span>
             Blog
           </button>
           <button 
             className={`${styles.logButton} ${showLogPanel ? styles.active : ''}`}
             onClick={() => setShowLogPanel(!showLogPanel)}
           >
+            <span className={styles.buttonIcon}>📊</span>
             Logs ({logs.length})
           </button>
         </div>
@@ -850,29 +861,36 @@ const Admin = () => {
       {showLogPanel && (
         <div className={styles.logPanel}>
           <div className={styles.logPanelHeader}>
-            <h3>Registro de Actividad</h3>
+            <div className={styles.logPanelTitle}>
+              <h3>📋 Registro de Actividad</h3>
+              <span className={styles.logCount}>{logs.length} eventos</span>
+            </div>
             <div className={styles.logActions}>
-              <button onClick={clearLogs} className={styles.smallButton}>
-                Limpiar
+              <button onClick={clearLogs} className={`${styles.smallButton} ${styles.clearButton}`}>
+                🗑️ Limpiar
               </button>
-              <button onClick={downloadLogs} className={styles.smallButton}>
-                Descargar
+              <button onClick={downloadLogs} className={`${styles.smallButton} ${styles.downloadButton}`}>
+                📥 Descargar
               </button>
               <button 
                 onClick={() => setShowLogPanel(false)} 
-                className={styles.smallButton}
+                className={`${styles.smallButton} ${styles.closeButton}`}
               >
-                Cerrar
+                ✕ Cerrar
               </button>
             </div>
           </div>
           <div className={styles.logContent}>
             {logs.length === 0 ? (
-              <div className={styles.emptyLogs}>No hay actividad registrada</div>
+              <div className={styles.emptyLogs}>
+                <span className={styles.emptyIcon}>📄</span>
+                No hay actividad registrada
+              </div>
             ) : (
               logs.map((log, index) => (
                 <div key={index} className={styles.logEntry}>
-                  {log}
+                  <span className={styles.logTime}>{log.match(/\[(.*?)\]/)?.[1] || ''}</span>
+                  <span className={styles.logMessage}>{log.replace(/\[.*?\] /, '')}</span>
                 </div>
               ))
             )}
@@ -880,536 +898,759 @@ const Admin = () => {
         </div>
       )}
 
-      <h2 className={styles.title}>
-        {editingProductId ? "Editar Producto" : "Agregar Producto"}
-      </h2>
-      
-      {validationErrors.length > 0 && (
-        <div className={styles.validationErrors}>
-          <h4>Errores de Validación:</h4>
-          <ul>
-            {validationErrors.map((error, index) => (
-              <li key={index}>{error.message}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <form className={styles.form} onSubmit={handleSubmit}>
-        {/* Sección de información general */}
-        <div className={styles.formSection}>
-          <h3 className={styles.sectionTitle}>Información General</h3>
-          <div className={styles.formGrid}>
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Nombre del Producto <span className={styles.required}>*</span>
-              </label>
-              <input
-                className={styles.input}
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                disabled={isLoading}
-                placeholder="Ej: Camiseta Premium"
-              />
-            </div>
-
-            <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Género <span className={styles.required}>*</span>
-              </label>
-              <select
-                className={styles.select}
-                value={gender}
-                onChange={(e) => setGender(e.target.value)}
-                required
-                disabled={isLoading}
-              >
-                <option value="">Seleccionar género...</option>
-                <option value="NIÑOS">NIÑOS</option>
-                <option value="NIÑAS">NIÑAS</option>
-                <option value="UNISEX">UNISEX</option>
-              </select>
-            </div>
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={styles.label}>
-              Descripción <span className={styles.required}>*</span>
-            </label>
-            <textarea
-              className={styles.textarea}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-              disabled={isLoading}
-              rows={3}
-              placeholder="Describe el producto detalladamente..."
-            />
-            <div className={styles.helpText}>Mínimo 50 caracteres recomendado</div>
-          </div>
-
-          <div className={styles.typeInfo}>
-            <span className={styles.typeBadge}>SUPERIOR</span>
-            <span className={styles.typeNote}>Tipo de producto fijo</span>
+      {/* Formulario principal */}
+      <div className={styles.formCard}>
+        <div className={styles.formHeader}>
+          <h2 className={styles.formTitle}>
+            {editingProductId ? "✏️ Editar Producto" : "➕ Agregar Producto"}
+          </h2>
+          <div className={styles.formGuide}>
+            <span className={styles.guideItem}>* Campos obligatorios</span>
+            <span className={styles.guideItem}>📸 Mínimo 1 imagen por color</span>
+            <span className={styles.guideItem}>💰 Precios en COP</span>
           </div>
         </div>
-
-        <hr className={styles.divider} />
         
-        {/* Sección de colores y variantes */}
-        <div className={styles.formSection}>
-          <div className={styles.sectionHeader}>
-            <h3 className={styles.sectionTitle}>
-              Colores y Variantes 
-              <span className={styles.sectionSubtitle}>
-                ({colorVariants.length} color{colorVariants.length !== 1 ? 'es' : ''})
-              </span>
-            </h3>
-            <button
-              type="button"
-              className={styles.addButton}
-              onClick={handleAddColor}
-              disabled={isLoading}
-            >
-              Agregar Color
-            </button>
+        {validationErrors.length > 0 && (
+          <div className={styles.validationErrors}>
+            <div className={styles.errorHeader}>
+              <span className={styles.errorIcon}>⚠️</span>
+              <h4>Errores de Validación:</h4>
+            </div>
+            <ul>
+              {validationErrors.map((error, index) => (
+                <li key={index} className={styles.errorItem}>
+                  <span className={styles.errorDot}>•</span>
+                  {error.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <form className={styles.form} onSubmit={handleSubmit}>
+          {/* Sección de información general */}
+          <div className={styles.formSection}>
+            <div className={styles.sectionHeader}>
+              <h3 className={styles.sectionTitle}>
+                <span className={styles.sectionIcon}>📋</span>
+                Información General
+              </h3>
+              <div className={styles.sectionHelp}>
+                Información básica del producto que aparecerá públicamente
+              </div>
+            </div>
+            
+            <div className={styles.formGrid}>
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Nombre del Producto <span className={styles.required}>*</span>
+                </label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  placeholder="Ej: Camiseta Premium Algodón"
+                />
+                <div className={styles.fieldHelp}>Nombre claro y descriptivo</div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.label}>
+                  Género <span className={styles.required}>*</span>
+                </label>
+                <select
+                  className={styles.select}
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  required
+                  disabled={isLoading}
+                >
+                  <option value="">Seleccionar género...</option>
+                  <option value="NIÑOS">👦 NIÑOS</option>
+                  <option value="NIÑAS">👧 NIÑAS</option>
+                  <option value="UNISEX">👥 UNISEX</option>
+                </select>
+                <div className={styles.fieldHelp}>Audiencia objetivo del producto</div>
+              </div>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.label}>
+                Descripción <span className={styles.required}>*</span>
+              </label>
+              <textarea
+                className={styles.textarea}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                required
+                disabled={isLoading}
+                rows={3}
+                placeholder="Describe el producto detalladamente: materiales, características, beneficios..."
+              />
+              <div className={styles.fieldHelp}>Obligatorio</div>
+            </div>
+
+            <div className={styles.typeInfo}>
+              <div className={styles.typeBadge}>
+                <span className={styles.typeIcon}>🏷️</span>
+                TIPO: SUPERIOR
+              </div>
+              <div className={styles.typeNote}>Tipo de producto configurado automáticamente</div>
+            </div>
+          </div>
+
+          <div className={styles.sectionDivider}>
+            <span className={styles.dividerText}>VARIANTES</span>
           </div>
           
-          {colorVariants.map((colorVariant, colorIndex) => (
-            <div key={`color-${colorIndex}-${colorVariant.color}`} className={styles.colorBox}>
-              <div className={styles.colorHeader}>
-                <button
-                  type="button"
-                  className={styles.collapseButton}
-                  onClick={() => toggleColorCollapse(colorIndex)}
-                  title={collapsedColors.includes(colorIndex) ? "Expandir" : "Colapsar"}
-                >
-                  {collapsedColors.includes(colorIndex) ? "▶" : "▼"}
-                </button>
-                
-                <div className={styles.colorInputContainer}>
-                  <div className={styles.colorInputWrapper}>
-                    <input
-                      className={styles.colorInput}
-                      type="text"
-                      value={colorVariant.color}
-                      onChange={(e) => handleCustomColor(colorIndex, e.target.value)}
-                      onClick={() => toggleColorDropdown(colorIndex)}
-                      required
-                      disabled={isLoading}
-                      placeholder="Seleccionar o escribir color..."
-                      readOnly={false}
-                    />
+          {/* Sección de colores y variantes */}
+          <div className={styles.formSection}>
+            <div className={styles.sectionHeader}>
+              <div className={styles.sectionTitleRow}>
+                <h3 className={styles.sectionTitle}>
+                  <span className={styles.sectionIcon}>🎨</span>
+                  Colores y Variantes
+                </h3>
+                <span className={styles.variantCount}>
+                  {colorVariants.length} color{colorVariants.length !== 1 ? 'es' : ''}
+                </span>
+              </div>
+              <div className={styles.sectionHelp}>
+                Agrega todos los colores disponibles con sus respectivas tallas
+              </div>
+            </div>
+            
+            <div className={styles.colorVariants}>
+              {colorVariants.map((colorVariant, colorIndex) => (
+                <div key={`color-${colorIndex}-${colorVariant.color}`} className={styles.colorVariant}>
+                  <div className={styles.colorHeader}>
                     <button
                       type="button"
-                      className={styles.colorDropdownButton}
-                      onClick={() => toggleColorDropdown(colorIndex)}
-                      disabled={isLoading}
+                      className={styles.collapseButton}
+                      onClick={() => toggleColorCollapse(colorIndex)}
+                      title={collapsedColors.includes(colorIndex) ? "Expandir" : "Colapsar"}
+                      aria-label={collapsedColors.includes(colorIndex) ? "Expandir sección" : "Colapsar sección"}
                     >
-                      ▼
+                      {collapsedColors.includes(colorIndex) ? "▶" : "▼"}
                     </button>
-                  </div>
-                  
-                  {showColorDropdown === colorIndex && (
-                    <div className={styles.colorDropdown}>
-                      <div className={styles.colorDropdownHeader}>
-                        <span>Colores disponibles</span>
+                    
+                    <div className={styles.colorMain}>
+                      <div className={styles.colorInputGroup}>
+                        <div className={styles.colorInputWrapper}>
+                          <input
+                            className={styles.colorInput}
+                            type="text"
+                            value={colorVariant.color}
+                            onChange={(e) => handleCustomColor(colorIndex, e.target.value)}
+                            onClick={() => toggleColorDropdown(colorIndex)}
+                            required
+                            disabled={isLoading}
+                            placeholder="Seleccionar o escribir color..."
+                            aria-label="Nombre del color"
+                          />
+                          <button
+                            type="button"
+                            className={styles.colorDropdownButton}
+                            onClick={() => toggleColorDropdown(colorIndex)}
+                            disabled={isLoading}
+                            aria-label="Mostrar colores disponibles"
+                          >
+                            ▼
+                          </button>
+                        </div>
+                        
+                        {showColorDropdown === colorIndex && (
+                          <div className={styles.colorDropdown}>
+                            <div className={styles.colorDropdownHeader}>
+                              <span className={styles.dropdownTitle}>🎨 Colores disponibles</span>
+                              <button
+                                type="button"
+                                className={styles.closeDropdownButton}
+                                onClick={() => setShowColorDropdown(null)}
+                                aria-label="Cerrar lista de colores"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            <div className={styles.colorOptions}>
+                              {PREDEFINED_COLORS.map((color) => (
+                                <button
+                                  key={color}
+                                  type="button"
+                                  className={`${styles.colorOption} ${
+                                    colorVariant.color === color ? styles.selected : ''
+                                  }`}
+                                  onClick={() => handleColorSelect(colorIndex, color)}
+                                  aria-label={`Seleccionar color ${color}`}
+                                >
+                                  <span className={styles.colorDot} style={{ 
+                                    backgroundColor: getColorHex(color) 
+                                  }} />
+                                  {color}
+                                </button>
+                              ))}
+                            </div>
+                            <div className={styles.customColorNote}>
+                              <small>O escribe un color personalizado arriba</small>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className={styles.colorStats}>
+                        <span className={styles.colorStat}>
+                          <span className={styles.statIcon}>📏</span>
+                          {colorVariant.sizes.length} talla{colorVariant.sizes.length !== 1 ? 's' : ''}
+                        </span>
+                        <span className={styles.colorStat}>
+                          <span className={styles.statIcon}>🖼️</span>
+                          {colorVariant.images.filter(img => img.imageUrl).length} img
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className={styles.colorActions}>
+                      {colorVariants.length > 1 && (
                         <button
                           type="button"
-                          className={styles.closeDropdownButton}
-                          onClick={() => setShowColorDropdown(null)}
+                          className={styles.removeColorButton}
+                          onClick={() => handleRemoveColor(colorIndex)}
+                          disabled={isLoading}
+                          title="Eliminar color"
+                          aria-label="Eliminar color"
                         >
-                          ×
+                          ✕
                         </button>
-                      </div>
-                      <div className={styles.colorOptions}>
-                        {PREDEFINED_COLORS.map((color) => (
-                          <button
-                            key={color}
-                            type="button"
-                            className={`${styles.colorOption} ${
-                              colorVariant.color === color ? styles.selected : ''
-                            }`}
-                            onClick={() => handleColorSelect(colorIndex, color)}
-                          >
-                            <span className={styles.colorDot} style={{ 
-                              backgroundColor: getColorHex(color) 
-                            }} />
-                            {color}
-                          </button>
-                        ))}
-                      </div>
-                      <div className={styles.customColorNote}>
-                        <small>O escribe un color personalizado arriba</small>
-                      </div>
+                      )}
                     </div>
-                  )}
-                  
-                  <div className={styles.colorStats}>
-                    <span className={styles.colorCount}>
-                      {colorVariant.sizes.length} talla{colorVariant.sizes.length !== 1 ? 's' : ''}
-                    </span>
-                    <span className={styles.imageCount}>
-                      {colorVariant.images.filter(img => img.imageUrl).length} img
-                    </span>
                   </div>
-                </div>
-                
-                <div className={styles.colorActions}>
-                  {colorVariants.length > 1 && (
-                    <button
-                      type="button"
-                      className={styles.removeSmallButton}
-                      onClick={() => handleRemoveColor(colorIndex)}
-                      disabled={isLoading}
-                      title="Eliminar color"
-                    >
-                      Eliminar
-                    </button>
-                  )}
-                </div>
-              </div>
-              
-              {!collapsedColors.includes(colorIndex) && (
-                <div className={styles.colorContent}>
-                  {/* Imágenes del color */}
-                  <div className={styles.imagesSection}>
-                    <label className={styles.subLabel}>
-                      Imágenes para este color <span className={styles.required}>*</span>
-                      <span className={styles.helpLabel}>
-                        (Mínimo 1 imagen, máximo 5)
-                      </span>
-                    </label>
-                    <div className={styles.imagesGrid}>
-                      {colorVariant.images.map((img, imgIndex) => (
-                        <div key={`img-${colorIndex}-${imgIndex}`} className={styles.imageCard}>
-                          <div className={styles.uploaderWrapper}>
-                            <ImageUploader
-                              onUploadSuccess={handleImageUploaded}
-                              variantIndex={colorIndex}
-                              imageIndex={imgIndex}
-                              disabled={isLoading}
-                              initialImageUrl={img.imageUrl}
-                              imageId={img.id}
-                            />
+                  
+                  {!collapsedColors.includes(colorIndex) && (
+                    <div className={styles.colorContent}>
+                      {/* Imágenes del color */}
+                      <div className={styles.imagesSection}>
+                        <div className={styles.imagesHeader}>
+                          <label className={styles.subLabel}>
+                            <span className={styles.labelIcon}>📸</span>
+                            Imágenes para este color <span className={styles.required}>*</span>
+                          </label>
+                          <div className={styles.imagesHelp}>
+                            Sube imágenes claras del producto en este color (Mínimo 1, máximo 5)
                           </div>
-                          
-                          {img.imageUrl && img.imageUrl.trim() !== "" && (
-                            <div className={styles.imagePreviewCompact}>
-                              <Image 
-                                src={img.thumbnailUrl || img.imageUrl} 
-                                alt="Preview" 
-                                width={50}
-                                height={50}
-                                className={styles.thumbnailCompact}
-                              />
-                              <div className={styles.imageActions}>
+                        </div>
+                        <div className={styles.imagesGrid}>
+                          {colorVariant.images.map((img, imgIndex) => (
+                            <div key={`img-${colorIndex}-${imgIndex}`} className={styles.imageCard}>
+                              <div className={styles.imageUploader}>
+                                <ImageUploader
+                                  onUploadSuccess={handleImageUploaded}
+                                  variantIndex={colorIndex}
+                                  imageIndex={imgIndex}
+                                  disabled={isLoading}
+                                  initialImageUrl={img.imageUrl}
+                                  imageId={img.id}
+                                />
+                              </div>
+                              
+                              {img.imageUrl && img.imageUrl.trim() !== "" && (
+                                <div className={styles.imagePreview}>
+                                  <div className={styles.previewImage}>
+                                    <Image 
+                                      src={img.thumbnailUrl || img.imageUrl} 
+                                      alt="Vista previa" 
+                                      width={60}
+                                      height={60}
+                                      className={styles.thumbnail}
+                                      onError={(e) => {
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                      }}
+                                    />
+                                  </div>
+                                  <div className={styles.imageActions}>
+                                    <button
+                                      type="button"
+                                      className={styles.copyButton}
+                                      onClick={() => copyToClipboard(img.imageUrl)}
+                                      title="Copiar URL de la imagen"
+                                      aria-label="Copiar URL de la imagen"
+                                    >
+                                      📋 Copiar
+                                    </button>
+                                    {colorVariant.images.length > 1 && (
+                                      <button
+                                        type="button"
+                                        className={styles.removeImageButton}
+                                        onClick={() => handleRemoveImage(colorIndex, imgIndex)}
+                                        title="Eliminar imagen"
+                                        aria-label="Eliminar imagen"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {colorVariant.images.length < 5 && (
+                          <button
+                            type="button"
+                            className={styles.addImageButton}
+                            onClick={() => handleAddImage(colorIndex)}
+                            disabled={isLoading}
+                          >
+                            <span className={styles.buttonIcon}>+</span>
+                            Agregar otra imagen
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Tallas del color */}
+                      <div className={styles.sizesSection}>
+                        <div className={styles.sizesHeader}>
+                          <label className={styles.subLabel}>
+                            <span className={styles.labelIcon}>📏</span>
+                            Tallas disponibles <span className={styles.required}>*</span>
+                          </label>
+                          <div className={styles.sizesHelp}>
+                            Define tallas, stock y precios para este color específico
+                          </div>
+                        </div>
+                        <div className={styles.sizesGrid}>
+                          {colorVariant.sizes.map((size, sizeIndex) => (
+                            <div key={`size-${colorIndex}-${sizeIndex}`} className={styles.sizeCard}>
+                              <div className={styles.sizeGroup}>
+                                <label className={styles.sizeLabel}>Talla</label>
+                                <input
+                                  className={styles.sizeInput}
+                                  type="text"
+                                  value={size.size}
+                                  onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'size', e.target.value)}
+                                  placeholder="Ej: S, M, L, XL"
+                                  required
+                                  disabled={isLoading}
+                                  aria-label="Talla"
+                                />
+                              </div>
+                              
+                              <div className={styles.sizeGroup}>
+                                <label className={styles.sizeLabel}>
+                                  <span className={styles.labelIcon}>📦</span>
+                                  Stock
+                                </label>
+                                <input
+                                  className={styles.stockInput}
+                                  type="number"
+                                  value={size.stock}
+                                  onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'stock', e.target.value)}
+                                  min="0"
+                                  step="1"
+                                  placeholder="0"
+                                  required
+                                  disabled={isLoading}
+                                  aria-label="Cantidad en stock"
+                                />
+                              </div>
+                              
+                              <div className={styles.sizeGroup}>
+                                <label className={styles.sizeLabel}>
+                                  <span className={styles.labelIcon}>💰</span>
+                                  Precio (COP)
+                                </label>
+                                <input
+                                  className={styles.priceInput}
+                                  type="number"
+                                  value={size.price}
+                                  onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'price', e.target.value)}
+                                  min="0"
+                                  step="100"
+                                  placeholder="0"
+                                  required
+                                  disabled={isLoading}
+                                  aria-label="Precio en pesos colombianos"
+                                />
+                              </div>
+                              
+                              {colorVariant.sizes.length > 1 && (
                                 <button
                                   type="button"
-                                  className={styles.copySmallButton}
-                                  onClick={() => copyToClipboard(img.imageUrl)}
-                                  title="Copiar URL"
+                                  className={styles.removeSizeButton}
+                                  onClick={() => handleRemoveSize(colorIndex, sizeIndex)}
+                                  disabled={isLoading}
+                                  title="Eliminar talla"
+                                  aria-label="Eliminar talla"
                                 >
-                                  Copiar
+                                  ✕
                                 </button>
-                                {colorVariant.images.length > 1 && (
-                                  <button
-                                    type="button"
-                                    className={styles.removeTinyButton}
-                                    onClick={() => handleRemoveImage(colorIndex, imgIndex)}
-                                    title="Eliminar imagen"
-                                  >
-                                    ×
-                                  </button>
-                                )}
-                              </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
+                        <button
+                          type="button"
+                          className={styles.addSizeButton}
+                          onClick={() => handleAddSize(colorIndex)}
+                          disabled={isLoading}
+                        >
+                          <span className={styles.buttonIcon}>+</span>
+                          Agregar otra talla
+                        </button>
+                      </div>
                     </div>
-                    {colorVariant.images.length < 5 && (
-                      <button
-                        type="button"
-                        className={styles.addImageButton}
-                        onClick={() => handleAddImage(colorIndex)}
-                        disabled={isLoading}
-                      >
-                        Agregar otra imagen
-                      </button>
-                    )}
-                  </div>
-                  
-                  {/* Tallas del color */}
-                  <div className={styles.sizesSection}>
-                    <label className={styles.subLabel}>
-                      Tallas disponibles para este color <span className={styles.required}>*</span>
-                    </label>
-                    <div className={styles.sizesHelp}>
-                      <span className={styles.helpText}>Agrega todas las tallas disponibles con su stock y precio</span>
-                    </div>
-                    <div className={styles.sizesGrid}>
-                      {colorVariant.sizes.map((size, sizeIndex) => (
-                        <div key={`size-${colorIndex}-${sizeIndex}`} className={styles.sizeCard}>
-                          <div className={styles.sizeField}>
-                            <label className={styles.fieldLabel}>Talla</label>
-                            <input
-                              className={styles.sizeInput}
-                              type="text"
-                              value={size.size}
-                              onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'size', e.target.value)}
-                              placeholder="Ej: S, M, L, XL"
-                              required
-                              disabled={isLoading}
-                            />
-                          </div>
-                          
-                          <div className={styles.sizeField}>
-                            <label className={styles.fieldLabel}>Stock</label>
-                            <input
-                              className={styles.stockInput}
-                              type="number"
-                              value={size.stock}
-                              onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'stock', e.target.value)}
-                              min="0"
-                              step="1"
-                              placeholder="0"
-                              required
-                              disabled={isLoading}
-                              title="Cantidad disponible (0 = agotado)"
-                            />
-                          </div>
-                          
-                          <div className={styles.sizeField}>
-                            <label className={styles.fieldLabel}>Precio ($)</label>
-                            <input
-                              className={styles.priceInput}
-                              type="number"
-                              value={size.price}
-                              onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'price', e.target.value)}
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              required
-                              disabled={isLoading}
-                              title="Precio en dólares"
-                            />
-                          </div>
-                          
-                          {colorVariant.sizes.length > 1 && (
-                            <button
-                              type="button"
-                              className={styles.removeTinyButton}
-                              onClick={() => handleRemoveSize(colorIndex, sizeIndex)}
-                              disabled={isLoading}
-                              title="Eliminar talla"
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className={styles.addSizeButton}
-                      onClick={() => handleAddSize(colorIndex)}
-                      disabled={isLoading}
-                    >
-                      Agregar otra talla
-                    </button>
-                  </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
+            
+            <div className={styles.addColorContainer}>
+              <button
+                type="button"
+                className={styles.addColorButton}
+                onClick={handleAddColor}
+                disabled={isLoading}
+              >
+                <span className={styles.buttonIcon}>+</span>
+                Agregar nuevo color
+              </button>
+              <div className={styles.addColorHelp}>
+                Puedes agregar múltiples colores con diferentes combinaciones de tallas
+              </div>
+            </div>
+          </div>
 
-        <div className={styles.formActions}>
-          <button 
-            className={`${styles.button} ${styles.primaryButton}`} 
-            type="submit"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <span className={styles.loadingSpinner}></span>
-                Procesando...
-              </>
-            ) : editingProductId ? (
-              'Actualizar Producto'
-            ) : (
-              'Crear Producto'
-            )}
-          </button>
+          {/* Acciones del formulario */}
+          <div className={styles.formActions}>
+            <div className={styles.actionButtons}>
+              <button 
+                className={`${styles.button} ${styles.primaryButton}`} 
+                type="submit"
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <span className={styles.loadingSpinner}></span>
+                    Procesando...
+                  </>
+                ) : editingProductId ? (
+                  <>
+                    <span className={styles.buttonIcon}>💾</span>
+                    Actualizar Producto
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.buttonIcon}>✨</span>
+                    Crear Producto
+                  </>
+                )}
+              </button>
 
-          {editingProductId && (
-            <button
-              type="button"
-              className={`${styles.button} ${styles.secondaryButton}`}
-              onClick={resetForm}
-              disabled={isLoading}
-            >
-              Cancelar Edición
-            </button>
-          )}
-          
-          <button
-            type="button"
-            className={`${styles.button} ${styles.tertiaryButton}`}
-            onClick={resetForm}
-            disabled={isLoading || (!name && !description && !gender && colorVariants[0].color === "")}
-          >
-            Limpiar Formulario
-          </button>
-        </div>
-      </form>
+              {editingProductId && (
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.secondaryButton}`}
+                  onClick={resetForm}
+                  disabled={isLoading}
+                >
+                  <span className={styles.buttonIcon}>↩️</span>
+                  Cancelar Edición
+                </button>
+              )}
+              
+              <button
+                type="button"
+                className={`${styles.button} ${styles.tertiaryButton}`}
+                onClick={resetForm}
+                disabled={isLoading || (!name && !description && !gender && colorVariants[0].color === "")}
+              >
+                <span className={styles.buttonIcon}>🗑️</span>
+                Limpiar Formulario
+              </button>
+            </div>
+            
+            <div className={styles.formTips}>
+              <div className={styles.tip}>
+                <span className={styles.tipIcon}>💡</span>
+                Verifica que todas las imágenes se hayan cargado correctamente antes de guardar
+              </div>
+              <div className={styles.tip}>
+                <span className={styles.tipIcon}>📝</span>
+                Los cambios se guardan automáticamente al editar productos existentes
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
 
       {/* Lista de productos */}
-      <div className={styles.productsSection}>
+      <div className={styles.productsCard}>
         <div className={styles.productsHeader}>
-          <h2 className={styles.title}>
-            Productos ({products.length})
+          <div className={styles.productsTitleRow}>
+            <h2 className={styles.productsTitle}>
+              <span className={styles.titleIcon}>📦</span>
+              Productos en Catálogo
+            </h2>
+            <div className={styles.productsStats}>
+              <span className={styles.statItem}>
+                <span className={styles.statIcon}>✅</span>
+                {products.filter(p => p.enabled).length} habilitados
+              </span>
+              <span className={styles.statItem}>
+                <span className={styles.statIcon}>⏸️</span>
+                {products.filter(p => !p.enabled).length} inhabilitados
+              </span>
+            </div>
+          </div>
+          <div className={styles.productsActions}>
             <button 
               onClick={fetchProducts} 
               className={styles.refreshButton}
               disabled={isLoading}
-              title="Actualizar lista"
+              title="Actualizar lista de productos"
+              aria-label="Actualizar lista"
             >
+              <span className={styles.buttonIcon}>🔄</span>
               Actualizar
             </button>
-          </h2>
+          </div>
         </div>
         
         {products.length === 0 ? (
           <div className={styles.emptyState}>
-            <p>No hay productos registrados.</p>
-            <p className={styles.emptySubtitle}>Crea tu primer producto usando el formulario superior</p>
+            <div className={styles.emptyIcon}>📦</div>
+            <h3 className={styles.emptyTitle}>No hay productos registrados</h3>
+            <p className={styles.emptySubtitle}>Comienza creando tu primer producto usando el formulario superior</p>
+            <button 
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className={styles.emptyButton}
+            >
+              <span className={styles.buttonIcon}>⬆️</span>
+              Ir al formulario
+            </button>
           </div>
         ) : (
           <div className={styles.productsTable}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Género</th>
-                  <th>Estado</th>
-                  <th>Variantes</th>
-                  <th>Stock Total</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((product) => (
-                  <tr key={product.id} className={`${product.hasOrders ? styles.hasOrders : ''} ${!product.enabled ? styles.disabledProduct : ''}`}>
-                    <td>
-                      <div className={styles.productCell}>
-                        <div className={styles.productHeader}>
-                          <strong>{product.name}</strong>
-                          {!product.enabled && (
-                            <span className={styles.disabledBadge} title="Producto inhabilitado">
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.tableHeader}>
+                      <span className={styles.headerIcon}>📋</span>
+                      Producto
+                    </th>
+                    <th className={styles.tableHeader}>
+                      <span className={styles.headerIcon}>👥</span>
+                      Género
+                    </th>
+                    <th className={styles.tableHeader}>
+                      <span className={styles.headerIcon}>⚡</span>
+                      Estado
+                    </th>
+                    <th className={styles.tableHeader}>
+                      <span className={styles.headerIcon}>🎨</span>
+                      Variantes
+                    </th>
+                    <th className={styles.tableHeader}>
+                      <span className={styles.headerIcon}>📦</span>
+                      Stock
+                    </th>
+                    <th className={styles.tableHeader}>
+                      <span className={styles.headerIcon}>⚙️</span>
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product) => (
+                    <tr 
+                      key={product.id} 
+                      className={`
+                        ${styles.tableRow}
+                        ${product.hasOrders ? styles.hasOrders : ''}
+                        ${!product.enabled ? styles.disabledProduct : ''}
+                      `}
+                    >
+                      <td className={styles.productCell}>
+                        <div className={styles.productInfo}>
+                          <div className={styles.productHeader}>
+                            <h4 className={styles.productName}>{product.name}</h4>
+                            <div className={styles.productBadges}>
+                              {!product.enabled && (
+                                <span className={`${styles.badge} ${styles.disabledBadge}`} title="Producto inhabilitado">
+                                  ⏸️ Inhabilitado
+                                </span>
+                              )}
+                              {product.hasOrders && (
+                                <span className={`${styles.badge} ${styles.ordersBadge}`} title="Tiene órdenes asociadas">
+                                  📦 Con órdenes
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <p className={styles.productDescription}>
+                            {product.description.substring(0, 80)}...
+                          </p>
+                        </div>
+                      </td>
+                      <td className={styles.genderCell}>
+                        <span className={`${styles.genderBadge} ${styles[product.gender.toLowerCase()]}`}>
+                          {product.gender === 'NIÑOS' ? '👦' : product.gender === 'NIÑAS' ? '👧' : '👥'}
+                          {product.gender}
+                        </span>
+                      </td>
+                      <td className={styles.statusCell}>
+                        <div className={styles.statusIndicator}>
+                          {product.enabled ? (
+                            <span className={styles.statusEnabled}>
+                              <span className={styles.statusIcon}>✅</span>
+                              Habilitado
+                            </span>
+                          ) : (
+                            <span className={styles.statusDisabled}>
+                              <span className={styles.statusIcon}>⏸️</span>
                               Inhabilitado
                             </span>
                           )}
                         </div>
-                        <small>{product.description.substring(0, 60)}...</small>
-                        {product.hasOrders && (
-                          <span className={styles.orderBadge} title="Tiene órdenes asociadas">
-                            Con órdenes
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`${styles.badge} ${styles.genderBadge} ${styles[product.gender.toLowerCase()]}`}>
-                        {product.gender}
-                      </span>
-                    </td>
-                    <td>
-                      <div className={styles.statusCell}>
-                        {product.enabled ? (
-                          <span className={styles.statusEnabled}>
-                            Habilitado
-                          </span>
-                        ) : (
-                          <span className={styles.statusDisabled}>
-                            Inhabilitado
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <div className={styles.variantsInfo}>
-                        {Array.from(new Set(product.variants.map(v => v.color))).slice(0, 3).map(color => (
-                          <span key={color} className={styles.colorTag}>{color}</span>
-                        ))}
-                        {Array.from(new Set(product.variants.map(v => v.color))).length > 3 && (
-                          <span className={styles.moreTag}>
-                            +{Array.from(new Set(product.variants.map(v => v.color))).length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={styles.stockNumber}>
-                        {product.variants.reduce((sum, v) => sum + v.stock, 0)}
-                        {product.variants.reduce((sum, v) => sum + v.stock, 0) === 0 && (
-                          <span className={styles.outOfStock}> (Agotado)</span>
-                        )}
-                      </span>
-                    </td>
-                    <td>
-                      <div className={styles.actionButtons}>
-                        <button 
-                          className={styles.editButtonSmall}
-                          onClick={() => handleEdit(product)}
-                          disabled={isLoading || isToggling !== null}
-                          title="Editar producto"
-                        >
-                          Editar
-                        </button>
-                        
-                        <button 
-                          className={product.enabled ? styles.disableButtonSmall : styles.enableButtonSmall}
-                          onClick={() => toggleProductStatus(product.id!, product.enabled!)}
-                          disabled={isLoading || isToggling !== null}
-                          title={product.enabled ? "Inhabilitar producto" : "Habilitar producto"}
-                        >
-                          {isToggling === product.id ? (
-                            <span className={styles.smallSpinner}></span>
-                          ) : product.enabled ? (
-                            'Inhabilitar'
-                          ) : (
-                            'Habilitar'
+                      </td>
+                      <td className={styles.variantsCell}>
+                        <div className={styles.variantsContainer}>
+                          {Array.from(new Set(product.variants.map(v => v.color))).slice(0, 2).map(color => (
+                            <span key={color} className={styles.colorTag}>
+                              <span 
+                                className={styles.colorDot} 
+                                style={{ backgroundColor: getColorHex(color) }}
+                              />
+                              {color}
+                            </span>
+                          ))}
+                          {Array.from(new Set(product.variants.map(v => v.color))).length > 2 && (
+                            <span className={styles.moreTag}>
+                              +{Array.from(new Set(product.variants.map(v => v.color))).length - 2} más
+                            </span>
                           )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        </div>
+                      </td>
+                      <td className={styles.stockCell}>
+                        <div className={styles.stockInfo}>
+                          <span className={styles.stockNumber}>
+                            {product.variants.reduce((sum, v) => sum + v.stock, 0)}
+                          </span>
+                          {product.variants.reduce((sum, v) => sum + v.stock, 0) === 0 && (
+                            <span className={styles.outOfStock}>⚠️ Agotado</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={styles.actionsCell}>
+                        <div className={styles.actionButtons}>
+                          <button 
+                            className={`${styles.actionButton} ${styles.editButton}`}
+                            onClick={() => handleEdit(product)}
+                            disabled={isLoading || isToggling !== null}
+                            title="Editar producto"
+                            aria-label="Editar producto"
+                          >
+                            <span className={styles.buttonIcon}>✏️</span>
+                            Editar
+                          </button>
+                          
+                          <button 
+                            className={`${styles.actionButton} ${product.enabled ? styles.disableButton : styles.enableButton}`}
+                            onClick={() => toggleProductStatus(product.id!, product.enabled!)}
+                            disabled={isLoading || isToggling !== null}
+                            title={product.enabled ? "Inhabilitar producto" : "Habilitar producto"}
+                            aria-label={product.enabled ? "Inhabilitar producto" : "Habilitar producto"}
+                          >
+                            {isToggling === product.id ? (
+                              <span className={styles.smallSpinner}></span>
+                            ) : product.enabled ? (
+                              <>
+                                <span className={styles.buttonIcon}>⏸️</span>
+                                Inhabilitar
+                              </>
+                            ) : (
+                              <>
+                                <span className={styles.buttonIcon}>✅</span>
+                                Habilitar
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
 
       {/* Footer informativo */}
       <div className={styles.infoFooter}>
-        <div className={styles.infoItem}>
-          <strong>Información:</strong>
-          <p>• Productos inhabilitados no son visibles al público</p>
-          <p>• Stock 0 = Producto agotado = No se compra</p>
-          <p>• Colores/tallas con órdenes no se pueden editar</p>
-          <p>• Precios en  (COP)</p>
+        <div className={styles.infoCard}>
+          <h4 className={styles.infoTitle}>
+            <span className={styles.infoIcon}>ℹ️</span>
+            Información Importante
+          </h4>
+          <ul className={styles.infoList}>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>⏸️</span>
+              Productos inhabilitados no son visibles al público
+            </li>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>📦</span>
+              Stock 0 = Producto agotado = No disponible para compra
+            </li>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>🔒</span>
+              Colores/tallas con órdenes no se pueden editar
+            </li>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>💰</span>
+              Precios en Pesos Colombianos (COP)
+            </li>
+          </ul>
         </div>
-        <div className={styles.infoItem}>
-          <strong>Notas:</strong>
-          <p>• Guarda cambios frecuentemente</p>
-          <p>• Verifica imágenes antes de publicar</p>
-          <p>• Mantén stock actualizado</p>
-          <p>• Inhabilita productos en lugar de eliminarlos</p>
+        <div className={styles.infoCard}>
+          <h4 className={styles.infoTitle}>
+            <span className={styles.infoIcon}>💡</span>
+            Buenas Prácticas
+          </h4>
+          <ul className={styles.infoList}>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>💾</span>
+              Guarda cambios frecuentemente
+            </li>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>🖼️</span>
+              Verifica imágenes antes de publicar
+            </li>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>📊</span>
+              Mantén stock actualizado regularmente
+            </li>
+            <li className={styles.infoItem}>
+              <span className={styles.itemIcon}>⏸️</span>
+              Inhabilita productos en lugar de eliminarlos
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Footer del panel */}
+      <div className={styles.panelFooter}>
+        <div className={styles.footerContent}>
+          <span className={styles.footerText}>Panel de Administración v1.0</span>
+          <span className={styles.footerSeparator}>•</span>
+          <span className={styles.footerText}>Total productos: {products.length}</span>
+          <span className={styles.footerSeparator}>•</span>
+          <span className={styles.footerText}>Sesión activa: Administrador</span>
         </div>
       </div>
     </div>
@@ -1444,4 +1685,4 @@ const getColorHex = (colorName: string): string => {
   return colorMap[colorName] || "#CCCCCC";
 };
 
-export default Admin; 
+export default Admin;

@@ -22,6 +22,8 @@ export const ADD_TO_CART = `${API_BASE_URL}/api/cart/add`;
 export const MIGRATE_CART = `${API_BASE_URL}/api/cart/migrate`;
 export const CLEAR_CART = `${API_BASE_URL}/api/cart/clear`;
 export const GET_CART_COUNT = `${API_BASE_URL}/api/cart/count`;
+export const ORDERS_EXPIRATION_INFO = `${API_BASE_URL}/api/orders`;
+export const ORDER_CHECK_EXPIRATION = `${API_BASE_URL}/api/orders/{orderId}/check-expiration`;
 
 // Órdenes
 export const ORDERS = `${API_BASE_URL}/api/orders`;

@@ -11,7 +11,8 @@ import {
   CHECKOUT_ANONYMOUS,
   CHECKOUT_AUTHENTICATED,
   MERCADOPAGO_CREATE_PREFERENCE,
-  MERCADOPAGO_STATUS
+  MERCADOPAGO_STATUS,
+  ORDER_CHECK_EXPIRATION
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -34,7 +35,8 @@ import {
   Phone,
   AlertCircle,
   Lock,
-  Shield
+  Shield,
+  Clock
 } from 'lucide-react';
 
 interface CartItem {
@@ -122,6 +124,7 @@ interface PaymentStatusResponse {
   stockReservationExpired?: boolean;
   stockReservationMinutesLeft?: number;
   paymentInfo?: any;
+  cancellationReason?: string;
 }
 
 interface CartTotalsResponse {
@@ -187,6 +190,28 @@ const CheckoutPage = () => {
   const hasFetchedRef = useRef(false);
   const paymentStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const orderFromStorageRef = useRef<string | null>(null);
+  const cartHashRef = useRef<string>('');
+  const isAutoCreatingOrderRef = useRef<boolean>(false);
+  const lastCartUpdateRef = useRef<number>(Date.now());
+
+  // 🔴 FUNCIÓN PARA CALCULAR HASH DEL CARRITO
+  const calculateCartHash = useCallback((items: CartItem[]): string => {
+    if (!items || items.length === 0) return 'empty';
+    
+    const cartData = items
+      .map(item => `${item.productVariantId}:${item.quantity}`)
+      .sort()
+      .join('|');
+    
+    let hash = 0;
+    for (let i = 0; i < cartData.length; i++) {
+      const char = cartData.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    
+    return Math.abs(hash).toString(36);
+  }, []);
 
   // 🔴 INICIALIZAR MERCADO PAGO CUANDO TENGAMOS LA PUBLIC KEY
   const initializeMercadoPago = useCallback((publicKeyFromBackend: string) => {
@@ -198,7 +223,6 @@ const CheckoutPage = () => {
     try {
       console.log('🔧 Inicializando MercadoPago con public key:', publicKeyFromBackend.substring(0, 20) + '...');
       
-      // Inicializar SDK con la public key del backend
       initMercadoPago(publicKeyFromBackend, {
         locale: 'es-CO'
       });
@@ -214,23 +238,17 @@ const CheckoutPage = () => {
     }
   }, []);
 
-  // 🔴 FUNCIÓN PARA OBTENER SESSION ID DESDE MULTIPLES FUENTES
+  // 🔴 FUNCIÓN PARA OBTENER SESSION ID
   const getSessionId = useCallback(() => {
-    // 1. Intentar desde localStorage
     let sessionId = localStorage.getItem('cartSessionId');
   
-    // 2. Si no existe, crear uno nuevo
     if (!sessionId) {
       sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem('cartSessionId', sessionId);
       console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
-    } else {
-      console.log('🔁 SessionId existente:', sessionId.substring(0, 8) + '...');
     }
     
-    // 3. También guardar en sessionStorage
     sessionStorage.setItem('cartSessionId', sessionId);
-    
     setSessionId(sessionId);
     return sessionId;
   }, []);
@@ -241,16 +259,13 @@ const CheckoutPage = () => {
       'Content-Type': 'application/json',
     };
 
-    // Agregar token si existe
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // 🔴 ENVIAR SESSION ID EN HEADER (CRÍTICO)
     const currentSessionId = getSessionId();
     headers['X-Cart-Session-Id'] = currentSessionId;
     
-    // DEBUG en desarrollo
     if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
       console.log('📤 Headers enviados:', {
         'X-Cart-Session-Id': currentSessionId.substring(0, 8) + '...',
@@ -278,45 +293,61 @@ const CheckoutPage = () => {
     setTotalItems(data.totalItems || 0);
   }, []);
 
-  // Verificar si hay una orden pendiente
-  const checkPendingOrder = useCallback(() => {
-    const pendingOrder = localStorage.getItem('pendingOrderId');
-    const pendingOrderData = localStorage.getItem('pendingOrderData');
+  // 🔴 VERIFICAR Y MANEJAR ORDENES EXPIRADAS AUTOMÁTICAMENTE
+  const checkAndHandleExpiredOrder = useCallback(async (): Promise<boolean> => {
+    if (!orderId) return false;
     
-    if (pendingOrder && pendingOrderData) {
-      try {
-        const orderData = JSON.parse(pendingOrderData);
-        setOrderId(pendingOrder);
-        setOrderCreated(true);
-        orderFromStorageRef.current = pendingOrder;
+    try {
+      const token = localStorage.getItem('token');
+      const headers = getRequestHeaders(token);
+      
+      const response = await fetch(`${ORDER_CHECK_EXPIRATION.replace('{orderId}', orderId)}`, {
+        method: 'POST',
+        headers,
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
         
-        if (step === 3) {
-          console.log('🔄 Recuperando orden pendiente:', pendingOrder);
-          setSuccessMessage(`Orden #${pendingOrder} recuperada.`);
+        if (data.expired) {
+          console.log('🔴 Orden expirada detectada, creando nueva automáticamente...');
+          
+          // Limpiar datos de orden expirada SILENCIOSAMENTE
+          localStorage.removeItem('pendingOrderId');
+          localStorage.removeItem('pendingOrderData');
+          localStorage.removeItem('pendingPreferenceId');
+          localStorage.removeItem('lastOrderCartHash');
+          
+          setOrderCreated(false);
+          setOrderId('');
+          setMercadoPagoData(null);
+          setPaymentStatus(null);
+          
+          // Crear nueva orden automáticamente
+          await createOrderSilently();
+          return true;
         }
-      } catch (err) {
-        console.error('Error parsing pending order data:', err);
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
       }
+    } catch (error) {
+      console.error('Error verificando expiración:', error);
     }
-  }, [step]);
+    
+    return false;
+  }, [orderId, getRequestHeaders]);
 
-  // 🔴 ACTUALIZADO: Obtener carrito con totales desde el nuevo endpoint
+  // 🔴 ACTUALIZADO: Obtener carrito con manejo automático de cambios
   const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
     try {
-      console.log('🛒 Fetching cart data with totals...');
+      console.log('🛒 Actualizando información del carrito...');
       
       const headers = getRequestHeaders(token);
       
-      // Usar el nuevo endpoint con totales
       const res = await fetch(`${CART}/with-totals`, {
         headers,
         signal,
         credentials: 'include'
       });
-      
-      console.log('🛒 Response status:', res.status);
       
       if (!res.ok) {
         if (res.status === 404 || res.status === 204) {
@@ -330,6 +361,8 @@ const CheckoutPage = () => {
             totalItems: 0,
             itemCount: 0
           });
+          
+          cartHashRef.current = '';
           return;
         }
         throw new Error(`Error ${res.status}: ${res.statusText}`);
@@ -348,6 +381,7 @@ const CheckoutPage = () => {
           totalItems: 0,
           itemCount: 0
         });
+        cartHashRef.current = '';
         return;
       }
       
@@ -366,14 +400,40 @@ const CheckoutPage = () => {
         })
       );
       
+      // 🔴 CALCULAR NUEVO HASH Y VERIFICAR CAMBIOS
+      const newCartHash = calculateCartHash(items);
+      const hasCartChanged = cartHashRef.current && cartHashRef.current !== newCartHash;
+      
+      if (hasCartChanged) {
+        console.log('🔄 Carrito modificado - Actualizando orden automáticamente...');
+        console.log('Hash anterior:', cartHashRef.current);
+        console.log('Hash nuevo:', newCartHash);
+        
+        // 🔴 SI EL CARRITO CAMBIÓ Y TENEMOS UNA ORDEN, CREAR NUEVA AUTOMÁTICAMENTE
+        if (orderCreated && !isAutoCreatingOrderRef.current) {
+          isAutoCreatingOrderRef.current = true;
+          
+          try {
+            // Crear nueva orden automáticamente
+            await createOrderSilently();
+          } finally {
+            isAutoCreatingOrderRef.current = false;
+          }
+        }
+      }
+      
+      // 🔴 ACTUALIZAR HASH ACTUAL
+      cartHashRef.current = newCartHash;
+      lastCartUpdateRef.current = Date.now();
+      
       setCartItems(items);
       updateTotalsFromResponse(data);
-      console.log(`✅ Carrito cargado: ${items.length} items, Subtotal: ${formatPrice(data.subtotal)}, Envío: ${formatPrice(data.shippingCost)}, Total: ${formatPrice(data.total)}`);
+      console.log(`✅ Carrito actualizado: ${items.length} items`);
       
     } catch (error: unknown) {
       const err = error as Error;
       if (err.name !== 'AbortError') {
-        console.error('🛑 Error fetching cart:', err);
+        console.error('🛑 Error actualizando carrito:', err);
         setCartItems([]);
         updateTotalsFromResponse({
           items: [],
@@ -383,14 +443,14 @@ const CheckoutPage = () => {
           totalItems: 0,
           itemCount: 0
         });
-        throw err;
+        cartHashRef.current = '';
       }
     }
-  }, [formatPrice, getRequestHeaders, updateTotalsFromResponse]);
+  }, [formatPrice, getRequestHeaders, updateTotalsFromResponse, calculateCartHash, orderCreated]);
 
   const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
-      console.log('👤 Fetching user data...');
+      console.log('👤 Cargando información del usuario...');
       const headers = getRequestHeaders(token);
       const res = await fetch(PERFIL_ME, {
         headers,
@@ -417,8 +477,7 @@ const CheckoutPage = () => {
     } catch (error: unknown) {
       const err = error as Error;
       if (err.name !== 'AbortError') {
-        console.error('🛑 Error fetching user:', err);
-        throw err;
+        console.error('🛑 Error cargando usuario:', err);
       }
     }
   }, [getRequestHeaders]);
@@ -431,8 +490,11 @@ const CheckoutPage = () => {
     // Obtener sessionId
     getSessionId();
 
-    // Verificar orden pendiente
-    checkPendingOrder();
+    // 🔴 CARGAR HASH DE ORDEN ANTERIOR SI EXISTE
+    const lastOrderHash = localStorage.getItem('lastOrderCartHash');
+    if (lastOrderHash) {
+      cartHashRef.current = lastOrderHash;
+    }
 
     if (isAuth && !hasFetchedRef.current) {
       loadAuthenticatedData(token!);
@@ -445,7 +507,7 @@ const CheckoutPage = () => {
         clearInterval(paymentStatusIntervalRef.current);
       }
     };
-  }, [checkPendingOrder, getSessionId]);
+  }, [getSessionId]);
 
   const loadAuthenticatedData = useCallback(async (token: string) => {
     setLoading(true);
@@ -468,8 +530,7 @@ const CheckoutPage = () => {
     } catch (err: unknown) {
       const error = err as Error;
       if (error.name !== 'AbortError') {
-        console.error('Error loading authenticated data:', error);
-        setError('Error cargando los datos');
+        console.error('Error cargando datos:', error);
       }
     } finally {
       setLoading(false);
@@ -482,13 +543,13 @@ const CheckoutPage = () => {
       await fetchCart(null);
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('Error loading anonymous cart:', error);
-      setError('Error cargando el carrito');
+      console.error('Error cargando carrito:', error);
     } finally {
       setLoading(false);
     }
   }, [fetchCart]);
 
+  // 🔴 ACTUALIZAR CANTIDAD CON MANEJO AUTOMÁTICO
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     
@@ -518,18 +579,19 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error actualizando cantidad'}`);
       }
       
-      // Refrescar carrito completo para obtener los nuevos totales
+      // Refrescar carrito para obtener los nuevos totales
       await fetchCart(token);
       
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('🛑 Error updating quantity:', error);
+      console.error('🛑 Error actualizando cantidad:', error);
       setError(`Error actualizando la cantidad: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // 🔴 ELIMINAR ITEM CON MANEJO AUTOMÁTICO
   const removeItem = async (itemId: string) => {
     if (!confirm('¿Estás seguro de eliminar este producto del carrito?')) return;
 
@@ -551,17 +613,40 @@ const CheckoutPage = () => {
         throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando producto'}`);
       }
       
-      // Refrescar carrito completo para obtener los nuevos totales
+      // Refrescar carrito para obtener los nuevos totales
       await fetchCart(token);
       
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('🛑 Error removing item:', error);
+      console.error('🛑 Error eliminando producto:', error);
       setError(`Error eliminando el producto: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
     }
   };
+
+  // Verificar si hay una orden pendiente
+  const checkPendingOrder = useCallback(() => {
+    const pendingOrder = localStorage.getItem('pendingOrderId');
+    const pendingOrderData = localStorage.getItem('pendingOrderData');
+    
+    if (pendingOrder && pendingOrderData) {
+      try {
+        const orderData = JSON.parse(pendingOrderData);
+        setOrderId(pendingOrder);
+        setOrderCreated(true);
+        orderFromStorageRef.current = pendingOrder;
+        
+        if (step === 3) {
+          console.log('🔄 Recuperando orden pendiente:', pendingOrder);
+        }
+      } catch (err) {
+        console.error('Error parsing pending order data:', err);
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+      }
+    }
+  }, [step]);
 
   const addAddress = async () => {
     const token = localStorage.getItem('token');
@@ -625,7 +710,7 @@ const CheckoutPage = () => {
       
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('🛑 Error adding address:', error);
+      console.error('🛑 Error agregando dirección:', error);
       setError(`No se pudo agregar la dirección: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
@@ -671,7 +756,7 @@ const CheckoutPage = () => {
       
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('🛑 Error deleting address:', error);
+      console.error('🛑 Error eliminando dirección:', error);
       setError(`No se pudo eliminar la dirección: ${error.message || 'Error desconocido'}`);
     } finally {
       setLoading(false);
@@ -729,7 +814,113 @@ const CheckoutPage = () => {
     setError('');
   };
 
-  // 🔴 FUNCIÓN CORREGIDA: Crear orden con validación de totales
+  // 🔴 CREAR ORDEN SILENCIOSAMENTE (sin notificar al usuario)
+  const createOrderSilently = async (): Promise<OrderResponse | null> => {
+    if (cartItems.length === 0 || !selectedAddress) {
+      console.log('⚠️ No se puede crear orden: carrito vacío o sin dirección');
+      return null;
+    }
+
+    try {
+      console.log('🤫 Creando nueva orden automáticamente...');
+      
+      let orderResponse: OrderResponse;
+      
+      if (isAuthenticated) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          console.error('Usuario no autenticado');
+          return null;
+        }
+        
+        const headers = getRequestHeaders(token);
+        const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({
+            shippingAddressId: selectedAddress.id
+          }),
+        });
+
+        if (!orderRes.ok) {
+          console.error('Error creando orden autenticada:', orderRes.status);
+          return null;
+        }
+
+        orderResponse = await orderRes.json() as OrderResponse;
+        console.log('✅ Nueva orden creada automáticamente:', orderResponse.id);
+        
+      } else {
+        if (!anonymousUserInfo.email) {
+          console.error('Email requerido para usuarios anónimos');
+          return null;
+        }
+        
+        const headers = getRequestHeaders();
+        const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({
+            customerEmail: anonymousUserInfo.email,
+            customerFirstName: anonymousUserInfo.firstName,
+            customerLastName: anonymousUserInfo.lastName,
+            customerPhone: anonymousUserInfo.phone,
+            shippingAddress: {
+              address: selectedAddress.address,
+              city: selectedAddress.city,
+              state: selectedAddress.state,
+              country: selectedAddress.country
+            }
+          }),
+        });
+
+        if (!orderRes.ok) {
+          console.error('Error creando orden anónima:', orderRes.status);
+          return null;
+        }
+
+        orderResponse = await orderRes.json() as OrderResponse;
+        console.log('✅ Nueva orden anónima creada automáticamente:', orderResponse.id);
+      }
+
+      if (!orderResponse.id) {
+        console.error('No se pudo obtener el ID de la orden');
+        return null;
+      }
+
+      // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
+      const currentCartHash = calculateCartHash(cartItems);
+      localStorage.setItem('lastOrderCartHash', currentCartHash);
+      cartHashRef.current = currentCartHash;
+      
+      console.log('📋 Hash del carrito actualizado:', currentCartHash);
+
+      // Guardar orden en localStorage
+      localStorage.setItem('pendingOrderId', orderResponse.id.toString());
+      localStorage.setItem('pendingOrderData', JSON.stringify({
+        shippingAddress: selectedAddress,
+        customerInfo: isAuthenticated ? userData : anonymousUserInfo,
+        createdAt: new Date().toISOString(),
+        total: orderResponse.totalPrice,
+        cartHash: currentCartHash
+      }));
+
+      setOrderId(orderResponse.id.toString());
+      setOrderCreated(true);
+      orderFromStorageRef.current = null;
+
+      return orderResponse;
+
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('🛑 Error creando orden automáticamente:', error);
+      return null;
+    }
+  };
+
+  // 🔴 FUNCIÓN PARA CREAR ORDEN (usada por el usuario)
   const createOrder = useCallback(async (): Promise<OrderResponse | null> => {
     if (cartItems.length === 0) {
       setError('Carrito vacío');
@@ -741,7 +932,6 @@ const CheckoutPage = () => {
       return null;
     }
 
-    // 🔴 VALIDAR TOTALES ANTES DE CREAR ORDEN
     if (total <= 0) {
       setError('Error en el cálculo del total. Por favor, recarga la página.');
       return null;
@@ -753,11 +943,6 @@ const CheckoutPage = () => {
       setSuccessMessage('');
 
       console.log('🚀 Creando orden...');
-      console.log('📤 SessionId enviado:', sessionId?.substring(0, 8) + '...');
-      console.log('👤 Autenticado:', isAuthenticated);
-      console.log('💰 Total calculado:', total);
-      console.log('🚚 Costo de envío:', shippingCost);
-      console.log('🧮 Subtotal:', subtotal);
       
       let orderResponse: OrderResponse;
       
@@ -775,8 +960,6 @@ const CheckoutPage = () => {
           }),
         });
 
-        console.log('📦 Orden autenticada response:', orderRes.status);
-        
         if (!orderRes.ok) {
           let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
           try {
@@ -787,8 +970,7 @@ const CheckoutPage = () => {
         }
 
         orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden autenticada creada:', orderResponse.id);
-        console.log('💰 Total de la orden (backend):', orderResponse.totalPrice);
+        console.log('✅ Orden creada:', orderResponse.id);
         
       } else {
         if (!anonymousUserInfo.email) {
@@ -814,8 +996,6 @@ const CheckoutPage = () => {
           }),
         });
 
-        console.log('📦 Orden anónima response:', orderRes.status);
-        
         if (!orderRes.ok) {
           let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
           try {
@@ -826,22 +1006,19 @@ const CheckoutPage = () => {
         }
 
         orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden anónima creada:', orderResponse.id);
-        console.log('💰 Total de la orden (backend):', orderResponse.totalPrice);
+        console.log('✅ Orden creada:', orderResponse.id);
       }
 
       if (!orderResponse.id) {
         throw new Error('No se pudo obtener el ID de la orden');
       }
 
-      // 🔴 VALIDAR QUE EL TOTAL DE LA ORDEN COINCIDA
-      const expectedTotal = total; // Total que el frontend calculó
-      const actualTotal = orderResponse.totalPrice;
+      // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
+      const currentCartHash = calculateCartHash(cartItems);
+      localStorage.setItem('lastOrderCartHash', currentCartHash);
+      cartHashRef.current = currentCartHash;
       
-      if (Math.abs(expectedTotal - actualTotal) > 1) {
-        console.warn(`⚠️ Diferencia en totales: Frontend ${expectedTotal} vs Backend ${actualTotal}`);
-        // No fallamos aquí, pero lo registramos
-      }
+      console.log('📋 Hash del carrito guardado:', currentCartHash);
 
       // Guardar orden en localStorage
       localStorage.setItem('pendingOrderId', orderResponse.id.toString());
@@ -849,12 +1026,13 @@ const CheckoutPage = () => {
         shippingAddress: selectedAddress,
         customerInfo: isAuthenticated ? userData : anonymousUserInfo,
         createdAt: new Date().toISOString(),
-        total: orderResponse.totalPrice
+        total: orderResponse.totalPrice,
+        cartHash: currentCartHash
       }));
 
       setOrderId(orderResponse.id.toString());
       setOrderCreated(true);
-      setSuccessMessage(`✅ Orden #${orderResponse.id} creada exitosamente`);
+      setSuccessMessage(`Orden #${orderResponse.id} creada exitosamente`);
       
       if (orderFromStorageRef.current) {
         orderFromStorageRef.current = null;
@@ -871,25 +1049,23 @@ const CheckoutPage = () => {
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, sessionId, total, shippingCost, subtotal]);
+  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, total, calculateCartHash]);
 
-  // 🔴 FUNCIÓN ACTUALIZADA: Crear preferencia y recibir public key
+  // 🔴 FUNCIÓN PARA CREAR PREFERENCIA
   const createMercadoPagoPreference = async (orderId: string) => {
     try {
       setMercadoPagoLoading(true);
       setError('');
       
-      console.log('💳 Creando preferencia MercadoPago para orden:', orderId);
-      console.log('📤 SessionId enviado:', sessionId?.substring(0, 8) + '...');
-      console.log('💰 Total con envío:', total);
-      console.log('🚚 Costo de envío:', shippingCost);
-      console.log('🧮 Subtotal:', subtotal);
+      console.log('💳 Creando preferencia para orden:', orderId);
+      
+      // 🔴 VERIFICAR EXPIRACIÓN ANTES DE CREAR PREFERENCIA
+      await checkAndHandleExpiredOrder();
       
       const token = localStorage.getItem('token');
       const headers = getRequestHeaders(token);
       
-      // 🔴 CRÍTICO: Enviar totalAmount como BigDecimal (string para precisión)
-      const totalAmount = total; // Ya incluye envío
+      const totalAmount = total;
       
       const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
@@ -897,25 +1073,45 @@ const CheckoutPage = () => {
         credentials: 'include',
         body: JSON.stringify({
           orderId: parseInt(orderId),
-          totalAmount: totalAmount, // 🔴 ESTO ES OBLIGATORIO Y DEBE COINCIDIR
+          totalAmount: totalAmount,
           paymentMethod: "MERCADO_PAGO",
           shippingAmount: shippingCost
         }),
       });
 
-      console.log('💳 Response status:', response.status);
-      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Error response:', errorText);
+        console.error('❌ Error creando preferencia:', errorText);
         
         let errorMessage = `Error ${response.status}: ${errorText || 'Error creando preferencia'}`;
         
-        // Intentar parsear como JSON
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.error) {
             errorMessage = errorJson.error;
+            
+            // 🔴 SI LA ORDEN ESTÁ EXPIRADA, CREAR NUEVA AUTOMÁTICAMENTE
+            if (errorMessage.includes('expirada') || errorMessage.includes('CANCELADA')) {
+              console.log('🔄 Orden expirada, creando nueva automáticamente...');
+              
+              // Limpiar datos
+              localStorage.removeItem('pendingOrderId');
+              localStorage.removeItem('pendingOrderData');
+              localStorage.removeItem('pendingPreferenceId');
+              localStorage.removeItem('lastOrderCartHash');
+              
+              setOrderCreated(false);
+              setOrderId('');
+              setMercadoPagoData(null);
+              setPaymentStatus(null);
+              
+              // Crear nueva orden automáticamente
+              const newOrder = await createOrderSilently();
+              if (newOrder) {
+                // Crear preferencia para la nueva orden
+                return await createMercadoPagoPreference(newOrder.id.toString());
+              }
+            }
           }
         } catch {}
         
@@ -924,24 +1120,20 @@ const CheckoutPage = () => {
 
       const data = await response.json() as MercadoPagoResponse;
       console.log('✅ Preferencia creada:', data.preferenceId);
-      console.log('💰 Total validado:', data.totalAmount);
-      console.log('🚚 Envío validado:', data.shippingCost);
-      console.log('✅ Validación:', data.validation);
       
       if (data.hasExistingPreference) {
         console.log('🔄 Usando preferencia existente');
-        setSuccessMessage(data.message || 'Ya tienes un pago en proceso');
       }
       
       if (!data.success) {
         throw new Error('No se pudo crear la preferencia de pago');
       }
       
-      // 🔴 IMPORTANTE: Inicializar MercadoPago con la public key del backend
+      // 🔴 INICIALIZAR MERCADO PAGO
       if (data.publicKey) {
         const initialized = initializeMercadoPago(data.publicKey);
         if (!initialized) {
-          console.warn('⚠️ No se pudo inicializar MercadoPago, usando initPoint');
+          console.warn('⚠️ No se pudo inicializar MercadoPago');
         }
       }
       
@@ -954,15 +1146,14 @@ const CheckoutPage = () => {
       
     } catch (err: unknown) {
       const error = err as Error;
-      console.error('🛑 Error creando preferencia MercadoPago:', error);
+      console.error('🛑 Error creando preferencia:', error);
       
-      // 🔴 ERROR DE VALIDACIÓN DE MONTO - MOSTRAR MENSAJE ESPECÍFICO
       if (error.message.includes('no coincide') || 
           error.message.includes('monto') || 
           error.message.includes('PAYMENT_VALIDATION_FAILED') ||
           error.message.includes('manipulación')) {
         
-        setError(`⚠️ Error de validación: ${error.message}. Por favor, recarga la página e intenta nuevamente.`);
+        setError(`Error de validación: ${error.message}. Por favor, recarga la página e intenta nuevamente.`);
         
         // Limpiar datos y reintentar
         localStorage.removeItem('pendingOrderId');
@@ -979,19 +1170,21 @@ const CheckoutPage = () => {
       } else if (error.message.includes('Acceso denegado') || error.message.includes('no tienes permiso')) {
         setError('No tienes permiso para acceder a esta orden. Por favor, inicia sesión nuevamente.');
         
-        // Limpiar sesión
         localStorage.removeItem('token');
         localStorage.removeItem('pendingOrderId');
         localStorage.removeItem('pendingOrderData');
         setIsAuthenticated(false);
         
       } else if (error.message.includes('ya fue procesada')) {
-        setError('Esta orden ya fue procesada. Por favor, crea una nueva orden.');
+        setError('Esta orden ya fue procesada. Se creará una nueva orden automáticamente.');
         
         localStorage.removeItem('pendingOrderId');
         localStorage.removeItem('pendingOrderData');
         setOrderCreated(false);
         setOrderId('');
+        
+        // Crear nueva orden automáticamente
+        await createOrderSilently();
         
       } else {
         setError(`Error al crear el pago: ${error.message || 'Error desconocido'}`);
@@ -1003,6 +1196,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // 🔴 VERIFICAR ESTADO DEL PAGO
   const checkPaymentStatus = async (orderId: string): Promise<PaymentStatusResponse | null> => {
     try {
       console.log('🔄 Verificando estado del pago para orden:', orderId);
@@ -1025,11 +1219,29 @@ const CheckoutPage = () => {
       console.log('📊 Estado del pago:', {
         orderStatus: data.status,
         mpStatus: data.mercadoPagoStatus,
-        hasPayment: data.hasPayment,
         reservationMinutesLeft: data.stockReservationMinutesLeft
       });
       
       setPaymentStatus(data);
+      
+      // 🔴 VERIFICAR SI LA ORDEN ESTÁ CANCELADA (EXPIRADA)
+      if (data.status === 'CANCELADO' || data.cancellationReason?.includes('expirado')) {
+        console.log('🔴 Orden cancelada, creando nueva automáticamente...');
+        
+        // Limpiar datos
+        localStorage.removeItem('pendingOrderId');
+        localStorage.removeItem('pendingOrderData');
+        localStorage.removeItem('pendingPreferenceId');
+        localStorage.removeItem('lastOrderCartHash');
+        
+        setOrderCreated(false);
+        setOrderId('');
+        setMercadoPagoData(null);
+        
+        // Crear nueva orden automáticamente
+        await createOrderSilently();
+        return data;
+      }
       
       if (data.status === 'PAGO_APROBADO' || data.mercadoPagoStatus === 'approved') {
         handleSuccessfulPayment(orderId);
@@ -1041,22 +1253,19 @@ const CheckoutPage = () => {
         return data;
       }
       
-      if (data.status === 'CANCELADO') {
-        setError('La orden fue cancelada. Por favor, crea una nueva orden.');
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
-        setOrderCreated(false);
-        return data;
-      }
-      
       // 🔴 VERIFICAR RESERVA DE STOCK
       if (data.stockReservationMinutesLeft !== undefined && data.stockReservationMinutesLeft <= 0) {
         console.warn('⚠️ Reserva de stock expirada');
         if (!data.stockReservationExpired) {
-          setError('La reserva de stock ha expirado. Por favor, crea una nueva orden.');
+          setError('La reserva de stock ha expirado. Creando nueva orden automáticamente...');
+          
           localStorage.removeItem('pendingOrderId');
           localStorage.removeItem('pendingOrderData');
+          localStorage.removeItem('pendingPreferenceId');
           setOrderCreated(false);
+          
+          // Crear nueva orden automáticamente
+          await createOrderSilently();
         }
       }
       
@@ -1068,6 +1277,7 @@ const CheckoutPage = () => {
     }
   };
 
+  // 🔴 INICIAR POLLING PARA VERIFICAR ESTADO
   const startPaymentStatusPolling = (orderId: string) => {
     if (paymentStatusIntervalRef.current) {
       clearInterval(paymentStatusIntervalRef.current);
@@ -1075,27 +1285,33 @@ const CheckoutPage = () => {
     
     checkPaymentStatus(orderId);
     
-    paymentStatusIntervalRef.current = setInterval(() => {
-      checkPaymentStatus(orderId);
-    }, 5000);
+    paymentStatusIntervalRef.current = setInterval(async () => {
+      await checkPaymentStatus(orderId);
+      
+      // 🔴 VERIFICAR EXPIRACIÓN CADA 30 SEGUNDOS
+      await checkAndHandleExpiredOrder();
+    }, 30000);
     
-    // Detener después de 5 minutos
+    // Detener después de 15 minutos
     setTimeout(() => {
       if (paymentStatusIntervalRef.current) {
         clearInterval(paymentStatusIntervalRef.current);
         paymentStatusIntervalRef.current = null;
-        console.log('⏱️ Polling detenido después de 5 minutos');
       }
-    }, 300000);
+    }, 900000);
   };
 
+  // 🔴 MANEJAR PAGO EXITOSO
   const handleSuccessfulPayment = (orderId: string) => {
     if (paymentStatusIntervalRef.current) {
       clearInterval(paymentStatusIntervalRef.current);
       paymentStatusIntervalRef.current = null;
     }
     
-    // Limpiar datos pendientes
+    // 🔴 LIMPIAR DATOS
+    localStorage.removeItem('lastOrderCartHash');
+    cartHashRef.current = '';
+    
     localStorage.removeItem('pendingOrderId');
     localStorage.removeItem('pendingOrderData');
     localStorage.removeItem('pendingPreferenceId');
@@ -1118,29 +1334,27 @@ const CheckoutPage = () => {
     }, 3000);
   };
 
+  // 🔴 REINTENTAR PAGO
   const retryPayment = async () => {
     if (!orderId) {
       setError('No hay una orden para reintentar el pago');
       return;
     }
     
-    // 🔴 LIMPIAR DATOS ANTERIORES COMPLETAMENTE
+    // 🔴 VERIFICAR SI LA ORDEN SIGUE VÁLIDA
+    await checkAndHandleExpiredOrder();
+    
+    // Limpiar preferencia anterior
     localStorage.removeItem('pendingPreferenceId');
     setMercadoPagoData(null);
     setError('');
     
-    // 🔴 ACTUALIZAR CARRITO ANTES DE REINTENTAR
+    // Actualizar carrito antes de reintentar
     try {
       const token = localStorage.getItem('token');
       await fetchCart(token);
       
-      // Pequeño delay para asegurar que los totales se actualicen
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('🔄 Recalculando totales después de recargar carrito...');
-      console.log('💰 Nuevo total:', total);
-      console.log('🚚 Nuevo envío:', shippingCost);
-      console.log('🧮 Nuevo subtotal:', subtotal);
       
     } catch (error) {
       console.error('Error actualizando carrito:', error);
@@ -1149,13 +1363,18 @@ const CheckoutPage = () => {
     await createMercadoPagoPreference(orderId);
   };
 
+  // 🔴 EFECTO PARA CREAR ORDEN Y PREFERENCIA AUTOMÁTICAMENTE
   useEffect(() => {
     const createOrderAndPreference = async () => {
       if (step === 3 && !orderCreated && !isProcessingPayment && !mercadoPagoData) {
-        console.log('🔄 Step 3: Creando orden y preferencia...');
+        console.log('🔄 Step 3: Procesando orden...');
         
         if (orderFromStorageRef.current) {
           console.log('📦 Usando orden almacenada:', orderFromStorageRef.current);
+          
+          // Verificar si la orden almacenada sigue válida
+          await checkAndHandleExpiredOrder();
+          
           setOrderId(orderFromStorageRef.current);
           setOrderCreated(true);
           await createMercadoPagoPreference(orderFromStorageRef.current);
@@ -1163,7 +1382,7 @@ const CheckoutPage = () => {
           console.log('📦 Creando nueva orden...');
           const order = await createOrder();
           if (order) {
-            console.log('💳 Creando preferencia para nueva orden...');
+            console.log('💳 Creando preferencia...');
             await createMercadoPagoPreference(order.id.toString());
           }
         }
@@ -1171,11 +1390,12 @@ const CheckoutPage = () => {
     };
     
     createOrderAndPreference();
-  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder, createMercadoPagoPreference]);
+  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder, createMercadoPagoPreference, checkAndHandleExpiredOrder]);
 
+  // 🔴 EFECTO PARA INICIAR POLLING
   useEffect(() => {
     if (step === 3 && orderId && !mercadoPagoLoading && orderCreated) {
-      console.log('📊 Iniciando polling para orden:', orderId);
+      console.log('📊 Iniciando verificación de estado para orden:', orderId);
       startPaymentStatusPolling(orderId);
     }
     
@@ -1186,6 +1406,25 @@ const CheckoutPage = () => {
       }
     };
   }, [step, orderId, mercadoPagoLoading, orderCreated]);
+
+  // 🔴 EFECTO PARA VERIFICAR CAMBIOS EN EL CARRITO PERIÓDICAMENTE
+  useEffect(() => {
+    if (step === 3 && orderCreated) {
+      const interval = setInterval(async () => {
+        // Verificar si el carrito ha sido modificado recientemente
+        const timeSinceLastUpdate = Date.now() - lastCartUpdateRef.current;
+        if (timeSinceLastUpdate < 5000) { // Si se modificó hace menos de 5 segundos
+          console.log('🔄 Carrito modificado recientemente, verificando cambios...');
+          
+          // Forzar actualización del carrito para detectar cambios
+          const token = localStorage.getItem('token');
+          await fetchCart(token);
+        }
+      }, 10000); // Verificar cada 10 segundos
+      
+      return () => clearInterval(interval);
+    }
+  }, [step, orderCreated, fetchCart]);
 
   const steps = [
     { number: 1, label: "Carrito", icon: ShoppingBag },
@@ -1854,6 +2093,20 @@ const CheckoutPage = () => {
                                 <span>Protegido por Mercado Pago</span>
                               </div>
                             </div>
+                            
+                            {/* 🔴 TIMER DE EXPIRACIÓN DISCRETO */}
+                            {paymentStatus?.stockReservationMinutesLeft && paymentStatus.stockReservationMinutesLeft > 0 && (
+                              <div className="checkout-expiration-timer">
+                                <Clock className="checkout-icon" size={14} />
+                                <span>La reserva de stock expira en {paymentStatus.stockReservationMinutesLeft} minutos</span>
+                                <div className="checkout-expiration-progress">
+                                  <div 
+                                    className="checkout-expiration-progress-bar"
+                                    style={{ width: `${(paymentStatus.stockReservationMinutesLeft / 10) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
