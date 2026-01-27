@@ -31,10 +31,6 @@ export const CHECKOUT_ANONYMOUS = `${API_BASE_URL}/api/orders/checkout/anonymous
 export const CHECKOUT_AUTHENTICATED = `${API_BASE_URL}/api/orders/checkout/authenticated`;
 export const MIGRATE_ORDERS = `${API_BASE_URL}/api/orders/migrate`;
 
-// Bold Payments
-// export const BOLD_SIGNATURE = `${API_BASE_URL}/api/bold/signature`;
-
-
 // Mercado Pago
 export const MERCADOPAGO_CREATE_PREFERENCE = `${API_BASE_URL}/api/payments/create-preference`;
 export const MERCADOPAGO_STATUS = `${API_BASE_URL}/api/payments/status`;
@@ -66,20 +62,35 @@ export const BLOG_SEARCH = (query: string) => `${API_BASE_URL}/api/blog/search?q
 export const BLOG_FILTER = `${API_BASE_URL}/api/blog/filter`;
 
 
-// META Integration
+// ======================= META Integration (V1 - DEPRECATED) =======================
+// 🔴 COMENTADOS: Estos endpoints V1 han sido reemplazados por V2
+// Si necesitas usarlos en el futuro, descomenta las líneas correspondientes
+/*
 export const META_PRODUCTS = `${API_BASE_URL}/api/meta/products`;
-export const META_STATS = `${API_BASE_URL}/api/meta/stats`;
-export const META_CSV = `${API_BASE_URL}/api/meta/feed/csv`;
-export const META_MIGRATE = `${API_BASE_URL}/api/meta/migrate`;
-export const META_GENERATE = `${API_BASE_URL}/api/meta/feed/generate`;
-export const META_FILES = `${API_BASE_URL}/api/meta/feed/files`;
 export const META_FILE_DOWNLOAD = (filename: string) => `${API_BASE_URL}/api/meta/feed/files/${filename}`;
 export const META_PRODUCT_UPDATE = (variantId: number) => `${API_BASE_URL}/api/meta/products/${variantId}`;
 export const META_PRODUCT_TOGGLE = (variantId: number) => `${API_BASE_URL}/api/meta/products/${variantId}/enabled`;
 export const META_BATCH_ENABLE = `${API_BASE_URL}/api/meta/products/batch/enable`;
 export const META_BATCH_DISABLE = `${API_BASE_URL}/api/meta/products/batch/disable`;
 export const META_REGENERATE_SKU = (variantId: number) => `${API_BASE_URL}/api/meta/products/${variantId}/regenerate-sku`;
-// META Integration - USAR V2 ENDPOINTS
+*/
+
+// ======================= META Integration (V2 - ACTIVOS) =======================
+// 🟢 ENDPOINTS ACTIVOS: Usar estos para todas las operaciones META
 export const META_PRODUCTS_V2 = `${API_BASE_URL}/api/meta/v2/products`;
 export const META_PRODUCT_V2 = (productId: number) => `${API_BASE_URL}/api/meta/v2/products/${productId}`;
 export const META_PRODUCT_TOGGLE_V2 = (productId: number) => `${API_BASE_URL}/api/meta/v2/products/${productId}/enabled`;
+export const META_STATS = `${API_BASE_URL}/api/meta/stats`;
+export const META_CSV = `${API_BASE_URL}/api/meta/feed/csv`;
+export const META_MIGRATE = `${API_BASE_URL}/api/meta/migrate`;
+export const META_GENERATE = `${API_BASE_URL}/api/meta/feed/generate`;
+export const META_FILES = `${API_BASE_URL}/api/meta/feed/files`;
+
+// Órdenes del usuario actual
+export const ORDERS_MY_ORDERS = `${API_BASE_URL}/api/orders/my-orders`;
+
+// Detalle de orden específica
+export const ORDER_DETAIL = (id: number) => `${API_BASE_URL}/api/orders/${id}`;
+
+// Cambiar estado de orden (administrador)
+export const ADMIN_UPDATE_ORDER_STATUS = `${API_BASE_URL}/api/payments/admin/change-status`;

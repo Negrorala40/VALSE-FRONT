@@ -2,7 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_BASE_URL } from '@/app/utils/Api';
+import { 
+  API_BASE_URL,
+  META_PRODUCTS_V2,
+  META_STATS,
+  META_CSV,
+  META_MIGRATE,
+  META_GENERATE
+} from '@/app/utils/Api';
 import styles from './meta.module.css';
 
 // Tipos de datos ACTUALIZADOS para V2
@@ -73,13 +80,6 @@ const MetaDashboard = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  
-  // Endpoints META V2 (CORREGIDOS)
-  const META_PRODUCTS_V2 = `${API_BASE_URL}/api/meta/v2/products`;
-  const META_STATS = `${API_BASE_URL}/api/meta/stats`;
-  const META_CSV = `${API_BASE_URL}/api/meta/feed/csv`;
-  const META_MIGRATE = `${API_BASE_URL}/api/meta/migrate`;
-  const META_GENERATE = `${API_BASE_URL}/api/meta/feed/generate`;
 
   // Función para obtener headers con autenticación
   const getAuthHeaders = () => {

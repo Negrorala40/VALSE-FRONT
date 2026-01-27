@@ -36,7 +36,8 @@ import {
   AlertCircle,
   Lock,
   Shield,
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 
 interface CartItem {
@@ -48,6 +49,7 @@ interface CartItem {
   color: string;
   quantity: number;
   stock?: number;
+  maxStock?: number; // 🔴 NUEVO: stock máximo del backend
   productVariantId?: string;
 }
 
@@ -137,6 +139,7 @@ interface CartTotalsResponse {
     color: string;
     quantity: number;
     stock?: number;
+    maxStock?: number; // 🔴 NUEVO: stock máximo del backend
   }>;
   subtotal: number;
   shippingCost: number;
@@ -155,6 +158,8 @@ const CheckoutPage = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [needsCartAdjustment, setNeedsCartAdjustment] = useState<boolean>(false);
+  const [adjustedItems, setAdjustedItems] = useState<Array<{id: string, name: string, oldQty: number, newQty: number}>>([]);
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
@@ -336,7 +341,50 @@ const CheckoutPage = () => {
     return false;
   }, [orderId, getRequestHeaders]);
 
-  // 🔴 ACTUALIZADO: Obtener carrito con manejo automático de cambios
+  // 🔴 NUEVA FUNCIÓN: VERIFICAR Y AJUSTAR CANTIDADES SI EXCEDEN STOCK MÁXIMO
+  const checkAndAdjustCartQuantities = useCallback(async (data: CartTotalsResponse, token: string | null) => {
+    const adjustments: Array<{id: string, name: string, oldQty: number, newQty: number}> = [];
+    
+    // Verificar cada item del carrito
+    for (const item of data.items) {
+      const existingItem = cartItems.find(ci => ci.productVariantId === item.id?.toString() || ci.id === item.id?.toString());
+      
+      if (item.maxStock !== undefined && existingItem && existingItem.quantity > item.maxStock) {
+        console.log(`⚠️ Ajustando cantidad de ${item.productName}: ${existingItem.quantity} → ${item.maxStock}`);
+        
+        // Agregar a la lista de ajustes
+        adjustments.push({
+          id: existingItem.id,
+          name: existingItem.name,
+          oldQty: existingItem.quantity,
+          newQty: item.maxStock
+        });
+        
+        // Actualizar cantidad en el backend
+        try {
+          const headers = getRequestHeaders(token);
+          await fetch(`${CART}/update/${existingItem.id}?quantity=${item.maxStock}`, {
+            method: 'PUT',
+            headers,
+            credentials: 'include'
+          });
+        } catch (err) {
+          console.error('Error ajustando cantidad:', err);
+        }
+      }
+    }
+    
+    // Si hay ajustes, mostrar notificación
+    if (adjustments.length > 0) {
+      setAdjustedItems(adjustments);
+      setNeedsCartAdjustment(true);
+      return true;
+    }
+    
+    return false;
+  }, [cartItems, getRequestHeaders]);
+
+  // 🔴 ACTUALIZADO: Obtener carrito con verificación de stock máximo
   const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
     try {
       console.log('🛒 Actualizando información del carrito...');
@@ -385,6 +433,16 @@ const CheckoutPage = () => {
         return;
       }
       
+      // 🔴 VERIFICAR Y AJUSTAR CANTIDADES SI ES NECESARIO
+      const needsAdjustment = await checkAndAdjustCartQuantities(data, token);
+      
+      if (needsAdjustment) {
+        // Si se ajustaron cantidades, refrescar el carrito
+        console.log('🔄 Recargando carrito después de ajustes...');
+        setTimeout(() => fetchCart(token, signal), 500);
+        return;
+      }
+      
       // Transformar items del carrito
       const items: CartItem[] = data.items.map(
         (item: any) => ({
@@ -396,6 +454,7 @@ const CheckoutPage = () => {
           color: item.color || '',
           quantity: item.quantity || 1,
           stock: item.stock || 100,
+          maxStock: item.maxStock || item.stock, // 🔴 AGREGAR STOCK MÁXIMO
           productVariantId: item.productVariantId?.toString() || item.id?.toString(),
         })
       );
@@ -446,7 +505,7 @@ const CheckoutPage = () => {
         cartHashRef.current = '';
       }
     }
-  }, [formatPrice, getRequestHeaders, updateTotalsFromResponse, calculateCartHash, orderCreated]);
+  }, [formatPrice, getRequestHeaders, updateTotalsFromResponse, calculateCartHash, orderCreated, checkAndAdjustCartQuantities]);
 
   const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
     try {
@@ -549,15 +608,17 @@ const CheckoutPage = () => {
     }
   }, [fetchCart]);
 
-  // 🔴 ACTUALIZAR CANTIDAD CON MANEJO AUTOMÁTICO
+  // 🔴 ACTUALIZADO: Actualizar cantidad con verificación de stock máximo
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) return;
     
     const item = cartItems.find((i) => i.id === itemId);
     if (!item) return;
     
-    if (item.stock && newQuantity > item.stock) {
-      setError(`No hay suficiente stock disponible (máximo ${item.stock})`);
+    // 🔴 VERIFICAR CONTRA STOCK MÁXIMO (si está disponible)
+    const maxStock = item.maxStock || item.stock;
+    if (maxStock && newQuantity > maxStock) {
+      setError(`No hay suficiente stock disponible (máximo ${maxStock})`);
       return;
     }
 
@@ -1460,6 +1521,49 @@ const CheckoutPage = () => {
         </div>
       </div>
 
+      {/* 🔴 NOTIFICACIÓN DE AJUSTE DE CARRITO */}
+      {needsCartAdjustment && adjustedItems.length > 0 && (
+        <div className="checkout-cart-adjustment-notification">
+          <div className="checkout-cart-adjustment-content">
+            <div className="checkout-cart-adjustment-header">
+              <RefreshCw className="checkout-icon spinning" />
+              <h4>Stock actualizado</h4>
+              <button 
+                className="checkout-cart-adjustment-close" 
+                onClick={() => {
+                  setNeedsCartAdjustment(false);
+                  setAdjustedItems([]);
+                }}
+              >
+                <X className="checkout-icon" />
+              </button>
+            </div>
+            <p className="checkout-cart-adjustment-message">
+              Algunos productos en tu carrito excedían el stock disponible. Hemos ajustado las cantidades:
+            </p>
+            <div className="checkout-cart-adjustment-items">
+              {adjustedItems.map((item) => (
+                <div key={item.id} className="checkout-cart-adjustment-item">
+                  <span className="checkout-cart-adjustment-name">{item.name}</span>
+                  <span className="checkout-cart-adjustment-qty">
+                    {item.oldQty} → {item.newQty}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button 
+              className="checkout-btn checkout-btn-outline checkout-btn-sm"
+              onClick={() => {
+                setNeedsCartAdjustment(false);
+                setAdjustedItems([]);
+              }}
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="checkout-progress-section">
         <div className="checkout-progress-container">
           <div className="checkout-progress-steps">
@@ -1563,7 +1667,9 @@ const CheckoutPage = () => {
                               <h3 className="checkout-cart-item-name">{item.name}</h3>
                               <div className="checkout-cart-item-badges">
                                 <span className="checkout-badge checkout-badge-outline checkout-badge-purple">{item.color}</span>
-                                <span className="checkout-badge checkout-badge-outline checkout-badge-mint">Stock: {item.stock || 'Disponible'}</span>
+                                <span className="checkout-badge checkout-badge-outline checkout-badge-mint">
+                                  Stock: {item.maxStock || item.stock || 'Disponible'}
+                                </span>
                               </div>
                               <p className="checkout-cart-item-price">{formatPrice(item.price)}</p>
                             </div>
@@ -1581,7 +1687,7 @@ const CheckoutPage = () => {
                                 <button
                                   className="checkout-quantity-btn"
                                   onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                  disabled={loading || Boolean(item.stock && item.quantity >= item.stock)}
+                                  disabled={loading || Boolean(((item.maxStock ?? item.stock) ?? 0) && item.quantity >= (item.maxStock ?? item.stock ?? 0))}
                                 >
                                   <Plus className="checkout-icon" />
                                 </button>
@@ -2268,7 +2374,8 @@ const CheckoutPage = () => {
                   (!isAuthenticated && (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone || !selectedAddress))
                 )) || 
                 loading || 
-                isProcessingPayment
+                isProcessingPayment ||
+                needsCartAdjustment // 🔴 NO PERMITIR AVANZAR SI HAY AJUSTES PENDIENTES
               }
             >
               Continuar
