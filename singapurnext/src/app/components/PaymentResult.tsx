@@ -33,7 +33,7 @@
   } from 'lucide-react';
   import Link from 'next/link';
   import Image from 'next/image';
-  import './PaymentResult.css';
+  import styles from './PaymentResult.module.css';
 
   // Tipos de respuesta de Mercado Pago
   interface MercadoPagoParams {

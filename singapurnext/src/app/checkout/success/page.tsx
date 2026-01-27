@@ -1,7 +1,7 @@
 // app/checkout/success/page.tsx
 import { Suspense } from 'react';
 import PaymentResult from '@/app/components/PaymentResult';
-import './PaymentResult.css';
+import styles from '@/app/components/PaymentResult.module.css';
 
 export const metadata = {
   title: 'Confirmación de Pago | Amarte Store',
