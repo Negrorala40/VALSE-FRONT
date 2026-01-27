@@ -94,3 +94,11 @@ export const ORDER_DETAIL = (id: number) => `${API_BASE_URL}/api/orders/${id}`;
 
 // Cambiar estado de orden (administrador)
 export const ADMIN_UPDATE_ORDER_STATUS = `${API_BASE_URL}/api/payments/admin/change-status`;
+
+//payment
+export const ORDER_MY_ORDERS = `${API_BASE_URL}/api/orders/my-orders`;
+export const ORDER_STATUS = (orderId: string) => 
+  `${API_BASE_URL}/api/orders/${orderId}/status`;
+
+
+
