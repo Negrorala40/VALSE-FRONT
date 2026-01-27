@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import styles from '../orden.module.css';
+import styles from './page.module.css';
 
 // ✅ INTERFAZ ACTUALIZADA para los DTOs del backend
 interface Order {
