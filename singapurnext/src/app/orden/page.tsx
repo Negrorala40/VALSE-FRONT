@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from './orden.module.css';
 
+// ✅ INTERFAZ ACTUALIZADA para DTOs del listado
 interface Order {
   id: number;
   totalPrice: number;
@@ -12,20 +13,22 @@ interface Order {
   customerEmail: string;
   customerName?: string;
   orderDate: string;
-  updatedAt?: string;
-  stockReservedAt?: string;
-  stockReservationExpired?: boolean;
-  mercadoPagoPaymentId?: string;
-  mercadoPagoStatus?: string;
-  paymentMethod?: string;
-  cancellationReason?: string;
-  orderItems: Array<{
-    id: number;
-    quantity: number;
-    price: number;
-    productName: string;
-    variantName?: string;
-  }>;
+  paymentMethod?: string;  // ✅ Agregar esto
+  createdAt: string;       // ✅ Agregar esto
+  itemCount: number;       // ✅ Agregar esto (reemplaza orderItems)
+  
+  // ❌ ELIMINAR esto (el DTO de listado NO trae orderItems ni shippingAddress)
+  // orderItems: Array<{
+  //   id: number;
+  //   quantity: number;
+  //   price: number;
+  //   productName: string;
+  // }>;
+  // shippingAddress?: {
+  //   address: string;
+  //   city: string;
+  //   state: string;
+  // };
 }
 
 export default function AdminOrdersPage() {
@@ -35,10 +38,8 @@ export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Usar directamente la URL base como en tu Api.ts
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://backendamarte-production.up.railway.app';
 
-  // Obtener token del localStorage
   const getToken = () => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('token');
@@ -46,19 +47,21 @@ export default function AdminOrdersPage() {
     return null;
   };
 
-  // Formatear fecha
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      return dateString;
+    }
   };
 
-  // Formatear moneda
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -67,7 +70,6 @@ export default function AdminOrdersPage() {
     }).format(amount);
   };
 
-  // Cargar órdenes - USAR EL ENDPOINT CORRECTO: /api/orders/my-orders
   const fetchOrders = async () => {
     setLoading(true);
     try {
@@ -77,19 +79,23 @@ export default function AdminOrdersPage() {
         return;
       }
 
-      // 🔴 USAR EL ENDPOINT CORRECTO que existe en tu backend
-      const response = await fetch(`${API_BASE_URL}/api/orders/my-orders`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/orders`, {
         headers: {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
       });
 
       if (response.ok) {
         const data = await response.json();
+        console.log('📦 Órdenes recibidas:', data); // Para debug
         setOrders(data);
       } else if (response.status === 401) {
         localStorage.removeItem('token');
         router.push('/login');
+      } else if (response.status === 403) {
+        console.error('Acceso denegado - No tienes permisos de administrador');
+        router.push('/dashboard');
       } else {
         console.error('Error al cargar órdenes:', response.status);
       }
@@ -100,45 +106,129 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // Filtrar órdenes
+  // Marcar como enviada
+  const handleMarkAsShipped = async (orderId: number) => {
+    try {
+      const token = getToken();
+      const response = await fetch(`${API_BASE_URL}/api/admin/orders/${orderId}/mark-as-shipped`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        alert('Orden marcada como enviada correctamente');
+        fetchOrders(); // Recargar la lista
+      } else {
+        const error = await response.text();
+        alert(`Error: ${error}`);
+      }
+    } catch (error) {
+      console.error('Error al marcar como enviada:', error);
+      alert('Error al marcar como enviada');
+    }
+  };
+
   const filteredOrders = orders.filter(order => {
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      const matchesId = order.id.toString().includes(search);
-      const matchesEmail = order.customerEmail.toLowerCase().includes(search);
-      const matchesName = order.customerName?.toLowerCase().includes(search) || false;
-      if (!matchesId && !matchesEmail && !matchesName) return false;
-    }
+    const search = searchTerm.toLowerCase();
+    const matchesId = order.id.toString().includes(search);
+    const matchesEmail = order.customerEmail.toLowerCase().includes(search);
+    const matchesName = order.customerName?.toLowerCase().includes(search) || false;
     
-    if (statusFilter && order.status !== statusFilter) {
-      return false;
-    }
+    if (searchTerm && !matchesId && !matchesEmail && !matchesName) return false;
+    if (statusFilter && order.status !== statusFilter) return false;
     
     return true;
   });
 
-  // Calcular estadísticas
+  // ✅ ESTADÍSTICAS ACTUALIZADAS (sin usar orderItems)
   const stats = {
     total: orders.length,
     pendiente: orders.filter(o => o.status === 'PENDIENTE').length,
     aprobado: orders.filter(o => o.status === 'PAGO_APROBADO').length,
+    enviado: orders.filter(o => o.status === 'ENVIADO').length,
+    entregado: orders.filter(o => o.status === 'ENTREGADO').length,
+    rechazado: orders.filter(o => o.status === 'PAGO_RECHAZADO').length,
     cancelado: orders.filter(o => o.status === 'CANCELADO').length,
     totalRevenue: orders
-      .filter(o => o.status === 'PAGO_APROBADO' || o.status === 'ENVIADO' || o.status === 'ENTREGADO')
+      .filter(o => ['PAGO_APROBADO', 'ENVIADO', 'ENTREGADO'].includes(o.status))
       .reduce((sum, o) => sum + o.totalPrice, 0)
   };
 
-  // Cargar órdenes al iniciar
+  const navigateTo = (path: string) => {
+    router.push(path);
+  };
+
   useEffect(() => {
     fetchOrders();
   }, []);
 
+  const getStatusClass = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'PENDIENTE': 'statusPendiente',
+      'PAGO_APROBADO': 'statusAprobado',
+      'PAGO_RECHAZADO': 'statusRechazado',
+      'CANCELADO': 'statusCancelado',
+      'ENVIADO': 'statusEnviado',
+      'ENTREGADO': 'statusEntregado',
+    };
+    return statusMap[status] || 'statusPendiente';
+  };
+
+  const getStatusText = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'PENDIENTE': 'Pendiente',
+      'PAGO_APROBADO': 'Pago Aprobado',
+      'PAGO_RECHAZADO': 'Pago Rechazado',
+      'CANCELADO': 'Cancelado',
+      'ENVIADO': 'Enviado',
+      'ENTREGADO': 'Entregado',
+    };
+    return statusMap[status] || status;
+  };
+
   return (
     <div className={styles.adminOrdersContainer}>
-      {/* Header */}
+      {/* Header con navegación */}
       <header className={styles.adminHeader}>
-        <h1>Panel de Administración de Órdenes</h1>
-        <p>Gestiona todas las órdenes del sistema</p>
+        <div className={styles.headerContent}>
+          <div>
+            <h1>Panel de Administración</h1>
+            <p>Gestiona todas las órdenes del sistema</p>
+          </div>
+          <div className={styles.navButtons}>
+            <button 
+              className={styles.navButton}
+              onClick={() => navigateTo('/perfil')}
+            >
+              <span className={styles.buttonIcon}>👤</span>
+              Perfil
+            </button>
+            <button 
+              className={styles.navButton}
+              onClick={() => navigateTo('/meta')}
+            >
+              <span className={styles.buttonIcon}>🎯</span>
+              Meta
+            </button>
+            <button 
+              className={styles.navButton}
+              onClick={() => navigateTo('/orden')}
+            >
+              <span className={styles.buttonIcon}>📦</span>
+              Órdenes
+            </button>
+            <button 
+              className={styles.navButton}
+              onClick={() => navigateTo('/admin/blog')}
+            >
+              <span className={styles.buttonIcon}>📝</span>
+              Blog
+            </button>
+          </div>
+        </div>
       </header>
 
       {/* Estadísticas */}
@@ -253,8 +343,14 @@ export default function AdminOrdersPage() {
                   <td className={styles.orderId}>#{order.id}</td>
                   <td className={styles.customerInfo}>
                     <div className={styles.customerEmail}>{order.customerEmail}</div>
-                    {order.customerName && (
+                    {order.customerName && order.customerName.trim() && (
                       <div className={styles.customerName}>{order.customerName}</div>
+                    )}
+                    {/* ✅ Mostrar cantidad de productos si está disponible */}
+                    {order.itemCount !== undefined && (
+                      <div className={styles.itemCount}>
+                        {order.itemCount} {order.itemCount === 1 ? 'producto' : 'productos'}
+                      </div>
                     )}
                   </td>
                   <td>
@@ -268,6 +364,14 @@ export default function AdminOrdersPage() {
                     <Link href={`/orden/${order.id}`} className={styles.viewButton}>
                       Ver detalles
                     </Link>
+                    {order.status === 'PAGO_APROBADO' && (
+                      <button 
+                        onClick={() => handleMarkAsShipped(order.id)}
+                        className={styles.shipButton}
+                      >
+                        Marcar enviada
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -283,29 +387,4 @@ export default function AdminOrdersPage() {
       </div>
     </div>
   );
-
-  // Helper functions
-  function getStatusClass(status: string): string {
-    switch (status) {
-      case 'PENDIENTE': return 'statusPendiente';
-      case 'PAGO_APROBADO': return 'statusAprobado';
-      case 'PAGO_RECHAZADO': return 'statusRechazado';
-      case 'CANCELADO': return 'statusCancelado';
-      case 'ENVIADO': return 'statusEnviado';
-      case 'ENTREGADO': return 'statusEntregado';
-      default: return 'statusPendiente';
-    }
-  }
-
-  function getStatusText(status: string): string {
-    switch (status) {
-      case 'PENDIENTE': return 'Pendiente';
-      case 'PAGO_APROBADO': return 'Pago Aprobado';
-      case 'PAGO_RECHAZADO': return 'Pago Rechazado';
-      case 'CANCELADO': return 'Cancelado';
-      case 'ENVIADO': return 'Enviado';
-      case 'ENTREGADO': return 'Entregado';
-      default: return status;
-    }
-  }
 }

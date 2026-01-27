@@ -1,27 +1,71 @@
+/* orden.module.css */
+
 .adminOrdersContainer {
   min-height: 100vh;
-  background-color: #f5f7fa;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 24px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-/* Header */
+/* Header con navegación */
 .adminHeader {
   margin-bottom: 32px;
-  text-align: center;
+}
+
+.headerContent {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .adminHeader h1 {
-  color: #1a1a1a;
+  color: white;
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 8px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .adminHeader p {
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 16px;
   margin: 0;
+}
+
+.navButtons {
+  display: flex;
+  gap: 12px;
+}
+
+.navButton {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px 20px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.navButton:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.buttonIcon {
+  font-size: 18px;
 }
 
 /* Estadísticas */
@@ -33,30 +77,32 @@
 }
 
 .statCard {
-  background: white;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .statCard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-5px);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .statCard.total {
-  border-top: 4px solid #3b82f6;
+  border-top: 4px solid #667eea;
 }
 
 .statCard.pending {
-  border-top: 4px solid #f59e0b;
+  border-top: 4px solid #ff7e5f;
 }
 
 .statCard.approved {
-  border-top: 4px solid #10b981;
+  border-top: 4px solid #42e695;
 }
 
 .statCard.revenue {
@@ -64,12 +110,13 @@
 }
 
 .statIcon {
-  font-size: 32px;
+  font-size: 36px;
   margin-right: 20px;
+  opacity: 0.9;
 }
 
 .statInfo h3 {
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
@@ -78,19 +125,21 @@
 }
 
 .statValue {
-  color: #1a1a1a;
+  color: white;
   font-size: 28px;
   font-weight: 700;
   margin: 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Filtros */
 .filtersSection {
-  background: white;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
   padding: 24px;
   margin-bottom: 32px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .filtersGrid {
@@ -106,64 +155,80 @@
 }
 
 .filterGroup label {
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   margin-bottom: 8px;
 }
 
 .searchInput,
 .statusSelect {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
   padding: 12px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
   font-size: 14px;
-  transition: border-color 0.2s ease;
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.searchInput::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .searchInput:focus,
 .statusSelect:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+}
+
+.statusSelect option {
+  background: #2d3748;
+  color: white;
 }
 
 .refreshButton,
 .clearButton {
   padding: 12px 24px;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.refreshButton {
-  background-color: #3b82f6;
-  color: white;
+  transition: all 0.3s ease;
   margin-right: 12px;
 }
 
+.refreshButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
 .refreshButton:hover {
-  background-color: #2563eb;
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
 }
 
 .clearButton {
-  background-color: #f3f4f6;
-  color: #666;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .clearButton:hover {
-  background-color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 /* Tabla de órdenes */
 .ordersTableContainer {
-  background: white;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .loadingSpinner {
@@ -172,8 +237,8 @@
 }
 
 .spinner {
-  border: 4px solid #f3f4f6;
-  border-top: 4px solid #3b82f6;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid white;
   border-radius: 50%;
   width: 40px;
   height: 40px;
@@ -189,7 +254,7 @@
 .noOrders {
   padding: 60px;
   text-align: center;
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .ordersTable {
@@ -198,27 +263,27 @@
 }
 
 .ordersTable thead {
-  background-color: #f9fafb;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .ordersTable th {
   padding: 16px 24px;
   text-align: left;
   font-weight: 600;
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ordersTable tbody tr {
-  border-bottom: 1px solid #e5e7eb;
-  transition: background-color 0.2s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
 }
 
 .ordersTable tbody tr:hover {
-  background-color: #f9fafb;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ordersTable td {
@@ -228,7 +293,7 @@
 
 .orderId {
   font-weight: 600;
-  color: #1a1a1a;
+  color: white;
 }
 
 .customerInfo {
@@ -237,12 +302,12 @@
 
 .customerEmail {
   font-weight: 500;
-  color: #1a1a1a;
+  color: white;
   margin-bottom: 4px;
 }
 
 .customerName {
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
 }
 
@@ -257,68 +322,93 @@
 }
 
 .statusPendiente {
-  background-color: #fef3c7;
-  color: #92400e;
+  background: linear-gradient(135deg, #ff7e5f 0%, #feb47b 100%);
+  color: white;
 }
 
 .statusAprobado {
-  background-color: #d1fae5;
-  color: #065f46;
+  background: linear-gradient(135deg, #42e695 0%, #3bb2b8 100%);
+  color: white;
 }
 
 .statusRechazado {
-  background-color: #fee2e2;
-  color: #991b1b;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  color: white;
 }
 
 .statusCancelado {
-  background-color: #f3f4f6;
-  color: #374151;
+  background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+  color: white;
 }
 
 .statusEnviado {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
 }
 
 .statusEntregado {
-  background-color: #ede9fe;
-  color: #5b21b6;
+  background: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+  color: white;
 }
 
 .orderTotal {
   font-weight: 600;
-  color: #1a1a1a;
+  color: white;
   font-size: 15px;
 }
 
 .orderDate {
-  color: #666;
+  color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
   white-space: nowrap;
 }
 
-.viewButton {
-  display: inline-block;
+.orderActions {
+  display: flex;
+  gap: 8px;
+}
+
+.viewButton,
+.shipButton {
   padding: 8px 16px;
-  background-color: #3b82f6;
-  color: white;
-  text-decoration: none;
-  border-radius: 6px;
+  border: none;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  transition: background-color 0.2s ease;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+
+.viewButton {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
 }
 
 .viewButton:hover {
-  background-color: #2563eb;
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.shipButton {
+  background: linear-gradient(135deg, #42e695 0%, #3bb2b8 100%);
+  color: white;
+}
+
+.shipButton:hover {
+  background: linear-gradient(135deg, #3bb2b8 0%, #42e695 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(66, 230, 149, 0.4);
 }
 
 .tableFooter {
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   text-align: center;
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
 }
 
@@ -326,6 +416,17 @@
 @media (max-width: 768px) {
   .adminOrdersContainer {
     padding: 16px;
+  }
+  
+  .headerContent {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+  }
+  
+  .navButtons {
+    flex-wrap: wrap;
+    justify-content: center;
   }
   
   .statsGrid {
@@ -344,5 +445,9 @@
   .ordersTable th,
   .ordersTable td {
     padding: 12px 16px;
+  }
+  
+  .orderActions {
+    flex-direction: column;
   }
 }

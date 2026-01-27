@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import styles from '../orden.module.css';
 
+// ✅ INTERFAZ ACTUALIZADA para los DTOs del backend
 interface Order {
   id: number;
   totalPrice: number;
@@ -19,18 +20,16 @@ interface Order {
   mercadoPagoStatus?: string;
   paymentMethod?: string;
   cancellationReason?: string;
-  shippingAddress?: {
-    address: string;
-    city: string;
-    state: string;
-    country: string;
-  };
+  
+  // ✅ CAMBIO: Ahora es string, no objeto
+  shippingAddress?: string;
+  
   orderItems: Array<{
     id: number;
     quantity: number;
     price: number;
     productName: string;
-    variantName?: string;
+    variantInfo?: string;  // ✅ CAMBIO: variantName → variantInfo
   }>;
 }
 
@@ -42,7 +41,6 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
-  // Usar directamente la URL base como en tu Api.ts
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://backendamarte-production.up.railway.app';
 
   const getToken = () => localStorage.getItem('token');
@@ -60,8 +58,8 @@ export default function OrderDetailPage() {
         return;
       }
 
-      // 🔴 USAR EL ENDPOINT CORRECTO que existe en tu backend
-      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+      // ✅ USAR EL ENDPOINT CORRECTO
+      const response = await fetch(`${API_BASE_URL}/api/admin/orders/${orderId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -69,10 +67,14 @@ export default function OrderDetailPage() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Datos recibidos:', data); // Para debug
         setOrder(data);
       } else if (response.status === 401) {
         localStorage.removeItem('token');
         router.push('/login');
+      } else if (response.status === 403) {
+        alert('No tienes permisos de administrador');
+        router.push('/orden');
       }
     } catch (error) {
       console.error('Error al cargar orden:', error);
@@ -81,35 +83,30 @@ export default function OrderDetailPage() {
     }
   };
 
-  const updateOrderStatus = async (newStatus: string, reason?: string) => {
+  // ✅ FUNCIÓN SIMPLE: Solo PAGO_APROBADO → ENVIADO
+  const markAsShipped = async () => {
     setUpdating(true);
     try {
       const token = getToken();
       
-      // 🔴 USAR EL ENDPOINT CORRECTO del PaymentController
-      const response = await fetch(`${API_BASE_URL}/api/payments/admin/change-status`, {
+      const response = await fetch(`${API_BASE_URL}/api/admin/orders/${orderId}/mark-as-shipped`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-          'X-Admin-Token': 'ADMIN_SECRET_TOKEN', // Necesitas este header según tu backend
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          orderId: parseInt(orderId), 
-          status: newStatus,
-          reason 
-        }),
       });
 
       if (response.ok) {
-        fetchOrder();
-        alert('Estado actualizado correctamente');
+        const result = await response.json();
+        alert('Orden marcada como enviada');
+        fetchOrder(); // Recargar datos
       } else {
-        const error = await response.json();
-        alert(`Error: ${error.error || 'No se pudo actualizar el estado'}`);
+        const error = await response.text();
+        alert(`Error: ${error}`);
       }
     } catch (error) {
-      console.error('Error al actualizar estado:', error);
+      console.error('Error:', error);
       alert('Error al actualizar el estado');
     } finally {
       setUpdating(false);
@@ -117,14 +114,19 @@ export default function OrderDetailPage() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    if (!dateString) return 'No disponible';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      return dateString;
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -133,6 +135,22 @@ export default function OrderDetailPage() {
       currency: 'COP',
       minimumFractionDigits: 0,
     }).format(amount);
+  };
+
+  // ✅ Función para parsear la dirección string
+  const parseAddress = (addressString?: string) => {
+    if (!addressString) return null;
+    
+    // La dirección viene como: "Calle 123, Ciudad, Estado, País"
+    const parts = addressString.split(', ');
+    
+    return {
+      address: parts[0] || '',
+      city: parts[1] || '',
+      state: parts[2] || '',
+      country: parts[3] || '',
+      full: addressString
+    };
   };
 
   if (loading) {
@@ -158,6 +176,9 @@ export default function OrderDetailPage() {
       </div>
     );
   }
+
+  // ✅ Parsear la dirección
+  const parsedAddress = parseAddress(order.shippingAddress);
 
   return (
     <div className={styles.orderDetailContainer}>
@@ -193,7 +214,7 @@ export default function OrderDetailPage() {
                 <span className={styles.infoLabel}>Email:</span>
                 <span className={styles.infoValue}>{order.customerEmail}</span>
               </div>
-              {order.customerName && (
+              {order.customerName && order.customerName.trim() && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Nombre:</span>
                   <span className={styles.infoValue}>{order.customerName}</span>
@@ -218,12 +239,16 @@ export default function OrderDetailPage() {
             <div className={styles.infoGrid}>
               <div className={styles.infoItem}>
                 <span className={styles.infoLabel}>Total:</span>
-                <span className={`${styles.infoValue} ${styles.totalPrice}`}>{formatCurrency(order.totalPrice)}</span>
+                <span className={`${styles.infoValue} ${styles.totalPrice}`}>
+                  {formatCurrency(order.totalPrice)}
+                </span>
               </div>
               {order.mercadoPagoPaymentId && (
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>ID de pago MP:</span>
-                  <span className={`${styles.infoValue} ${styles.code}`}>{order.mercadoPagoPaymentId}</span>
+                  <span className={`${styles.infoValue} ${styles.code}`}>
+                    {order.mercadoPagoPaymentId}
+                  </span>
                 </div>
               )}
               {order.paymentMethod && (
@@ -252,11 +277,15 @@ export default function OrderDetailPage() {
               <div key={item.id} className={styles.productCard}>
                 <div className={styles.productInfo}>
                   <h3>{item.productName}</h3>
-                  {item.variantName && (
-                    <p className={styles.variantName}>{item.variantName}</p>
+                  {item.variantInfo && item.variantInfo.trim() && (
+                    <p className={styles.variantName}>
+                      Variante: {item.variantInfo}
+                    </p>
                   )}
                   <div className={styles.productMeta}>
-                    <span className={styles.productQuantity}>{item.quantity} unidades</span>
+                    <span className={styles.productQuantity}>
+                      {item.quantity} {item.quantity === 1 ? 'unidad' : 'unidades'}
+                    </span>
                     <span className={styles.productUnitPrice}>
                       {formatCurrency(item.price / item.quantity)} c/u
                     </span>
@@ -270,20 +299,22 @@ export default function OrderDetailPage() {
           </div>
           <div className={styles.orderSummary}>
             <span className={styles.summaryLabel}>Total de la orden:</span>
-            <span className={styles.summaryValue}>{formatCurrency(order.totalPrice)}</span>
+            <span className={styles.summaryValue}>
+              {formatCurrency(order.totalPrice)}
+            </span>
           </div>
         </div>
 
         {/* Información adicional */}
         <div className={styles.additionalInfoGrid}>
-          {/* Dirección de envío */}
-          {order.shippingAddress && (
+          {/* ✅ Dirección de envío (ahora con string) */}
+          {parsedAddress && (
             <div className={styles.infoCard}>
               <h2>Dirección de Envío</h2>
               <div className={styles.addressInfo}>
-                <p>{order.shippingAddress.address}</p>
-                <p>{order.shippingAddress.city}, {order.shippingAddress.state}</p>
-                <p>{order.shippingAddress.country}</p>
+                <p>{parsedAddress.address}</p>
+                <p>{parsedAddress.city}, {parsedAddress.state}</p>
+                <p>{parsedAddress.country}</p>
               </div>
             </div>
           )}
@@ -295,7 +326,9 @@ export default function OrderDetailPage() {
               <div className={styles.infoGrid}>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Reservado el:</span>
-                  <span className={styles.infoValue}>{formatDate(order.stockReservedAt)}</span>
+                  <span className={styles.infoValue}>
+                    {formatDate(order.stockReservedAt)}
+                  </span>
                 </div>
                 <div className={styles.infoItem}>
                   <span className={styles.infoLabel}>Reserva expirada:</span>
@@ -316,36 +349,28 @@ export default function OrderDetailPage() {
           )}
         </div>
 
-        {/* Acciones */}
+        {/* ✅ ACCIÓN ÚNICA Y SIMPLE: Solo PAGO_APROBADO → ENVIADO */}
         <div className={styles.orderActionsSection}>
           <h2>Acciones</h2>
           <div className={styles.actionsGrid}>
-            {order.status === 'PAGO_APROBADO' && (
+            {order.status === 'PAGO_APROBADO' ? (
               <button
-                onClick={() => updateOrderStatus('ENVIADO', 'Enviado por administrador')}
+                onClick={markAsShipped}
                 disabled={updating}
                 className={`${styles.actionButton} ${styles.send}`}
               >
                 {updating ? 'Procesando...' : 'Marcar como Enviado'}
               </button>
-            )}
-            {order.status === 'ENVIADO' && (
-              <button
-                onClick={() => updateOrderStatus('ENTREGADO', 'Entregado al cliente')}
-                disabled={updating}
-                className={`${styles.actionButton} ${styles.deliver}`}
-              >
-                {updating ? 'Procesando...' : 'Marcar como Entregado'}
-              </button>
-            )}
-            {(order.status === 'PENDIENTE' || order.status === 'PAGO_RECHAZADO') && (
-              <button
-                onClick={() => updateOrderStatus('CANCELADO', 'Cancelado manualmente por administrador')}
-                disabled={updating}
-                className={`${styles.actionButton} ${styles.cancel}`}
-              >
-                {updating ? 'Procesando...' : 'Cancelar Orden'}
-              </button>
+            ) : order.status === 'ENVIADO' ? (
+              <div className={styles.infoMessage}>
+                <p>✅ Esta orden ya fue marcada como enviada</p>
+                <small>Estado actual: {getStatusText(order.status)}</small>
+              </div>
+            ) : (
+              <div className={styles.infoMessage}>
+                <p>⏳ Esta orden no puede ser enviada</p>
+                <small>Solo órdenes con estado PAGO_APROBADO pueden ser enviadas</small>
+              </div>
             )}
           </div>
         </div>
