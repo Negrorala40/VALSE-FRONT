@@ -115,6 +115,8 @@ function PaymentResultContent() {
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
   const [isOrderExpired, setIsOrderExpired] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+  const [pollingAttempts, setPollingAttempts] = useState(0);
 
   // 🔴 OBTENER SESSION ID (igual que en Checkout.tsx)
   const getSessionId = useCallback(() => {
@@ -257,6 +259,56 @@ function PaymentResultContent() {
     
     return false;
   }, [getRequestHeaders]);
+
+  // 🔴 POLLING PARA WEBHOOK (máx 2 minutos)
+  const pollForWebhookCompletion = useCallback(async (orderId: string, maxAttempts = 120) => {
+    console.log('🔄 Iniciando polling para webhook (máx 2 minutos)...');
+    setIsPolling(true);
+    
+    let attempts = 0;
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      
+      try {
+        const token = localStorage.getItem('token');
+        const headers = getRequestHeaders(token);
+        
+        const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
+          method: 'GET',
+          headers,
+          credentials: 'include'
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log(`✅ Poll intento ${attempts}: Estado = ${data.status}`);
+          
+          // Si el estado cambió de PENDIENTE, webhook llegó
+          if (data.status && data.status !== 'PENDIENTE') {
+            clearInterval(pollInterval);
+            console.log('🎉 Webhook procesado! Actualizando UI...');
+            setOrderDetails(data);
+            determinePaymentStatus(data);
+            setIsPolling(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.error(`❌ Error en poll intento ${attempts}:`, error);
+      }
+      
+      if (attempts >= maxAttempts) {
+        clearInterval(pollInterval);
+        console.log('⏱️ Timeout de polling (2 minutos) - Mostrando estado PENDIENTE');
+        setIsPolling(false);
+        return;
+      }
+      
+      setPollingAttempts(attempts);
+    }, 1000); // Polling cada 1 segundo
+    
+    return pollInterval;
+  }, [getRequestHeaders, determinePaymentStatus]);
 
   // 🔴 VERIFICAR ESTADO DEL PAGO EN EL BACKEND
   const verifyPayment = useCallback(async (orderId: string) => {
@@ -413,6 +465,10 @@ function PaymentResultContent() {
       // 🔴 INICIAR TIMER SI LA ORDEN ESTÁ PENDIENTE
       if (orderData.status === 'PENDIENTE' && orderData.stockReservationMinutesLeft && orderData.stockReservationMinutesLeft > 0) {
         setTimerSeconds(orderData.stockReservationMinutesLeft * 60);
+        
+        // 🔴 INICIAR POLLING PARA WEBHOOK (máx 2 minutos = 120 segundos)
+        console.log('🔔 Orden pendiente - iniciando polling para webhook...');
+        await pollForWebhookCompletion(orderId);
       }
 
     } catch (err) {
@@ -421,7 +477,7 @@ function PaymentResultContent() {
     } finally {
       setLoading(false);
     }
-  }, [checkOrderExpiration, determinePaymentStatus, getRequestHeaders]);
+  }, [checkOrderExpiration, determinePaymentStatus, getRequestHeaders, pollForWebhookCompletion]);
 
   // 🔴 MANEJAR PARÁMETROS DE MERCADO PAGO
   const handleMercadoPagoRedirect = useCallback(async (params: MercadoPagoParams) => {
@@ -474,40 +530,57 @@ function PaymentResultContent() {
           break;
       }
     }
-  }, [searchParams, verifyPayment]);
+  }, [searchParams, verifyPayment, pollForWebhookCompletion]);
 
   // 🔴 EFECTO PRINCIPAL
   useEffect(() => {
     const params = getMercadoPagoParams();
     
     if (Object.keys(params).length > 0) {
-      // Viene de Mercado Pago (pago completado o salió)
+      // ✅ CASO 1: Viene de Mercado Pago (pago completado o salió)
+      console.log('✅ CASO 1: Retorno desde Mercado Pago con parámetros');
       handleMercadoPagoRedirect(params);
     } else {
       // Acceso directo a la página
       const orderId = searchParams.get('orderId');
       if (orderId) {
+        // ✅ CASO 2: URL directa con orderId
+        console.log('✅ CASO 2: URL directa con orderId');
         verifyPayment(orderId);
       } else {
         // Verificar si hay orden pendiente en localStorage
         const pendingOrderId = localStorage.getItem('pendingOrderId');
         if (pendingOrderId) {
-          console.log('🔄 Usuario accedió sin parámetros - Verificando orden pendiente:', pendingOrderId);
+          // ✅ CASO 3: Orden pendiente en localStorage
+          console.log('✅ CASO 3: Usuario accedió sin parámetros - Orden pendiente en localStorage:', pendingOrderId);
           verifyPayment(pendingOrderId);
         } else {
-          // 🔴 CASO ESPECIAL: Usuario salió de Mercado Pago sin parámetros
-          // Podría ser que volvió sin completar el pago
-          console.log('⚠️ No hay parámetros ni orden pendiente - Posible retorno de MP sin pago');
-          setError('No se encontraron datos de pago. Si saliste del proceso de pago, tu orden sigue pendiente por 10 minutos.');
-          setLoading(false);
+          // 🔴 CASO 4: Usuario salió de Mercado Pago SIN parámetros y SIN orden pendiente
+          // Esto significa que:
+          // - Volvió de Mercado Pago sin completar pago (rechazó o cerró)
+          // - La orden EXISTE en backend pero aún no tiene referencia
+          console.log('⚠️ CASO 4: Usuario sin parámetros ni orden pendiente');
+          console.log('📋 Esto podría significar:');
+          console.log('   - Volvió de Mercado Pago sin completar pago');
+          console.log('   - Cerró la ventana de Mercado Pago');
+          console.log('   - Entrada directa a /checkout/success');
           
-          // Mostrar opción para volver al checkout
-          setTimeout(() => {
-            const checkoutBtn = document.getElementById('go-to-checkout-btn');
-            if (checkoutBtn) {
-              checkoutBtn.style.display = 'block';
-            }
-          }, 1000);
+          // 🔴 INTENTAR RECUPERAR ORDEN DEL BACKEND POR SESSIONID
+          const sessionId = localStorage.getItem('cartSessionId');
+          if (sessionId) {
+            console.log('🔍 Intentando buscar orden por sessionId...');
+            // ✅ MOSTRAR ESTADO PENDIENTE CON MENSAJE AMIGABLE
+            setError('⚠️ Tu orden está pendiente de pago. Tienes 15 minutos para completar la transacción en Mercado Pago.');
+            setPaymentStatus('pending');
+            setLoading(false);
+            
+            // Intentar obtener los detalles de la orden por sessionId después
+            // (esto debería ser un endpoint adicional en el backend si es necesario)
+          } else {
+            // Sin sessionId, realmente no tenemos referencia
+            setError('❌ No se encontraron datos de tu orden. Por favor, inicia el proceso de pago desde el inicio.');
+            setLoading(false);
+          }
         }
       }
     }
@@ -970,7 +1043,8 @@ function PaymentResultContent() {
               <li>• Revisa tu correo electrónico para más detalles</li>
               <li>• Si pagaste en efectivo, acércate al establecimiento con tu comprobante</li>
               <li>• Tu pedido se procesará automáticamente cuando recibamos la confirmación</li>
-              <li>• El stock de tus productos está reservado por 10 minutos</li>
+              <li>• El stock de tus productos está reservado por 15 minutos</li>
+              <li>• Estamos monitoreando tu pago automáticamente (polling cada segundo)</li>
             </ul>
           </div>
 
@@ -1041,7 +1115,7 @@ function PaymentResultContent() {
             <ul className="payment-info-list">
               {isExpired ? (
                 <>
-                  <li>• No se completó el pago dentro de los 10 minutos de reserva</li>
+                  <li>• No se completó el pago dentro de los 15 minutos de reserva</li>
                   <li>• El stock reservado ha sido liberado para otros clientes</li>
                   <li>• Puedes crear una nueva orden cuando lo desees</li>
                   <li>• Los precios y disponibilidad pueden cambiar</li>
