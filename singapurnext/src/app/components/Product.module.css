@@ -164,24 +164,177 @@
   min-height: 0;
 }
 
-/* Imagen */
+/* Sección de imágenes */
 .imageSection {
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.imageContainer {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3/4; /* Cambiado a 3:4 (más cuadrado) para ver más imagen */
+  max-height: 550px;
+  overflow: hidden;
+  border-radius: var(--radius);
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  cursor: pointer;
+  background-color: #f8fafb; /* Fondo suave para cuando la imagen no cubre todo */
+}
+
+.imageWrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
 }
 
 .productImage {
   width: 100%;
-  height: auto;
-  border-radius: var(--radius);
-  object-fit: cover;
-  aspect-ratio: 2/3;
-  max-height: 550px;
+  height: 100%;
+  object-fit: cover; /* Cubre el contenedor */
+  object-position: center; /* Enfoca en la parte superior para prendas */
+  pointer-events: none;
+  transition: transform 0.3s ease;
+}
+
+/* Flechas estilo Apple (funcionan en ambos dispositivos) */
+.arrowNav {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.3s ease;
+}
+
+/* Para desktop: aparecen al hover */
+@media (min-width: 769px) {
+  .imageContainer:hover .arrowNav {
+    opacity: 1;
+  }
+  
+  .arrowNav {
+    opacity: 0;
+  }
+}
+
+/* Para móvil: siempre visibles */
+@media (max-width: 768px) {
+  .arrowNav {
+    opacity: 1;
+  }
+  
+  .arrow {
+    width: 36px !important;
+    height: 36px !important;
+    margin: 0 12px !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+  }
+  
+  .arrowIcon {
+    font-size: 20px !important;
+  }
+}
+
+.arrowLeft {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.1) 0%, transparent 100%);
+}
+
+.arrowRight {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.1) 0%, transparent 100%);
+}
+
+.arrow {
+  width: 44px;
+  height: 44px;
+  margin: 0 20px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transform: scale(0.95);
+  transition: all 0.2s ease;
+}
+
+.arrow:hover {
+  transform: scale(1);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.arrowIcon {
+  font-size: 24px;
+  color: #333;
+  font-weight: bold;
+  line-height: 1;
+  opacity: 0.9;
+}
+
+.arrowLeft .arrowIcon {
+  margin-right: 2px;
+}
+
+.arrowRight .arrowIcon {
+  margin-left: 2px;
+}
+
+/* Indicadores de puntos */
+.imageIndicators {
+  position: absolute;
+  bottom: 1rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  z-index: 3;
+  padding: 0.5rem;
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.indicator.active {
+  background-color: rgba(255, 255, 255, 0.95);
+  transform: scale(1.3);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.indicator:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+  transform: scale(1.1);
 }
 
 .imagePlaceholder {
   width: 100%;
-  aspect-ratio: 2/3;
+  aspect-ratio: 3/4;
   background: linear-gradient(135deg, var(--bg), var(--border));
   border-radius: var(--radius);
   display: flex;
@@ -321,6 +474,7 @@
   color: var(--text);
   cursor: pointer;
   transition: var(--transition);
+  position: relative;
 }
 
 .sizeOption:hover {
@@ -405,7 +559,7 @@
   border-color: var(--secondary);
 }
 
-/* Stock */
+/* Stock - ACTUALIZADO: no muestra número exacto */
 .stockInfo {
   display: flex;
   align-items: center;
@@ -415,9 +569,12 @@
 .stockStatus {
   font-size: 0.8rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
-.inStock {
+.stockLabel {
   color: var(--success);
 }
 
@@ -518,176 +675,10 @@
   background: var(--secondary);
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .productContainer {
-    gap: 1.5rem;
-    padding: 1.25rem;
-    margin-top: 2rem;
-  }
-  
-  .productImage {
-    max-height: 500px;
-  }
-  
-  .infoSection {
-    max-height: 500px;
-    gap: 1rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .productContainer {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-    padding: 1rem;
-    margin-top: 1.5rem;
-  }
-  
-  .productImage {
-    max-height: 450px;
-    width: 100%;
-  }
-  
-  .imagePlaceholder {
-    max-height: 450px;
-  }
-  
-  .infoSection {
-    max-height: none;
-    overflow-y: visible;
-    padding-right: 0;
-  }
-  
-  .actionsSection {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-  
-  .stockInfo {
-    justify-content: flex-start;
-  }
-}
-
-@media (max-width: 480px) {
-  .productPage {
-    padding: 0.5rem;
-  }
-  
-  .backBtn {
-    top: 0.5rem;
-    left: 0.5rem;
-    font-size: 0.75rem;
-    padding: 0.35rem 0.7rem;
-  }
-  
-  .productContainer {
-    padding: 1rem;
-    margin-top: 2rem;
-  }
-  
-  .productTitle {
-    font-size: 1.1rem;
-  }
-  
-  .productPrice {
-    font-size: 1.3rem;
-  }
-  
-  .productDescription {
-    font-size: 0.85rem;
-  }
-  
-  .colorOption {
-    width: 26px;
-    height: 26px;
-  }
-  
-  .sizeOption {
-    min-width: 38px;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
-  }
-  
-  .qtyBtn {
-    width: 30px;
-    height: 30px;
-    font-size: 0.9rem;
-  }
-  
-  .qtyInput {
-    width: 45px;
-    height: 30px;
-    font-size: 0.85rem;
-  }
-  
-  .addToCartBtn {
-    padding: 0.7rem;
-    font-size: 0.85rem;
-  }
-  
-  .totalPrice {
-    font-size: 0.9rem;
-  }
-}
-
-/* Pantallas muy pequeñas */
-@media (max-width: 360px) {
-  .productTitle {
-    font-size: 1rem;
-  }
-  
-  .productPrice {
-    font-size: 1.2rem;
-  }
-  
-  .colorOption {
-    width: 24px;
-    height: 24px;
-  }
-  
-  .sizeOption {
-    min-width: 36px;
-    padding: 0.35rem 0.5rem;
-    font-size: 0.75rem;
-  }
-  
-  .qtyBtn {
-    width: 28px;
-    height: 28px;
-  }
-  
-  .qtyInput {
-    width: 40px;
-    height: 28px;
-  }
-}
-
-/* Ajustes para pantallas altas */
-@media (min-height: 800px) and (min-width: 769px) {
-  .productImage,
-  .imagePlaceholder {
-    max-height: 600px;
-  }
-  
-  .infoSection {
-    max-height: 600px;
-  }
-}
 /* Estados de stock */
 .disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.lowStock {
-  color: #f97316;
-  font-weight: 600;
-}
-
-.outOfStock {
-  color: #ef4444;
-  font-weight: 600;
 }
 
 .sizeBadge {
@@ -767,4 +758,210 @@
 
 .backButton:hover {
   background: #2563eb;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .productContainer {
+    gap: 1.5rem;
+    padding: 1.25rem;
+    margin-top: 2rem;
+  }
+  
+  .imageContainer {
+    max-height: 500px;
+  }
+  
+  .infoSection {
+    max-height: 500px;
+    gap: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .productContainer {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 1rem;
+    margin-top: 1.5rem;
+  }
+  
+  .imageContainer {
+    max-height: 450px;
+    width: 100%;
+  }
+  
+  .imagePlaceholder {
+    max-height: 450px;
+  }
+  
+  .infoSection {
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
+  }
+  
+  .actionsSection {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .stockInfo {
+    justify-content: flex-start;
+  }
+  
+  /* Flechas más grandes y siempre visibles en móvil */
+  .arrowNav {
+    opacity: 1 !important;
+  }
+  
+  .arrow {
+    width: 38px;
+    height: 38px;
+    margin: 0 15px;
+    background: rgba(255, 255, 255, 0.95);
+  }
+  
+  .arrowIcon {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 480px) {
+  .productPage {
+    padding: 0.5rem;
+  }
+  
+  .backBtn {
+    top: 0.5rem;
+    left: 0.5rem;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.7rem;
+  }
+  
+  .productContainer {
+    padding: 1rem;
+    margin-top: 2rem;
+  }
+  
+  .productTitle {
+    font-size: 1.1rem;
+  }
+  
+  .productPrice {
+    font-size: 1.3rem;
+  }
+  
+  .productDescription {
+    font-size: 0.85rem;
+  }
+  
+  .colorOption {
+    width: 26px;
+    height: 26px;
+  }
+  
+  .sizeOption {
+    min-width: 38px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+  }
+  
+  .qtyBtn {
+    width: 30px;
+    height: 30px;
+    font-size: 0.9rem;
+  }
+  
+  .qtyInput {
+    width: 45px;
+    height: 30px;
+    font-size: 0.85rem;
+  }
+  
+  .addToCartBtn {
+    padding: 0.7rem;
+    font-size: 0.85rem;
+  }
+  
+  .totalPrice {
+    font-size: 0.9rem;
+  }
+  
+  /* Flechas un poco más pequeñas en móvil muy pequeño */
+  .arrow {
+    width: 34px;
+    height: 34px;
+    margin: 0 10px;
+  }
+  
+  .arrowIcon {
+    font-size: 20px;
+  }
+  
+  /* Indicadores más grandes para tacto */
+  .indicator {
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    min-height: 10px;
+  }
+}
+
+/* Pantallas muy pequeñas */
+@media (max-width: 360px) {
+  .productTitle {
+    font-size: 1rem;
+  }
+  
+  .productPrice {
+    font-size: 1.2rem;
+  }
+  
+  .colorOption {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .sizeOption {
+    min-width: 36px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.75rem;
+  }
+  
+  .qtyBtn {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .qtyInput {
+    width: 40px;
+    height: 28px;
+  }
+  
+  .arrow {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .arrowIcon {
+    font-size: 18px;
+  }
+  
+  .indicator {
+    width: 9px;
+    height: 9px;
+  }
+}
+
+/* Ajustes para pantallas altas */
+@media (min-height: 800px) and (min-width: 769px) {
+  .imageContainer,
+  .imagePlaceholder {
+    max-height: 600px;
+  }
+  
+  .infoSection {
+    max-height: 600px;
+  }
 }
