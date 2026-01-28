@@ -494,11 +494,11 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       case 'verde':
         return { background: '#3DB28A' };
       case 'rosa':
-        return { background: '#E9566D' };
+        return { background: '#F7D1D9' };
       case 'morado':
       case 'lila':
       case 'violeta':
-        return { background: '#806FF7' };
+        return { background: '#B0A9C6' };
       case 'amarillo':
         return { 
           background: '#FFD449',
@@ -515,7 +515,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           border: '1px solid rgba(0,0,0,0.1)'
         };
       case 'rojo':
-        return { background: '#FF0000' };
+        return { background: '#E9566D' };
       case 'naranja':
         return { background: '#F47B47' };
       case 'beige':
