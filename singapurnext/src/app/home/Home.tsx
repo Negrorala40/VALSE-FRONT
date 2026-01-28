@@ -88,10 +88,16 @@ const Home = () => {
         // Filtrar solo productos disponibles
         const availableProducts = filterAvailableProducts(allProducts);
         
-        // Filtrar productos por categoría
-        const niñosProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑOS);
-        const niñasProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑAS);
-        const unisexProducts = availableProducts.filter(p => p.gender === ProductGender.UNISEX);
+        // CORRECCIÓN: Filtrar productos por categoría incluyendo unisex donde corresponda
+        const niñosProducts = availableProducts.filter(p => 
+          p.gender === ProductGender.NIÑOS || p.gender === ProductGender.UNISEX
+        );
+        const niñasProducts = availableProducts.filter(p => 
+          p.gender === ProductGender.NIÑAS || p.gender === ProductGender.UNISEX
+        );
+        const unisexProducts = availableProducts.filter(p => 
+          p.gender === ProductGender.UNISEX
+        );
         
         // Función para obtener todas las imágenes válidas de un producto
         const getValidImagesFromProduct = (product: Product): string[] => {
