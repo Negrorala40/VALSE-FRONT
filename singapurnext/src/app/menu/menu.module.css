@@ -309,7 +309,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center top; /* Enfoca la parte superior de la imagen */
+  object-position: center; /* Enfoca la parte superior de la imagen */
   transition: transform var(--transition-slow);
 }
 
