@@ -142,64 +142,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
       
       const data = await response.json();
-      
-      // Validar y ajustar stock: si la cantidad excede el stock disponible, ajustar o remover
-      const validatedItems: CartItem[] = [];
-      const itemsToRemove: number[] = [];
-
-      for (const item of data) {
-        const itemStock = item.stock || 100;
-        
-        if (itemStock === 0) {
-          // Stock en 0: marcar para remover
-          console.log(`⚠️ Stock en 0 para ${item.productName}, eliminando del carrito`);
-          itemsToRemove.push(item.id);
-        } else if (item.quantity > itemStock) {
-          // Cantidad excede stock: ajustar a stock máximo
-          console.log(`⚠️ Cantidad (${item.quantity}) excede stock (${itemStock}) para ${item.productName}, ajustando`);
-          validatedItems.push({
-            ...item,
-            quantity: itemStock
-          });
-        } else {
-          validatedItems.push(item);
-        }
-      }
-
-      // Remover items con stock 0
-      if (itemsToRemove.length > 0) {
-        for (const itemId of itemsToRemove) {
-          try {
-            const response = await fetchWithSession(`${CART}/remove/${itemId}`, {
-              method: 'DELETE'
-            });
-            if (response.ok) {
-              console.log(`✅ Producto ${itemId} removido por stock 0`);
-            }
-          } catch (err) {
-            console.error(`Error removiendo producto ${itemId}:`, err);
-          }
-        }
-      }
-
-      // Actualizar cantidades ajustadas
-      for (const item of validatedItems) {
-        const originalItem = data.find((t: CartItem) => t.id === item.id);
-        if (originalItem && originalItem.quantity !== item.quantity) {
-          try {
-            const response = await fetchWithSession(`${CART}/update/${item.id}?quantity=${item.quantity}`, {
-              method: 'PUT'
-            });
-            if (response.ok) {
-              console.log(`✅ Cantidad actualizada para ${item.id} a ${item.quantity}`);
-            }
-          } catch (err) {
-            console.error(`Error actualizando cantidad de ${item.id}:`, err);
-          }
-        }
-      }
-
-      setCartItems(validatedItems);
+      setCartItems(data);
       
       // Obtener contador
       const countResponse = await fetchWithSession(GET_CART_COUNT);

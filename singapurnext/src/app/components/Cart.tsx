@@ -25,7 +25,7 @@ interface CartItem {
   size: string;
   color: string;
   quantity: number;
-  stock: number;
+  stock?: number;
 }
 
 interface CartTotals {
@@ -246,56 +246,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           stock: item.stock || 100,
         }));
 
-        // Validar y ajustar stock: si la cantidad excede el stock disponible, ajustar o remover
-        const validatedItems: CartItem[] = [];
-        const itemsToRemove: string[] = [];
-
-        for (const item of transformedItems) {
-          if (item.stock === 0) {
-            // Stock en 0: marcar para remover
-            console.log(`⚠️ Stock en 0 para ${item.name}, eliminando del carrito`);
-            itemsToRemove.push(item.id);
-          } else if (item.quantity > item.stock) {
-            // Cantidad excede stock: ajustar a stock máximo
-            console.log(`⚠️ Cantidad (${item.quantity}) excede stock (${item.stock}) para ${item.name}, ajustando`);
-            validatedItems.push({
-              ...item,
-              quantity: item.stock
-            });
-          } else {
-            validatedItems.push(item);
-          }
-        }
-
-        // Remover items con stock 0
-        if (itemsToRemove.length > 0) {
-          for (const itemId of itemsToRemove) {
-            try {
-              await fetchWithSession(`${CART}/remove/${itemId}`, {
-                method: 'DELETE'
-              });
-              console.log(`✅ Producto ${itemId} removido por stock 0`);
-            } catch (err) {
-              console.error(`Error removiendo producto ${itemId}:`, err);
-            }
-          }
-        }
-
-        // Actualizar cantidades ajustadas
-        for (const item of validatedItems) {
-          if (transformedItems.find(t => t.id === item.id && t.quantity !== item.quantity)) {
-            try {
-              await fetchWithSession(`${CART}/update/${item.id}?quantity=${item.quantity}`, {
-                method: 'PUT'
-              });
-              console.log(`✅ Cantidad actualizada para ${item.id} a ${item.quantity}`);
-            } catch (err) {
-              console.error(`Error actualizando cantidad de ${item.id}:`, err);
-            }
-          }
-        }
-
-        setCartItems(validatedItems);
+        setCartItems(transformedItems);
         
         // Establecer totales del backend
         setCartTotals({
