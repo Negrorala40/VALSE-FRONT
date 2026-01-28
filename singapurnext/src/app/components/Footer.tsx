@@ -244,7 +244,7 @@ const Footer = () => {
             <h4 className="footer-title">Contacto</h4>
             <div className="contact-items">
               <div className="contact-item">
-                <FaPhone className="contact-icon" />
+                {/* <FaPhone className="contact-icon" /> */}
               </div>
               <div className="contact-item">
                 <FaWhatsapp className="contact-icon" />
