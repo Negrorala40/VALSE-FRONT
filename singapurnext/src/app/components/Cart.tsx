@@ -452,7 +452,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         return { background: '#B0A9C6' };
       case 'amarillo':
         return { 
-          background: '#FFD449',
+          background: '#FBEAD4',
           border: '1px solid rgba(0,0,0,0.1)'
         };
       case 'negro':

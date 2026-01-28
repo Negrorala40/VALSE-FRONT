@@ -55,7 +55,7 @@
       'negro': '#1a1a1a',
       'blanco': '#ffffff',
       'naranja': '#F47B47',
-      'amarillo': '#CCC2B5',
+      'amarillo': '#FBEAD4',
       'rojo': '#E9566D',
       'celeste': '#87CEEB',
       'gris': '#808080',
