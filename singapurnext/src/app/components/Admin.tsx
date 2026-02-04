@@ -21,6 +21,8 @@ interface Size {
   size: string;
   stock: number;
   price: number;
+    discountPercentage?: number; // Agregar este campo
+
 }
 
 interface ColorVariant {
@@ -35,6 +37,8 @@ interface Variant {
   size: string;
   stock: number;
   price: number;
+    discountPercentage?: number; // Agregar este campo
+
   images?: Image[];
   hasOrders?: boolean;
   enabled?: boolean;
@@ -75,6 +79,38 @@ interface ValidationError {
   message: string;
 }
 
+// Agrega estas funciones justo antes del componente Admin (después de las interfaces):
+// Función para calcular precio con descuento
+const calculatePriceWithDiscount = (price: number, discountPercentage?: number): number => {
+  if (!discountPercentage || discountPercentage <= 0) {
+    return price;
+  }
+  
+  const discountAmount = price * (discountPercentage / 100);
+  const discountedPrice = price - discountAmount;
+  
+  // Asegurar que el precio no sea negativo
+  return discountedPrice > 0 ? Number(discountedPrice.toFixed(2)) : 0;
+};
+
+// Función para calcular el monto de descuento
+const calculateDiscountAmount = (price: number, discountPercentage?: number): number => {
+  if (!discountPercentage || discountPercentage <= 0) {
+    return 0;
+  }
+  
+  return Number((price * (discountPercentage / 100)).toFixed(2));
+};
+
+// Función para formatear precios en COP
+const formatPrice = (price: number): string => {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(price);
+};
 // Colores predefinidos disponibles
 const PREDEFINED_COLORS = [
   "Rojo", "Azul", "Verde", "Negro", "Blanco", "Gris", "Amarillo", "Naranja",
@@ -123,7 +159,8 @@ const Admin = () => {
         mediumUrl: "", 
         largeUrl: "" 
       }],
-      sizes: [{ size: "", stock: 0, price: 0 }]
+      sizes: [{ size: "", stock: 0, price: 0,       discountPercentage: 0 // Agregar este campo con valor por defecto 0
+ }]
     }
   ]);
 
@@ -292,64 +329,79 @@ const Admin = () => {
     }
   };
 
-  const handleSizeChange = (colorIndex: number, sizeIndex: number, field: keyof Size, value: string | number) => {
-    const updatedColors = [...colorVariants];
+  // Busca la función handleSizeChange y actualízala:
+const handleSizeChange = (colorIndex: number, sizeIndex: number, field: keyof Size, value: string | number) => {
+  const updatedColors = [...colorVariants];
+  
+  if (colorIndex < updatedColors.length && 
+      sizeIndex < updatedColors[colorIndex].sizes.length) {
     
-    if (colorIndex < updatedColors.length && 
-        sizeIndex < updatedColors[colorIndex].sizes.length) {
-      
-      const size = updatedColors[colorIndex].sizes[sizeIndex];
-      
-      if (field === 'size') {
-        if (editingProductId) {
-          const originalProduct = products.find(p => p.id === editingProductId);
-          if (originalProduct) {
-            const oldSize = size.size;
-            const hasOrders = originalProduct.variants.some(v => 
-              v.color === updatedColors[colorIndex].color && 
-              v.size === oldSize && 
-              v.hasOrders
-            );
-            
-            if (hasOrders) {
-              alert(`La talla "${oldSize}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
-              return;
-            }
+    const size = updatedColors[colorIndex].sizes[sizeIndex];
+    
+    if (field === 'size') {
+      if (editingProductId) {
+        const originalProduct = products.find(p => p.id === editingProductId);
+        if (originalProduct) {
+          const oldSize = size.size;
+          const hasOrders = originalProduct.variants.some(v => 
+            v.color === updatedColors[colorIndex].color && 
+            v.size === oldSize && 
+            v.hasOrders
+          );
+          
+          if (hasOrders) {
+            alert(`La talla "${oldSize}" tiene órdenes asociadas.\nNo se puede modificar. Crea una nueva variante en su lugar.`);
+            return;
           }
         }
-        size.size = value as string;
-      } else if (field === 'stock') {
-        const stockValue = Number(value);
-        if (stockValue >= 0) {
-          size.stock = stockValue;
-        } else {
-          alert("El stock no puede ser negativo");
-          return;
-        }
-      } else if (field === 'price') {
-        const priceValue = Number(value);
-        if (priceValue >= 0) {
-          size.price = priceValue;
-        } else {
-          alert("El precio no puede ser negativo");
-          return;
-        }
       }
-      
-      setColorVariants(updatedColors);
+      size.size = value as string;
+    } else if (field === 'stock') {
+      const stockValue = Number(value);
+      if (stockValue >= 0) {
+        size.stock = stockValue;
+      } else {
+        alert("El stock no puede ser negativo");
+        return;
+      }
+    } else if (field === 'price') {
+      const priceValue = Number(value);
+      if (priceValue >= 0) {
+        size.price = priceValue;
+      } else {
+        alert("El precio no puede ser negativo");
+        return;
+      }
+    } else if (field === 'discountPercentage') {
+      const discountValue = Number(value);
+      // Validar que el descuento esté entre 0 y 100
+      if (discountValue < 0) {
+        alert("El descuento no puede ser negativo");
+        return;
+      }
+      if (discountValue > 100) {
+        alert("El descuento no puede ser mayor a 100%");
+        return;
+      }
+      size.discountPercentage = discountValue;
     }
-  };
-
-  const handleAddSize = (colorIndex: number) => {
-    const updatedColors = [...colorVariants];
-    updatedColors[colorIndex].sizes.push({ 
-      size: "", 
-      stock: 0, 
-      price: 0 
-    });
+    
     setColorVariants(updatedColors);
-    addLog(`Talla añadida al color ${colorIndex + 1}`);
-  };
+  }
+};
+
+  // Busca la función handleAddSize y actualízala:
+const handleAddSize = (colorIndex: number) => {
+  const updatedColors = [...colorVariants];
+  updatedColors[colorIndex].sizes.push({ 
+    size: "", 
+    stock: 0, 
+    price: 0,
+    discountPercentage: 0 // Agregar este campo
+  });
+  setColorVariants(updatedColors);
+  addLog(`Talla añadida al color ${colorIndex + 1}`);
+};
 
   const handleRemoveSize = (colorIndex: number, sizeIndex: number) => {
     const updatedColors = [...colorVariants];
@@ -475,77 +527,79 @@ const Admin = () => {
     return true;
   };
 
-  const transformToProductData = (): Product => {
-    addLog("Transformando datos para envío...");
-    
-    const originalProduct = editingProductId 
-      ? products.find(p => p.id === editingProductId)
-      : null;
-    
-    const originalVariantsMap = new Map<string, Variant>();
-    if (originalProduct) {
-      originalProduct.variants.forEach(variant => {
-        const key = `${variant.color}_${variant.size}`;
-        originalVariantsMap.set(key, variant);
-      });
-    }
-
-    const variants: Variant[] = [];
-    
-    colorVariants.forEach((colorVariant) => {
-      colorVariant.sizes.forEach((size) => {
-        const key = `${colorVariant.color.trim()}_${size.size.trim()}`;
-        const originalVariant = originalVariantsMap.get(key);
-        
-        let images: Image[] = [];
-        
-        if (colorVariant.images && colorVariant.images.length > 0) {
-          images = colorVariant.images
-            .filter(img => img.imageUrl && img.imageUrl.trim() !== "")
-            .map(img => ({
-              ...(img.id ? { id: img.id } : {}),
-              fileName: img.fileName.trim() || `producto_${colorVariant.color}`,
-              imageUrl: img.imageUrl.trim(),
-              thumbnailUrl: img.thumbnailUrl || img.imageUrl,
-              mediumUrl: img.mediumUrl || img.imageUrl,
-              largeUrl: img.largeUrl || img.imageUrl
-            }));
-        }
-        
-        const variant: Variant = {
-          ...(originalVariant?.id ? { id: originalVariant.id } : {}),
-          color: colorVariant.color.trim(),
-          size: size.size.trim(),
-          stock: Number(size.stock),
-          price: Number(size.price),
-          images: images,
-          hasOrders: originalVariant?.hasOrders,
-          enabled: originalVariant?.enabled ?? true
-        };
-        
-        variants.push(variant);
-      });
+  // Busca la función transformToProductData y actualízala:
+const transformToProductData = (): Product => {
+  addLog("Transformando datos para envío...");
+  
+  const originalProduct = editingProductId 
+    ? products.find(p => p.id === editingProductId)
+    : null;
+  
+  const originalVariantsMap = new Map<string, Variant>();
+  if (originalProduct) {
+    originalProduct.variants.forEach(variant => {
+      const key = `${variant.color}_${variant.size}`;
+      originalVariantsMap.set(key, variant);
     });
+  }
 
-    const productData: Product = {
-      ...(editingProductId ? { id: editingProductId } : {}),
-      name: name.trim(),
-      description: description.trim(),
-      gender: gender.trim(),
-      type: "SUPERIOR",
-      variants,
-      enabled: originalProduct?.enabled ?? true
-    };
-
-    addLog("Datos listos para enviar", {
-      name: productData.name,
-      variants: productData.variants.length,
-      editing: !!editingProductId,
-      enabled: productData.enabled
+  const variants: Variant[] = [];
+  
+  colorVariants.forEach((colorVariant) => {
+    colorVariant.sizes.forEach((size) => {
+      const key = `${colorVariant.color.trim()}_${size.size.trim()}`;
+      const originalVariant = originalVariantsMap.get(key);
+      
+      let images: Image[] = [];
+      
+      if (colorVariant.images && colorVariant.images.length > 0) {
+        images = colorVariant.images
+          .filter(img => img.imageUrl && img.imageUrl.trim() !== "")
+          .map(img => ({
+            ...(img.id ? { id: img.id } : {}),
+            fileName: img.fileName.trim() || `producto_${colorVariant.color}`,
+            imageUrl: img.imageUrl.trim(),
+            thumbnailUrl: img.thumbnailUrl || img.imageUrl,
+            mediumUrl: img.mediumUrl || img.imageUrl,
+            largeUrl: img.largeUrl || img.imageUrl
+          }));
+      }
+      
+      const variant: Variant = {
+        ...(originalVariant?.id ? { id: originalVariant.id } : {}),
+        color: colorVariant.color.trim(),
+        size: size.size.trim(),
+        stock: Number(size.stock),
+        price: Number(size.price),
+        discountPercentage: size.discountPercentage !== undefined ? Number(size.discountPercentage) : undefined, // Agregar esta línea
+        images: images,
+        hasOrders: originalVariant?.hasOrders,
+        enabled: originalVariant?.enabled ?? true
+      };
+      
+      variants.push(variant);
     });
-    
-    return productData;
+  });
+
+  const productData: Product = {
+    ...(editingProductId ? { id: editingProductId } : {}),
+    name: name.trim(),
+    description: description.trim(),
+    gender: gender.trim(),
+    type: "SUPERIOR",
+    variants,
+    enabled: originalProduct?.enabled ?? true
   };
+
+  addLog("Datos listos para enviar", {
+    name: productData.name,
+    variants: productData.variants.length,
+    editing: !!editingProductId,
+    enabled: productData.enabled
+  });
+  
+  return productData;
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -670,33 +724,36 @@ const Admin = () => {
     });
     
     // Recolectar tallas por color
-    product.variants.forEach(variant => {
-      if (!colorsMap.has(variant.color)) {
-        const imagesForColor = imagesByColor.get(variant.color) || [{ 
-          fileName: "", 
-          imageUrl: "", 
-          thumbnailUrl: "", 
-          mediumUrl: "", 
-          largeUrl: "" 
-        }];
-        
-        colorsMap.set(variant.color, {
-          color: variant.color,
-          images: imagesForColor,
-          sizes: []
-        });
-      }
-      
-      const colorData = colorsMap.get(variant.color)!;
-      const sizeExists = colorData.sizes.some(s => s.size === variant.size);
-      if (!sizeExists) {
-        colorData.sizes.push({
-          size: variant.size,
-          stock: variant.stock,
-          price: variant.price
-        });
-      }
+    // Busca la función handleEdit y actualiza la parte donde se procesan las tallas:
+// En la sección "Recolectar tallas por color", actualiza el código:
+product.variants.forEach(variant => {
+  if (!colorsMap.has(variant.color)) {
+    const imagesForColor = imagesByColor.get(variant.color) || [{ 
+      fileName: "", 
+      imageUrl: "", 
+      thumbnailUrl: "", 
+      mediumUrl: "", 
+      largeUrl: "" 
+    }];
+    
+    colorsMap.set(variant.color, {
+      color: variant.color,
+      images: imagesForColor,
+      sizes: []
     });
+  }
+  
+  const colorData = colorsMap.get(variant.color)!;
+  const sizeExists = colorData.sizes.some(s => s.size === variant.size);
+  if (!sizeExists) {
+    colorData.sizes.push({
+      size: variant.size,
+      stock: variant.stock,
+      price: variant.price,
+      discountPercentage: variant.discountPercentage || 0 // Agregar esta línea
+    });
+  }
+});
     
     const groupedColors = Array.from(colorsMap.values());
     
@@ -1222,76 +1279,123 @@ const Admin = () => {
                             Define tallas, stock y precios para este color específico
                           </div>
                         </div>
-                        <div className={styles.sizesGrid}>
-                          {colorVariant.sizes.map((size, sizeIndex) => (
-                            <div key={`size-${colorIndex}-${sizeIndex}`} className={styles.sizeCard}>
-                              <div className={styles.sizeGroup}>
-                                <label className={styles.sizeLabel}>Talla</label>
-                                <input
-                                  className={styles.sizeInput}
-                                  type="text"
-                                  value={size.size}
-                                  onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'size', e.target.value)}
-                                  placeholder="Ej: S, M, L, XL"
-                                  required
-                                  disabled={isLoading}
-                                  aria-label="Talla"
-                                />
-                              </div>
-                              
-                              <div className={styles.sizeGroup}>
-                                <label className={styles.sizeLabel}>
-                                  <span className={styles.labelIcon}>📦</span>
-                                  Stock
-                                </label>
-                                <input
-                                  className={styles.stockInput}
-                                  type="number"
-                                  value={size.stock}
-                                  onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'stock', e.target.value)}
-                                  min="0"
-                                  step="1"
-                                  placeholder="0"
-                                  required
-                                  disabled={isLoading}
-                                  aria-label="Cantidad en stock"
-                                />
-                              </div>
-                              
-                              <div className={styles.sizeGroup}>
-                                <label className={styles.sizeLabel}>
-                                  <span className={styles.labelIcon}>💰</span>
-                                  Precio (COP)
-                                </label>
-                                <input
-                                  className={styles.priceInput}
-                                  type="number"
-                                  value={size.price}
-                                  onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'price', e.target.value)}
-                                  min="0"
-                                  step="100"
-                                  placeholder="0"
-                                  required
-                                  disabled={isLoading}
-                                  aria-label="Precio en pesos colombianos"
-                                />
-                              </div>
-                              
-                              {colorVariant.sizes.length > 1 && (
-                                <button
-                                  type="button"
-                                  className={styles.removeSizeButton}
-                                  onClick={() => handleRemoveSize(colorIndex, sizeIndex)}
-                                  disabled={isLoading}
-                                  title="Eliminar talla"
-                                  aria-label="Eliminar talla"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+<div className={styles.sizesGrid}>
+  {colorVariant.sizes.map((size, sizeIndex) => {
+    const priceWithDiscount = calculatePriceWithDiscount(size.price, size.discountPercentage);
+    const discountAmount = calculateDiscountAmount(size.price, size.discountPercentage);
+    const hasDiscount = size.discountPercentage && size.discountPercentage > 0;
+    
+    return (
+      <div key={`size-${colorIndex}-${sizeIndex}`} className={styles.sizeCard}>
+        <div className={styles.sizeGroup}>
+          <label className={styles.sizeLabel}>Talla</label>
+          <input
+            className={styles.sizeInput}
+            type="text"
+            value={size.size}
+            onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'size', e.target.value)}
+            placeholder="Ej: S, M, L, XL"
+            required
+            disabled={isLoading}
+            aria-label="Talla"
+          />
+        </div>
+        
+        <div className={styles.sizeGroup}>
+          <label className={styles.sizeLabel}>
+            <span className={styles.labelIcon}>📦</span>
+            Stock
+          </label>
+          <input
+            className={styles.stockInput}
+            type="number"
+            value={size.stock}
+            onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'stock', e.target.value)}
+            min="0"
+            step="1"
+            placeholder="0"
+            required
+            disabled={isLoading}
+            aria-label="Cantidad en stock"
+          />
+        </div>
+        
+        <div className={styles.sizeGroup}>
+          <label className={styles.sizeLabel}>
+            <span className={styles.labelIcon}>💰</span>
+            Precio (COP)
+          </label>
+          <input
+            className={styles.priceInput}
+            type="number"
+            value={size.price}
+            onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'price', e.target.value)}
+            min="0"
+            step="100"
+            placeholder="0"
+            required
+            disabled={isLoading}
+            aria-label="Precio en pesos colombianos"
+          />
+        </div>
+        
+        {/* AGREGAR NUEVO CAMPO PARA DESCUENTO */}
+        <div className={styles.sizeGroup}>
+          <label className={styles.sizeLabel}>
+            <span className={styles.labelIcon}>🎯</span>
+            Descuento %
+          </label>
+          <div className={styles.discountContainer}>
+            <input
+              className={styles.discountInput}
+              type="number"
+              value={size.discountPercentage || 0}
+              onChange={(e) => handleSizeChange(colorIndex, sizeIndex, 'discountPercentage', e.target.value)}
+              min="0"
+              max="100"
+              step="1"
+              placeholder="0"
+              disabled={isLoading}
+              aria-label="Porcentaje de descuento"
+            />
+            <span className={styles.discountSymbol}>%</span>
+          </div>
+          
+          {/* Mostrar información del descuento */}
+          {hasDiscount && (
+            <div className={styles.discountInfo}>
+              <div className={styles.discountRow}>
+                <span className={styles.discountLabel}>Precio final:</span>
+                <span className={styles.discountValue}>
+                  {formatPrice(priceWithDiscount)}
+                </span>
+              </div>
+              <div className={styles.discountRow}>
+                <span className={styles.discountLabel}>Ahorras:</span>
+                <span className={styles.discountSavings}>
+                  {formatPrice(discountAmount)} ({size.discountPercentage}%)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {colorVariant.sizes.length > 1 && (
+          <button
+            type="button"
+            className={styles.removeSizeButton}
+            onClick={() => handleRemoveSize(colorIndex, sizeIndex)}
+            disabled={isLoading}
+            title="Eliminar talla"
+            aria-label="Eliminar talla"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    );
+  })}
+</div>
                         <button
                           type="button"
                           className={styles.addSizeButton}
@@ -1465,7 +1569,7 @@ const Admin = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                                  <tbody>
                   {products.map((product) => (
                     <tr 
                       key={product.id} 
@@ -1543,6 +1647,12 @@ const Admin = () => {
                           </span>
                           {product.variants.reduce((sum, v) => sum + v.stock, 0) === 0 && (
                             <span className={styles.outOfStock}>⚠️ Agotado</span>
+                          )}
+                          {product.variants.some(v => v.discountPercentage && v.discountPercentage > 0) && (
+                            <span className={styles.discountBadge}>
+                              <span className={styles.discountIcon}>🎯</span>
+                              Con descuento
+                            </span>
                           )}
                         </div>
                       </td>

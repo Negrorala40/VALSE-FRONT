@@ -1,8 +1,8 @@
-// app/layout.tsx - VERSIÓN COMPLETA CON GTM
+// app/layout.tsx - VERSIÓN CORREGIDA
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Fredoka } from "next/font/google";
-import { GoogleTagManager } from '@next/third-parties/google'; // <-- NUEVO
+import { GoogleTagManager } from '@next/third-parties/google';
 import "./globals.css";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -81,13 +81,46 @@ export const metadata: Metadata = {
   },
 };
 
+// Script para eliminar atributos de extensiones del navegador
+const RemoveBrowserExtensionsScript = () => {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+          // Eliminar atributos agregados por extensiones del navegador
+          (function() {
+            // Ejecutar inmediatamente cuando el script se carga
+            if (document.body.hasAttribute('cz-shortcut-listen')) {
+              document.body.removeAttribute('cz-shortcut-listen');
+            }
+            
+            // También escuchar cuando se carga completamente el DOM
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', function() {
+                if (document.body.hasAttribute('cz-shortcut-listen')) {
+                  document.body.removeAttribute('cz-shortcut-listen');
+                }
+              });
+            }
+          })();
+        `,
+      }}
+    />
+  )
+};
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={`${inter.variable} ${fredoka.variable}`}>
+    <html 
+      lang="es" 
+      // Añadimos suppressHydrationWarning aquí también
+      suppressHydrationWarning
+      className={`${inter.variable} ${fredoka.variable}`}
+    >
       <head>
         {/* Structured Data para SEO */}
         <script
@@ -116,8 +149,15 @@ export default function RootLayout({
         {/* Preconnect para mejorar performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        
+        {/* Script para eliminar extensiones */}
+        <RemoveBrowserExtensionsScript />
       </head>
-      <body className="min-h-screen bg-white text-gray-900 font-sans antialiased">
+      <body 
+        // SUPRESIÓN DEL WARNING DE HIDRATACIÓN CRÍTICA
+        suppressHydrationWarning
+        className="min-h-screen bg-white text-gray-900 font-sans antialiased"
+      >
         {/* NOSCRIPT para GTM - para usuarios sin JavaScript */}
         <noscript>
           <iframe

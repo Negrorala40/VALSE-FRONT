@@ -17,6 +17,10 @@ interface CartItem {
   color: string;
   size: string;
   price: number;
+  originalPrice: number;
+  priceWithDiscount: number;
+  discountPercentage: number;
+  hasDiscount: boolean;
   totalPrice: number;
   imageUrl: string;
 }
@@ -27,6 +31,14 @@ interface CartContextType {
   loading: boolean;
   showCartNotification: boolean;
   lastAddedProduct: string | null;
+  cartTotals: {
+    subtotal: number;
+    shippingCost: number;
+    total: number;
+    totalItems: number;
+    discountSavings: number;
+    originalSubtotal: number;
+  };
   addToCart: (productVariantId: number, quantity: number, productName?: string) => Promise<void>;
   removeFromCart: (cartItemId: number) => Promise<void>;
   updateQuantity: (cartItemId: number, quantity: number) => Promise<void>;
@@ -55,7 +67,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [showCartNotification, setShowCartNotification] = useState<boolean>(false);
   const [lastAddedProduct, setLastAddedProduct] = useState<string | null>(null);
-  const [tempCartCount, setTempCartCount] = useState<number>(0); // Para actualización inmediata
+  const [tempCartCount, setTempCartCount] = useState<number>(0);
+  
+  const [cartTotals, setCartTotals] = useState({
+    subtotal: 0,
+    shippingCost: 0,
+    total: 0,
+    totalItems: 0,
+    discountSavings: 0,
+    originalSubtotal: 0
+  });
 
   // Constante para header
   const CART_SESSION_HEADER = 'X-Cart-Session-Id';
@@ -110,7 +131,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     
     const response = await fetch(url, {
       ...options,
-      credentials: 'include', // IMPORTANTE para cookies
+      credentials: 'include',
       headers: {
         ...headers,
         ...options.headers
@@ -123,17 +144,25 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return response;
   };
 
-  // Obtener carrito
+  // Obtener carrito con totales
   const getCart = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetchWithSession(CART);
+      // Usar el endpoint con totales
+      const response = await fetchWithSession(`${CART}/with-totals`);
       
       if (response.status === 404 || response.status === 400) {
-        // Carrito vacío - normal
         setCartItems([]);
         setCartCount(0);
         setTempCartCount(0);
+        setCartTotals({
+          subtotal: 0,
+          shippingCost: 0,
+          total: 0,
+          totalItems: 0,
+          discountSavings: 0,
+          originalSubtotal: 0
+        });
         return;
       }
       
@@ -142,35 +171,65 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
       
       const data = await response.json();
-      setCartItems(data);
       
-      // Obtener contador
-      const countResponse = await fetchWithSession(GET_CART_COUNT);
-      if (countResponse.ok) {
-        const countData = await countResponse.json();
-        const newCount = countData.count || 0;
-        setCartCount(newCount);
-        setTempCartCount(newCount);
-      }
+      // Transformar items del carrito
+      const transformedItems: CartItem[] = data.items.map((item: any) => ({
+        id: item.id,
+        quantity: item.quantity,
+        productVariantId: item.productVariantId,
+        productName: item.productName,
+        color: item.color,
+        size: item.size,
+        price: item.priceWithDiscount || item.originalPrice,
+        originalPrice: item.originalPrice,
+        priceWithDiscount: item.priceWithDiscount,
+        discountPercentage: item.discountPercentage || 0,
+        hasDiscount: item.hasDiscount || false,
+        totalPrice: item.itemDiscountedTotal || (item.priceWithDiscount * item.quantity),
+        imageUrl: item.imageUrl
+      }));
+
+      setCartItems(transformedItems);
+      
+      // Actualizar totales
+      setCartTotals({
+        subtotal: data.subtotal || 0,
+        shippingCost: data.shippingCost || 0,
+        total: data.total || 0,
+        totalItems: data.totalItems || 0,
+        discountSavings: data.discountSavings || 0,
+        originalSubtotal: data.originalSubtotal || data.subtotal || 0
+      });
+      
+      // Actualizar contador
+      const newCount = data.totalItems || 0;
+      setCartCount(newCount);
+      setTempCartCount(newCount);
       
     } catch (error: any) {
       console.error('Error obteniendo carrito:', error);
-      if (error.message?.includes('404') || error.message?.includes('400')) {
-        setCartItems([]);
-        setCartCount(0);
-        setTempCartCount(0);
-      }
+      setCartItems([]);
+      setCartCount(0);
+      setTempCartCount(0);
+      setCartTotals({
+        subtotal: 0,
+        shippingCost: 0,
+        total: 0,
+        totalItems: 0,
+        discountSavings: 0,
+        originalSubtotal: 0
+      });
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Refrescar carrito (para uso externo)
+  // Refrescar carrito
   const refreshCart = async () => {
     await getCart();
   };
 
-  // Agregar al carrito - MODIFICADO para aceptar productName
+  // Agregar al carrito
   const addToCart = async (productVariantId: number, quantity: number, productName?: string) => {
     try {
       const payload = { productVariantId, quantity };
@@ -186,28 +245,26 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await response.json();
       
-      // Actualizar contador INMEDIATAMENTE (optimistic update)
+      // Actualizar contador INMEDIATAMENTE
       const newCount = tempCartCount + quantity;
       setTempCartCount(newCount);
       
-      // Mostrar notificación si hay nombre de producto
+      // Mostrar notificación
       if (productName) {
         setLastAddedProduct(productName);
         setShowCartNotification(true);
         
-        // Ocultar notificación después de 3 segundos automáticamente
         setTimeout(() => {
           hideCartNotification();
         }, 3000);
       }
       
-      // Actualizar carrito completo (llamada real al backend)
+      // Actualizar carrito completo
       await getCart();
       
       return data;
     } catch (error) {
       console.error('Error agregando al carrito:', error);
-      // Revertir el cambio optimista si hay error
       setTempCartCount(tempCartCount - quantity);
       throw error;
     }
@@ -263,6 +320,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       setCartItems([]);
       setCartCount(0);
       setTempCartCount(0);
+      setCartTotals({
+        subtotal: 0,
+        shippingCost: 0,
+        total: 0,
+        totalItems: 0,
+        discountSavings: 0,
+        originalSubtotal: 0
+      });
     } catch (error: any) {
       console.error('Error vaciando carrito:', error);
       throw error;
@@ -298,7 +363,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   // Inicializar al cargar la página
   useEffect(() => {
-    // Cargar sessionId inicial desde localStorage
     if (typeof window !== 'undefined') {
       const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
       if (savedSessionId) {
@@ -308,7 +372,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     
     getCart();
     
-    // Escuchar cambios de autenticación
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'token' && e.newValue && cartItems.length > 0) {
         migrateCart();
@@ -322,7 +385,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Sincronizar tempCartCount con cartCount cuando se actualiza
+  // Sincronizar tempCartCount con cartCount
   useEffect(() => {
     if (tempCartCount !== cartCount) {
       setTempCartCount(cartCount);
@@ -331,10 +394,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const value: CartContextType = {
     cartItems,
-    cartCount: tempCartCount, // Usar tempCartCount para actualización inmediata
+    cartCount: tempCartCount,
     loading,
     showCartNotification,
     lastAddedProduct,
+    cartTotals,
     addToCart,
     removeFromCart,
     updateQuantity,
@@ -345,10 +409,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     hideCartNotification,
     sessionId
   };
+  export type { CartItem }; // <-- Exportar el tipo
+
 
   return (
     <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
+  
 };

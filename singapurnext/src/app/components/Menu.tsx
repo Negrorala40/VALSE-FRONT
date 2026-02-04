@@ -22,6 +22,9 @@ interface ProductVariant {
   size: string;
   stock: number;
   price?: number;
+  discountPercentage?: number; // Agregar este campo
+  priceWithDiscount?: number; // Agregar este campo - precio con descuento
+  discountAmount?: number; // Agregar este campo - monto descontado
   images: Img[];
   enabled?: boolean;
 }
@@ -58,6 +61,11 @@ interface ProductSelectionState {
   };
 }
 
+// Agrega esta función de utilidad cerca de las otras funciones:
+const formatPrice = (price: number): string => {
+  if (!price || price <= 0) return 'Consultar';
+  return `$${price.toLocaleString('es-CO')}`;
+};
 // Función para filtrar variantes habilitadas y con stock > 0
 const filterAvailableVariants = (variants: ProductVariant[]): ProductVariant[] => {
   return variants.filter(variant => 
@@ -94,13 +102,94 @@ const getImageForColor = (variants: ProductVariant[], color: string): string => 
 };
 
 // Función para obtener el precio para una variante específica
+// Actualiza esta función existente:
 const getPriceForVariant = (variants: ProductVariant[], color: string, size: string): number => {
   const variant = filterAvailableVariants(variants).find(v => 
     v.color === color && 
     v.size === size
   );
   
+  // Usar el precio con descuento si está disponible
+  if (variant?.priceWithDiscount !== undefined) {
+    return Number(variant.priceWithDiscount);
+  }
+  
+  // Si no, usar el precio base
   return variant?.price ? Number(variant.price) : 0;
+};
+
+// Agrega esta función para obtener el precio original sin descuento:
+const getOriginalPriceForVariant = (variants: ProductVariant[], color: string, size: string): number => {
+  const variant = filterAvailableVariants(variants).find(v => 
+    v.color === color && 
+    v.size === size
+  );
+  
+  return variant?.price ? Number(variant.price) : 0;
+};
+// Agrega estas funciones después de tus funciones existentes (después de getPriceForVariant):
+
+// Función para calcular precio con descuento
+const calculatePriceWithDiscount = (price: number, discountPercentage?: number): number => {
+  if (!discountPercentage || discountPercentage <= 0 || !price) {
+    return price;
+  }
+  
+  const discountAmount = price * (discountPercentage / 100);
+  const discountedPrice = price - discountAmount;
+  
+  // Asegurar que el precio no sea negativo
+  return discountedPrice > 0 ? Number(discountedPrice.toFixed(0)) : 0;
+};
+
+// Función para obtener el precio con descuento para una variante específica
+const getPriceWithDiscountForVariant = (variants: ProductVariant[], color: string, size: string): number => {
+  const variant = filterAvailableVariants(variants).find(v => 
+    v.color === color && 
+    v.size === size
+  );
+  
+  if (!variant) return 0;
+  
+  // Si el backend ya proporciona el precio con descuento, usarlo
+  if (variant.priceWithDiscount !== undefined) {
+    return Number(variant.priceWithDiscount);
+  }
+  
+  // Si no, calcularlo
+  const price = variant.price || 0;
+  const discountPercentage = variant.discountPercentage || 0;
+  
+  return calculatePriceWithDiscount(price, discountPercentage);
+};
+
+// Función para obtener el porcentaje de descuento para una variante específica
+const getDiscountPercentageForVariant = (variants: ProductVariant[], color: string, size: string): number => {
+  const variant = filterAvailableVariants(variants).find(v => 
+    v.color === color && 
+    v.size === size
+  );
+  
+  return variant?.discountPercentage || 0;
+};
+
+// Función para verificar si una variante tiene descuento
+const hasDiscountForVariant = (variants: ProductVariant[], color: string, size: string): boolean => {
+  const variant = filterAvailableVariants(variants).find(v => 
+    v.color === color && 
+    v.size === size
+  );
+  
+  return (variant?.discountPercentage || 0) > 0;
+};
+
+// Función para obtener el descuento máximo de un producto
+const getMaxDiscountForProduct = (variants: ProductVariant[]): number => {
+  const availableVariants = filterAvailableVariants(variants);
+  if (!availableVariants || availableVariants.length === 0) return 0;
+  
+  const discounts = availableVariants.map(v => v.discountPercentage || 0);
+  return discounts.length > 0 ? Math.max(...discounts) : 0;
 };
 
 // Función para verificar si un producto tiene al menos una variante disponible
@@ -110,7 +199,24 @@ const hasAvailableVariants = (product: Product): boolean => {
 };
 
 // Función para obtener el precio mínimo solo de variantes disponibles
+// Actualiza esta función existente:
 const getMinPrice = (variants: ProductVariant[]): number => {
+  const availableVariants = filterAvailableVariants(variants);
+  if (!availableVariants || availableVariants.length === 0) return 0;
+  
+  // Usar el precio con descuento si está disponible, si no, el precio base
+  const prices = availableVariants.map(v => {
+    if (v.priceWithDiscount !== undefined) {
+      return Number(v.priceWithDiscount);
+    }
+    return Number(v.price || 0);
+  }).filter(p => p > 0);
+  
+  return prices.length > 0 ? Math.min(...prices) : 0;
+};
+
+// Agrega esta función para obtener el precio mínimo original (sin descuento):
+const getMinOriginalPrice = (variants: ProductVariant[]): number => {
   const availableVariants = filterAvailableVariants(variants);
   if (!availableVariants || availableVariants.length === 0) return 0;
   
@@ -190,26 +296,27 @@ const Menu: React.FC = () => {
         // Inicializar estados de selección para productos disponibles
         const initialSelections: ProductSelectionState = {};
         
-        availableProducts.forEach(product => {
-          const colors = getUniqueColorsWithStock(product.variants);
-          if (colors.length > 0) {
-            const firstColor = colors[0];
-            const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
-            const firstSize = sizesForFirstColor[0]?.size || '';
-            
-            // Obtener el precio inicial para la primera variante seleccionada
-            const initialPrice = firstSize ? 
-              getPriceForVariant(product.variants, firstColor, firstSize) : 
-              getMinPrice(product.variants);
-            
-            initialSelections[product.id] = {
-              selectedColor: firstColor,
-              selectedSize: firstSize,
-              availableSizes: sizesForFirstColor.map(v => v.size),
-              currentPrice: initialPrice
-            };
-          }
-        });
+        // En el useEffect, dentro de la inicialización de initialSelections:
+availableProducts.forEach(product => {
+  const colors = getUniqueColorsWithStock(product.variants);
+  if (colors.length > 0) {
+    const firstColor = colors[0];
+    const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
+    const firstSize = sizesForFirstColor[0]?.size || '';
+    
+    // Obtener el precio con descuento para la primera variante seleccionada
+    const initialPrice = firstSize ? 
+      getPriceForVariant(product.variants, firstColor, firstSize) : 
+      getMinPrice(product.variants);
+    
+    initialSelections[product.id] = {
+      selectedColor: firstColor,
+      selectedSize: firstSize,
+      availableSizes: sizesForFirstColor.map(v => v.size),
+      currentPrice: initialPrice
+    };
+  }
+});
         
         setProducts(availableProducts);
         setFilteredProducts(availableProducts);
@@ -328,56 +435,58 @@ const Menu: React.FC = () => {
     }
   });
 
-  const handleColorSelect = useCallback((e: React.MouseEvent, productId: number, color: string) => {
-    e.stopPropagation();
-    
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-    
-    const sizesForColor = getSizesForColorWithStock(product.variants, color);
-    const firstSize = sizesForColor[0]?.size || '';
-    
-    // Obtener el precio para la nueva variante seleccionada
-    const newPrice = firstSize ? 
-      getPriceForVariant(product.variants, color, firstSize) : 
-      getMinPrice(product.variants);
-    
-    setSelectionStates(prev => ({
-      ...prev,
-      [productId]: {
-        selectedColor: color,
-        selectedSize: firstSize,
-        availableSizes: sizesForColor.map(v => v.size),
-        currentPrice: newPrice
-      }
-    }));
-  }, [products]);
+  // Actualiza handleColorSelect:
+const handleColorSelect = useCallback((e: React.MouseEvent, productId: number, color: string) => {
+  e.stopPropagation();
+  
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  
+  const sizesForColor = getSizesForColorWithStock(product.variants, color);
+  const firstSize = sizesForColor[0]?.size || '';
+  
+  // Obtener el precio CON DESCUENTO para la nueva variante seleccionada
+  const newPrice = firstSize ? 
+    getPriceForVariant(product.variants, color, firstSize) : 
+    getMinPrice(product.variants);
+  
+  setSelectionStates(prev => ({
+    ...prev,
+    [productId]: {
+      selectedColor: color,
+      selectedSize: firstSize,
+      availableSizes: sizesForColor.map(v => v.size),
+      currentPrice: newPrice
+    }
+  }));
+}, [products]);
 
-  const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, size: string) => {
-    e.stopPropagation();
-    
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-    
-    const selectionState = selectionStates[productId];
-    if (!selectionState) return;
-    
-    // Obtener el precio para la nueva talla seleccionada
-    const newPrice = getPriceForVariant(
-      product.variants, 
-      selectionState.selectedColor, 
-      size
-    );
-    
-    setSelectionStates(prev => ({
-      ...prev,
-      [productId]: {
-        ...prev[productId],
-        selectedSize: size,
-        currentPrice: newPrice
-      }
-    }));
-  }, [products, selectionStates]);
+// Actualiza handleSizeSelect:
+const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, size: string) => {
+  e.stopPropagation();
+  
+  const product = products.find(p => p.id === productId);
+  if (!product) return;
+  
+  const selectionState = selectionStates[productId];
+  if (!selectionState) return;
+  
+  // Obtener el precio CON DESCUENTO para la nueva talla seleccionada
+  const newPrice = getPriceForVariant(
+    product.variants, 
+    selectionState.selectedColor, 
+    size
+  );
+  
+  setSelectionStates(prev => ({
+    ...prev,
+    [productId]: {
+      ...prev[productId],
+      selectedSize: size,
+      currentPrice: newPrice
+    }
+  }));
+}, [products, selectionStates]);
 
   const handleQuickAddClick = useCallback(async (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
@@ -554,19 +663,24 @@ const Menu: React.FC = () => {
             }
 
             return (
-              <div
-                key={`${product.id}-${index}`}
-                ref={(el) => setProductRef(el, index)}
-                data-index={index}
-                className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''}`}
-                onClick={() => router.push(`/product?id=${product.id}`)}
-              >
+              // En el mapeo de productos, actualiza el className del productCard:
+<div
+  key={`${product.id}-${index}`}
+  ref={(el) => setProductRef(el, index)}
+  data-index={index}
+  className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''} ${
+    getMaxDiscountForProduct(product.variants) > 0 ? styles.hasDiscount : ''
+  }`}
+  onClick={() => router.push(`/product?id=${product.id}`)}
+>
                 {/* Badges */}
-                <div className={styles.productBadges}>
-                  {renderGenderBadge(product.gender)}
-                  {isNew(product.createdAt) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
-                  {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
-                </div>
+<div className={styles.productBadges}>
+  {renderGenderBadge(product.gender)}
+  {isNew(product.createdAt) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
+  {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
+  
+  
+</div>
 
                 {/* Imagen con overlay */}
                 <div className={styles.productImageContainer}>
@@ -632,11 +746,52 @@ const Menu: React.FC = () => {
                   )}
 
                   {/* Precio - se actualiza con cada cambio de color/talla */}
-                  <div className={styles.productPriceContainer}>
-                    <span className={styles.productPrice}>
-                      {currentPrice > 0 ? `$${currentPrice.toLocaleString('es-CO')}` : 'Consultar'}
-                    </span>
-                  </div>
+                  {/* Precio - se actualiza con cada cambio de color/talla */}
+<div className={styles.productPriceContainer}>
+  {/* Mostrar precio con descuento y precio original tachado */}
+  {(() => {
+    const selectionState = selectionStates[product.id];
+    const hasCurrentDiscount = selectionState && selectionState.selectedColor && selectionState.selectedSize
+      ? hasDiscountForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
+      : getMaxDiscountForProduct(product.variants) > 0;
+    
+    const currentDiscountPercentage = selectionState && selectionState.selectedColor && selectionState.selectedSize
+      ? getDiscountPercentageForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
+      : getMaxDiscountForProduct(product.variants);
+    
+    const originalPrice = selectionState && selectionState.selectedColor && selectionState.selectedSize
+      ? getOriginalPriceForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
+      : getMinOriginalPrice(product.variants);
+    
+    const finalPrice = selectionState?.currentPrice || getMinPrice(product.variants);
+    
+    if (hasCurrentDiscount && originalPrice > 0 && currentDiscountPercentage > 0) {
+      return (
+        <div className={styles.discountedPriceContainer}>
+          <div className={styles.originalPriceWrapper}>
+            <span className={styles.originalPrice}>
+              ${originalPrice.toLocaleString('es-CO')}
+            </span>
+          </div>
+          <div className={styles.finalPriceWrapper}>
+            <span className={styles.finalPrice}>
+              ${finalPrice.toLocaleString('es-CO')}
+            </span>
+            <span className={styles.discountBadge}>
+              -{currentDiscountPercentage}%
+            </span>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <span className={styles.productPrice}>
+          ${finalPrice.toLocaleString('es-CO')}
+        </span>
+      );
+    }
+  })()}
+</div>
                 </div>
 
                 {/* Botón de agregar rápido - solo si hay color y talla seleccionados con stock */}

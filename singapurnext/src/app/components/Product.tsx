@@ -23,6 +23,9 @@ interface Variante {
   size: string;
   stock: number;
   price: number;
+  discountPercentage?: number; // Agregar este campo
+  priceWithDiscount?: number; // Agregar este campo
+  discountAmount?: number; // Agregar este campo
   productId: number;
   images: Imagen[];
   enabled?: boolean;
@@ -83,6 +86,62 @@ const getColorHex = (colorName: string): string => {
   }
   
   return '#103359';
+};
+
+// Función para calcular precio con descuento
+const calculatePriceWithDiscount = (price: number, discountPercentage?: number): number => {
+  if (!discountPercentage || discountPercentage <= 0 || !price || price <= 0) {
+    return price;
+  }
+  
+  const discountAmount = price * (discountPercentage / 100);
+  const discountedPrice = price - discountAmount;
+  
+  // Asegurar que el precio no sea negativo
+  return discountedPrice > 0 ? Number(discountedPrice.toFixed(0)) : 0;
+};
+
+// Función para calcular el monto de descuento
+const calculateDiscountAmount = (price: number, discountPercentage?: number): number => {
+  if (!discountPercentage || discountPercentage <= 0 || !price || price <= 0) {
+    return 0;
+  }
+  
+  return Number((price * (discountPercentage / 100)).toFixed(0));
+};
+
+// Función para obtener el precio con descuento de una variante
+const getDiscountedPrice = (variante: Variante): number => {
+  if (variante.priceWithDiscount !== undefined && variante.priceWithDiscount > 0) {
+    return variante.priceWithDiscount;
+  }
+  
+  if (variante.discountPercentage && variante.discountPercentage > 0 && variante.price) {
+    return calculatePriceWithDiscount(variante.price, variante.discountPercentage);
+  }
+  
+  return variante.price || 0;
+};
+
+// Función para obtener el precio original de una variante
+const getOriginalPrice = (variante: Variante): number => {
+  return variante.price || 0;
+};
+
+// Función para obtener el porcentaje de descuento de una variante
+const getDiscountPercentage = (variante: Variante): number => {
+  return variante.discountPercentage || 0;
+};
+
+// Función para verificar si una variante tiene descuento
+const hasDiscount = (variante: Variante): boolean => {
+  return (variante.discountPercentage || 0) > 0;
+};
+
+// Función para formatear precios
+const formatPrice = (price: number): string => {
+  if (!price || price <= 0) return 'Consultar';
+  return `$${price.toLocaleString('es-CO')}`;
 };
 
 let notificationId = 0;
@@ -169,6 +228,32 @@ const ProductContent = () => {
     }
   };
 
+  // Función para obtener la variante seleccionada actual
+  const obtenerVarianteSeleccionada = (): Variante | undefined => {
+    if (!producto || !colorSeleccionado || !tallaSeleccionada) {
+      return undefined;
+    }
+    
+    return producto.variants.find(
+      (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
+    );
+  };
+
+  // Función para obtener el descuento máximo del producto
+  const getMaxDiscountForProduct = (): number => {
+    if (!producto) return 0;
+    const discounts = producto.variants.map(v => v.discountPercentage || 0);
+    return discounts.length > 0 ? Math.max(...discounts) : 0;
+  };
+
+  // Función para verificar si un color tiene descuento
+  const colorHasDiscount = (color: string): boolean => {
+    if (!producto) return false;
+    return producto.variants.some(v => 
+      v.color === color && hasDiscount(v)
+    );
+  };
+
   useEffect(() => {
     if (!productId) {
       setError('Producto no encontrado');
@@ -227,9 +312,9 @@ const ProductContent = () => {
           setColorSeleccionado(primeraVariante.color);
         }
 
-        const precios = availableVariants.map(v => v.price);
-        const precioMinimo = precios.length > 0 ? Math.min(...precios) : 0;
-        setPrecioSeleccionado(precioMinimo);
+        // Usar precio con descuento si está disponible
+        const precioInicial = primeraVariante.price ? getDiscountedPrice(primeraVariante) : 0;
+        setPrecioSeleccionado(precioInicial);
 
       } catch (err: unknown) {
         console.error('Error obteniendo producto:', err);
@@ -257,7 +342,9 @@ const ProductContent = () => {
       );
       if (variante) {
         setStockDisponible(variante.stock);
-        setPrecioSeleccionado(variante.price);
+        // Usar precio con descuento si está disponible
+        const precioConDescuento = getDiscountedPrice(variante);
+        setPrecioSeleccionado(precioConDescuento);
         if (variante.images && variante.images.length > 0) {
           setImagenesActuales(variante.images);
           setImagenActual(0);
@@ -268,14 +355,18 @@ const ProductContent = () => {
     } else if (producto && colorSeleccionado) {
       const primeraVarianteColor = producto.variants.find(v => v.color === colorSeleccionado);
       if (primeraVarianteColor) {
-        setPrecioSeleccionado(primeraVarianteColor.price);
+        // Usar precio con descuento si está disponible
+        const precioConDescuento = getDiscountedPrice(primeraVarianteColor);
+        setPrecioSeleccionado(precioConDescuento);
         if (primeraVarianteColor.images && primeraVarianteColor.images.length > 0) {
           setImagenesActuales(primeraVarianteColor.images);
           setImagenActual(0);
         }
       }
     } else if (producto) {
-      const precioMinimo = Math.min(...producto.variants.map(v => v.price));
+      // Obtener el precio mínimo con descuento aplicado
+      const precios = producto.variants.map(v => getDiscountedPrice(v));
+      const precioMinimo = precios.length > 0 ? Math.min(...precios) : 0;
       setPrecioSeleccionado(precioMinimo);
       setStockDisponible(null);
     }
@@ -295,7 +386,9 @@ const ProductContent = () => {
     if (producto) {
       const variante = producto.variants.find((v) => v.color === color);
       if (variante) {
-        setPrecioSeleccionado(variante.price);
+        // Usar precio con descuento si está disponible
+        const precioConDescuento = getDiscountedPrice(variante);
+        setPrecioSeleccionado(precioConDescuento);
         if (variante.images && variante.images.length > 0) {
           setImagenesActuales(variante.images);
           setImagenActual(0);
@@ -462,6 +555,22 @@ const ProductContent = () => {
                   </>
                 )}
                 
+                {/* Badge de descuento en imagen */}
+                {(() => {
+                  const variante = obtenerVarianteSeleccionada();
+                  const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
+                  const discountPercentage = variante ? getDiscountPercentage(variante) : getMaxDiscountForProduct();
+                  
+                  if (hasCurrentDiscount && discountPercentage > 0) {
+                    // return (
+                    //   <div className={styles.imageDiscountBadge}>
+                    //     -{discountPercentage}%
+                    //   </div>
+                    // );
+                  }
+                  return null;
+                })()}
+                
                 {/* Indicadores de puntos */}
                 {imagenesActuales.length > 1 && (
                   <div className={styles.imageIndicators}>
@@ -490,13 +599,55 @@ const ProductContent = () => {
             <div className={styles.productHeader}>
               <h1 className={styles.productTitle}>{producto.name}</h1>
               <div className={styles.priceSection}>
-                <span className={styles.productPrice}>
-                  {precioSeleccionado !== null ? `$${precioSeleccionado.toLocaleString('es-CO')}` : 'Selecciona opciones'}
-                </span>
+                {(() => {
+                  const variante = obtenerVarianteSeleccionada();
+                  const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
+                  const discountPercentage = variante ? getDiscountPercentage(variante) : 0;
+                  const originalPrice = variante ? getOriginalPrice(variante) : (precioSeleccionado || 0);
+                  const finalPrice = precioSeleccionado || 0;
+                  
+                  if (hasCurrentDiscount && discountPercentage > 0 && originalPrice > 0) {
+                    return (
+                      <div className={styles.discountedPriceContainer}>
+                        <div className={styles.originalPriceWrapper}>
+                          <span className={styles.originalPrice}>
+                            {formatPrice(originalPrice)}
+                          </span>
+                        </div>
+                        <div className={styles.finalPriceWrapper}>
+                          <span className={styles.finalPrice}>
+                            {formatPrice(finalPrice)}
+                          </span>
+                          <span className={styles.discountBadge}>
+                            -{discountPercentage}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <span className={styles.productPrice}>
+                        {formatPrice(finalPrice)}
+                      </span>
+                    );
+                  }
+                })()}
               </div>
             </div>
 
             <p className={styles.productDescription}>{producto.description}</p>
+
+            {/* Información de ahorro */}
+            {(() => {
+              const variante = obtenerVarianteSeleccionada();
+              const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
+              const discountAmount = variante ? calculateDiscountAmount(variante.price || 0, variante.discountPercentage) : 0;
+              
+              if (hasCurrentDiscount && discountAmount > 0) {
+              
+              }
+              return null;
+            })()}
 
             <div className={styles.colorSection}>
               <label className={styles.sectionLabel}>Color</label>
@@ -504,7 +655,9 @@ const ProductContent = () => {
                 {coloresDisponibles.map((color) => (
                   <button
                     key={color}
-                    className={`${styles.colorOption} ${colorSeleccionado === color ? styles.selected : ''}`}
+                    className={`${styles.colorOption} ${colorSeleccionado === color ? styles.selected : ''} ${
+                      colorHasDiscount(color) ? styles.withDiscount : ''
+                    }`}
                     style={{ backgroundColor: getColorHex(color) }}
                     onClick={() => manejarCambioColor(color)}
                     title={color}
@@ -528,17 +681,21 @@ const ProductContent = () => {
                     );
                     const stock = variante?.stock || 0;
                     const disabled = stock === 0;
+                    const hasSizeDiscount = variante ? hasDiscount(variante) : false;
                     
                     return (
                       <button
                         key={talla}
-                        className={`${styles.sizeOption} ${tallaSeleccionada === talla ? styles.selected : ''} ${disabled ? styles.disabled : ''}`}
+                        className={`${styles.sizeOption} ${tallaSeleccionada === talla ? styles.selected : ''} ${disabled ? styles.disabled : ''} ${
+                          hasSizeDiscount ? styles.sizeWithDiscount : ''
+                        }`}
                         onClick={() => !disabled && manejarCambioTalla(talla)}
                         disabled={disabled}
                         title={disabled ? 'Agotado' : `Stock disponible`}
                       >
                         {talla}
                         {disabled && <span className={styles.sizeBadge}>X</span>}
+                        
                       </button>
                     );
                   })}
@@ -640,4 +797,4 @@ const Product = () => {
   );
 };
 
-export default Product; 
+export default Product;

@@ -1208,3 +1208,240 @@
     height: 16px;
   }
 }
+
+/* =============================================
+   BADGE DE DESCUENTO
+   ============================================= */
+.badgeDiscount {
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  color: var(--color-white);
+  animation: pulseDiscount 2s ease-in-out infinite;
+  margin-top: 0.25rem;
+  order: 1; /* Hacer que el badge de descuento aparezca primero */
+}
+
+@keyframes pulseDiscount {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(255, 107, 107, 0);
+  }
+}
+
+/* Ajuste de orden para badges */
+.productBadges {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  z-index: 5;
+  max-width: 120px;
+}
+
+/* =============================================
+   PRECIOS CON DESCUENTO
+   ============================================= */
+.discountedPriceContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+}
+
+.originalPriceWrapper {
+  display: flex;
+  align-items: center;
+}
+
+.originalPrice {
+  font-size: 0.85rem;
+  color: var(--color-text-light);
+  text-decoration: line-through;
+  font-weight: 500;
+  opacity: 0.7;
+  position: relative;
+}
+
+/* Línea de tachado más visible */
+.originalPrice::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  right: -2px;
+  height: 1.5px;
+  background: #FF6B6B;
+  transform: rotate(-5deg);
+  opacity: 0.8;
+}
+
+.finalPriceWrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.finalPrice {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #FF6B6B; /* Color rojo/anaranjado para precio con descuento */
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.finalPrice::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  border-radius: 50%;
+}
+
+.discountBadge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  color: var(--color-white);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  animation: pulseSmall 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseSmall {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Estilo para precio normal (sin descuento) */
+.productPrice {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-secondary); /* Color verde para precio normal */
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.productPrice::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-secondary-light));
+  border-radius: 50%;
+}
+
+/* Ajustes responsive para precios */
+@media (max-width: 768px) {
+  .finalPrice {
+    font-size: 1rem;
+  }
+  
+  .originalPrice {
+    font-size: 0.75rem;
+  }
+  
+  .discountBadge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.4rem;
+  }
+  
+  .productPrice {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .finalPrice {
+    font-size: 0.9rem;
+  }
+  
+  .originalPrice {
+    font-size: 0.7rem;
+  }
+  
+  .discountBadge {
+    font-size: 0.55rem;
+    padding: 0.08rem 0.35rem;
+  }
+  
+  .productPrice {
+    font-size: 0.9rem;
+  }
+}
+
+/* =============================================
+   AJUSTES PARA BADGE DE DESCUENTO EN IMAGEN
+   ============================================= */
+.productCard {
+  position: relative;
+  /* ... resto de estilos ... */
+}
+
+/* Posicionar badge de descuento en la esquina superior derecha */
+.badgeDiscount {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  left: auto; /* Anular el left del contenedor general */
+  margin-top: 0;
+  z-index: 6;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* Ajustar contenedor de badges para acomodar el badge de descuento a la derecha */
+.productBadges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: calc(100% - 1.5rem); /* Dejar espacio para el badge derecho */
+}
+
+/* =============================================
+   MEJORAS VISUALES PARA DESCUENTOS
+   ============================================= */
+/* Efecto de "hot deal" para productos con descuento */
+.productCard.hasDiscount::before {
+  background: linear-gradient(90deg, #FF6B6B, #FF8E53, #FFD166);
+  transform: scaleX(1);
+}
+
+/* Resaltar productos con descuento en hover */
+.productCard.hasDiscount:hover {
+  box-shadow: 0 12px 40px rgba(255, 107, 107, 0.25);
+}
+
+/* Clase para identificar productos con descuento */
+.hasDiscount {
+  position: relative;
+}
+
+/* Punto indicador de descuento en la imagen */
+.hasDiscount .productImageContainer::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  border-radius: 50%;
+  border: 2px solid var(--color-white);
+  z-index: 4;
+  animation: blink 2s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

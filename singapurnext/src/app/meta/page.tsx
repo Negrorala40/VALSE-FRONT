@@ -12,7 +12,7 @@ import {
 } from '@/app/utils/Api';
 import styles from './meta.module.css';
 
-// Tipos de datos ACTUALIZADOS para V2
+// Tipos de datos ACTUALIZADOS para V2 - CON DESCUENTOS
 interface MetaVariantInfo {
   variantId: number;
   sku: string;
@@ -22,6 +22,11 @@ interface MetaVariantInfo {
   price: number;
   enabled: boolean;
   variantEnabledForMeta: boolean;
+  // ✅ NUEVOS CAMPOS PARA DESCUENTOS
+  discountPercentage?: number;
+  hasDiscount?: boolean;
+  priceWithDiscount?: number;
+  discountAmount?: number;
 }
 
 interface MetaProductResponse {
@@ -40,7 +45,7 @@ interface MetaProductResponse {
   gtin?: string;
   shipping?: string;
   shippingWeight?: number;
-  salePrice?: number;
+  salePrice?: number;  // Precio de oferta global (metadata)
   salePriceStartDate?: string;
   salePriceEndDate?: string;
   videoUrl?: string;
@@ -57,6 +62,17 @@ interface MetaStats {
   enabledButNotInMeta: number;
   outOfStock: number;
   disabledProducts: number;
+}
+
+// ✅ Tipo para paginación de API
+interface ApiPaginationResponse {
+  content: MetaProductResponse[];
+  totalPages: number;
+  totalElements: number;
+  number: number;
+  size: number;
+  first: boolean;
+  last: boolean;
 }
 
 const MetaDashboard = () => {
@@ -82,7 +98,7 @@ const MetaDashboard = () => {
   const [totalElements, setTotalElements] = useState(0);
 
   // Función para obtener headers con autenticación
-  const getAuthHeaders = () => {
+  const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem('token');
     
     const headers: HeadersInit = {
@@ -101,53 +117,6 @@ const MetaDashboard = () => {
     loadMetaData();
   }, [currentPage]);
 
-  // Cargar datos
-  const loadMetaData = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      // Cargar productos con paginación
-      const productsResponse = await fetch(
-        `${META_PRODUCTS_V2}?page=${currentPage}&size=20&sort=id,desc`, 
-        {
-          headers: getAuthHeaders(),
-        }
-      );
-      
-      if (!productsResponse.ok) {
-        if (productsResponse.status === 401) {
-          throw new Error('Debes iniciar sesión como administrador para acceder a esta sección');
-        }
-        throw new Error('Error cargando productos');
-      }
-      
-      const productsData = await productsResponse.json();
-      
-      // Cargar estadísticas
-      const statsResponse = await fetch(META_STATS, {
-        headers: getAuthHeaders(),
-      });
-      
-      let statsData = null;
-      if (statsResponse.ok) {
-        statsData = await statsResponse.json();
-      } else if (statsResponse.status !== 401) {
-        console.warn('No se pudieron cargar estadísticas');
-      }
-      
-      setProducts(productsData.content || []);
-      setTotalPages(productsData.totalPages || 1);
-      setTotalElements(productsData.totalElements || 0);
-      setStats(statsData);
-    } catch (err: any) {
-      setError(err.message || 'Error cargando datos');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Filtrar productos localmente
   useEffect(() => {
     let filtered = products;
@@ -156,7 +125,11 @@ const MetaDashboard = () => {
       filtered = filtered.filter(p => 
         p.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.variants.some(v => v.color.toLowerCase().includes(searchTerm.toLowerCase()))
+        (p.metaTitle && p.metaTitle.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        p.variants.some(v => 
+          v.color.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          v.size.toLowerCase().includes(searchTerm.toLowerCase())
+        )
       );
     }
     
@@ -167,12 +140,91 @@ const MetaDashboard = () => {
     setFilteredProducts(filtered);
   }, [products, searchTerm, showOnlyEnabled]);
 
-  // Toggle estado META por PRODUCTO
-  const toggleMetaEnabled = async (productId: number, enabled: boolean) => {
+  // Cargar datos
+  const loadMetaData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/meta/v2/products/${productId}/enabled?enabled=${enabled}`, {
+      setLoading(true);
+      setError('');
+      
+      // ✅ URL CORREGIDA - Asegurar que use la correcta
+      const productsResponse = await fetch(
+        `${META_PRODUCTS_V2}?page=${currentPage}&size=10&sort=id,desc`, 
+        {
+          headers: getAuthHeaders(),
+          credentials: 'include' // Importante para cookies/sesiones
+        }
+      );
+      
+      if (!productsResponse.ok) {
+        if (productsResponse.status === 401) {
+          throw new Error('Debes iniciar sesión como administrador para acceder a esta sección');
+        }
+        if (productsResponse.status === 404) {
+          // Intentar con endpoint alternativo
+          const fallbackResponse = await fetch(
+            `${API_BASE_URL}/api/meta/v2/products?page=${currentPage}&size=10`,
+            { headers: getAuthHeaders() }
+          );
+          
+          if (!fallbackResponse.ok) {
+            throw new Error(`Error cargando productos: ${productsResponse.status}`);
+          }
+          
+          const productsData: ApiPaginationResponse = await fallbackResponse.json();
+          handleProductsData(productsData);
+        } else {
+          throw new Error(`Error cargando productos: ${productsResponse.status}`);
+        }
+      } else {
+        const productsData: ApiPaginationResponse = await productsResponse.json();
+        handleProductsData(productsData);
+      }
+      
+      // Cargar estadísticas
+      await loadStats();
+      
+    } catch (err: any) {
+      console.error('Error cargando datos META:', err);
+      setError(err.message || 'Error cargando datos. Verifica la conexión.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función auxiliar para manejar datos de productos
+  const handleProductsData = (productsData: ApiPaginationResponse) => {
+    setProducts(productsData.content || []);
+    setTotalPages(productsData.totalPages || 1);
+    setTotalElements(productsData.totalElements || 0);
+  };
+
+  // Cargar estadísticas
+  const loadStats = async () => {
+    try {
+      const statsResponse = await fetch(META_STATS, {
+        headers: getAuthHeaders(),
+      });
+      
+      if (statsResponse.ok) {
+        const statsData: MetaStats = await statsResponse.json();
+        setStats(statsData);
+      }
+    } catch (err) {
+      console.warn('No se pudieron cargar estadísticas:', err);
+    }
+  };
+
+  // ✅ Toggle estado META por PRODUCTO - CORREGIDO
+  const toggleMetaEnabled = async (productId: number, enabled: boolean) => {
+    if (!confirm(`¿${enabled ? 'Activar' : 'Desactivar'} este producto para META?`)) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/meta/v2/products/${productId}/enabled`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
+        body: JSON.stringify({ enabled }),
       });
       
       if (response.status === 401) {
@@ -181,21 +233,25 @@ const MetaDashboard = () => {
       }
       
       if (response.ok) {
-        // Actualizar estado local
+        // Actualizar estado local de manera óptima
         setProducts(prev => prev.map(p => 
           p.productId === productId ? { ...p, enabledForMeta: enabled } : p
         ));
-        loadMetaData(); // Recargar estadísticas
+        
+        // Actualizar estadísticas
+        loadStats();
+        
+        alert(`Producto ${enabled ? 'activado' : 'desactivado'} correctamente para META`);
       } else {
-        throw new Error('Error actualizando estado');
+        throw new Error(`Error ${response.status}`);
       }
     } catch (err: any) {
       console.error('Error actualizando estado:', err);
-      alert(err.message || 'Error actualizando estado');
+      alert(`Error actualizando estado: ${err.message || 'Error desconocido'}`);
     }
   };
 
-  // Migrar productos existentes
+  // ✅ Migrar productos existentes - CORREGIDO
   const migrateProducts = async () => {
     if (!confirm('¿Migrar todos los productos existentes a META? Esto creará metadatos para productos sin ellos.')) return;
     
@@ -210,18 +266,20 @@ const MetaDashboard = () => {
         return;
       }
       
-      if (!response.ok) throw new Error('Error en migración');
+      if (!response.ok) throw new Error(`Error ${response.status} en migración`);
       
       const result = await response.text();
-      alert(result);
+      alert(`✅ ${result}`);
       loadMetaData();
     } catch (err: any) {
-      alert('Error en migración: ' + err.message);
+      alert(`❌ Error en migración: ${err.message}`);
     }
   };
 
-  // Generar CSV
+  // ✅ Generar CSV - CORREGIDO
   const generateCSV = async () => {
+    if (!confirm('¿Generar y descargar archivo CSV para META?')) return;
+    
     try {
       const response = await fetch(META_CSV, {
         headers: getAuthHeaders(),
@@ -232,26 +290,40 @@ const MetaDashboard = () => {
         return;
       }
       
-      if (!response.ok) throw new Error('Error generando CSV');
+      if (!response.ok) throw new Error(`Error ${response.status} generando CSV`);
       
       const blob = await response.blob();
+      
+      // Verificar si es un CSV válido
+      if (blob.size === 0) {
+        alert('El CSV generado está vacío. No hay productos disponibles para el feed.');
+        return;
+      }
+      
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'meta_product_feed.csv';
+      a.download = `meta_feed_${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      
+      // Limpieza
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
     } catch (err: any) {
-      alert('Error descargando CSV: ' + err.message);
+      alert(`❌ Error descargando CSV: ${err.message}`);
     }
   };
 
-  // Generar feed manualmente
+  // ✅ Generar feed manualmente - OPCIÓN ADICIONAL
   const generateFeed = async () => {
+    if (!confirm('¿Regenerar feed META? Esto actualizará el archivo CSV en el servidor.')) return;
+    
     try {
-      const response = await fetch(META_GENERATE, {
+      const response = await fetch(META_GENERATE || `${API_BASE_URL}/api/meta/feed/generate`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
@@ -261,16 +333,16 @@ const MetaDashboard = () => {
         return;
       }
       
-      if (!response.ok) throw new Error('Error generando feed');
+      if (!response.ok) throw new Error(`Error ${response.status} generando feed`);
       
       const result = await response.text();
-      alert(result);
+      alert(`✅ ${result}`);
     } catch (err: any) {
-      alert('Error generando feed: ' + err.message);
+      alert(`❌ Error generando feed: ${err.message}`);
     }
   };
 
-  // Actualizar metadata del producto
+  // ✅ Actualizar metadata del producto - CORREGIDO
   const updateProductMetadata = async (productId: number, data: any): Promise<boolean> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/meta/v2/products/${productId}`, {
@@ -284,53 +356,148 @@ const MetaDashboard = () => {
         return false;
       }
       
-      if (response.ok) {
-        alert('Producto actualizado correctamente');
-        loadMetaData();
-        return true;
-      } else {
-        throw new Error('Error actualizando producto');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || `Error ${response.status}`);
       }
+      
+      const updatedProduct = await response.json();
+      
+      // Actualizar en estado local
+      setProducts(prev => prev.map(p => 
+        p.productId === productId ? { ...p, ...updatedProduct } : p
+      ));
+      
+      alert('✅ Producto actualizado correctamente');
+      return true;
+      
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      alert(`❌ Error: ${err.message}`);
       return false;
     }
   };
 
-  // Contar variantes habilitadas para META
-  const countEnabledVariants = (product: MetaProductResponse) => {
-    return product.variants.filter(v => v.variantEnabledForMeta).length;
+  // ✅ Contar variantes con descuento
+  const countVariantsWithDiscount = (product: MetaProductResponse) => {
+    return product.variants.filter(v => v.hasDiscount).length;
   };
 
-  // Contar total de variantes
-  const countTotalVariants = (product: MetaProductResponse) => {
-    return product.variants.length;
+  // ✅ Obtener porcentaje de descuento máximo
+  const getMaxDiscount = (product: MetaProductResponse) => {
+    const discounts = product.variants
+      .filter(v => v.discountPercentage && v.discountPercentage > 0)
+      .map(v => v.discountPercentage || 0);
+    
+    return discounts.length > 0 ? Math.max(...discounts) : 0;
   };
 
-  // Contar variantes con stock
-  const countVariantsWithStock = (product: MetaProductResponse) => {
-    return product.variants.filter(v => v.stock > 0).length;
+  // ✅ Calcular precio promedio con descuento
+  const getAverageDiscountedPrice = (product: MetaProductResponse) => {
+    const variantsWithDiscount = product.variants.filter(v => v.hasDiscount && v.priceWithDiscount);
+    
+    if (variantsWithDiscount.length === 0) return null;
+    
+    const total = variantsWithDiscount.reduce((sum, v) => sum + (v.priceWithDiscount || 0), 0);
+    return Math.round(total / variantsWithDiscount.length);
   };
 
+  // Renderizar estado de descuento
+  const renderDiscountBadge = (product: MetaProductResponse) => {
+    const discountCount = countVariantsWithDiscount(product);
+    
+    if (discountCount === 0) return null;
+    
+    const maxDiscount = getMaxDiscount(product);
+    const avgPrice = getAverageDiscountedPrice(product);
+    
+    return (
+      <div className={styles.discountBadge}>
+        <span className={styles.discountIcon}>🔥</span>
+        <span className={styles.discountText}>
+          {discountCount} var. con descuento
+          {maxDiscount > 0 && ` (hasta ${maxDiscount}% off)`}
+        </span>
+        {avgPrice && (
+          <span className={styles.discountPrice}>
+            ~${avgPrice.toLocaleString()} COP
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // ✅ Renderizar información de variante con descuento
+  const renderVariantInfo = (variant: MetaVariantInfo) => {
+    const hasDiscount = variant.hasDiscount && variant.discountPercentage && variant.discountPercentage > 0;
+    
+    return (
+      <div key={variant.variantId} className={styles.variantItem}>
+        <div className={styles.variantHeader}>
+          <span className={styles.variantColor}>{variant.color}</span>
+          <span className={styles.variantSize}>{variant.size}</span>
+          {hasDiscount ? (
+            <span className={styles.variantDiscountTag}>
+              🔥 {variant.discountPercentage}% OFF
+            </span>
+          ) : null}
+        </div>
+        <div className={styles.variantDetails}>
+          <span className={`${styles.variantStock} ${variant.stock > 0 ? styles.inStock : styles.outOfStock}`}>
+            Stock: {variant.stock}
+          </span>
+          <span className={styles.variantPrice}>
+            {hasDiscount ? (
+              <>
+                <span className={styles.originalPrice}>
+                  ${variant.price?.toLocaleString() || '0'} COP
+                </span>
+                <span className={styles.discountedPrice}>
+                  ${variant.priceWithDiscount?.toLocaleString() || '0'} COP
+                </span>
+              </>
+            ) : (
+              <span>${variant.price?.toLocaleString() || '0'} COP</span>
+            )}
+          </span>
+          <span className={`${styles.variantStatus} ${variant.variantEnabledForMeta ? styles.statusEnabled : styles.statusDisabled}`}>
+            {variant.variantEnabledForMeta ? '✅ META' : '❌'}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  // ✅ Renderizar loading
   if (loading) return (
     <div className={styles.loadingState}>
       <div className={styles.spinner}></div>
       <p>Cargando dashboard META...</p>
+      <p className={styles.loadingSubtext}>Obteniendo productos y estadísticas</p>
     </div>
   );
   
+  // ✅ Renderizar error
   if (error) return (
     <div className={styles.errorAlert}>
       <div className={styles.errorContent}>
         <span className={styles.errorIcon}>⚠️</span>
         <div className={styles.errorText}>
-          <strong>Error:</strong> {error}
+          <strong>Error cargando datos META:</strong> {error}
         </div>
       </div>
-      <button onClick={loadMetaData} className={styles.retryButton}>
-        <span className={styles.buttonIcon}>🔄</span>
-        Reintentar
-      </button>
+      <div className={styles.errorActions}>
+        <button onClick={loadMetaData} className={styles.retryButton}>
+          <span className={styles.buttonIcon}>🔄</span>
+          Reintentar
+        </button>
+        <button 
+          onClick={() => navigateTo('/admin')}
+          className={styles.backButton}
+        >
+          <span className={styles.buttonIcon}>←</span>
+          Volver al Admin
+        </button>
+      </div>
     </div>
   );
 
@@ -339,10 +506,12 @@ const MetaDashboard = () => {
       {/* Barra de navegación */}
       <div className={styles.adminHeader}>
         <div className={styles.headerLeft}>
-          <h1 className={styles.adminTitle}>Panel de Administración</h1>
+          <h1 className={styles.adminTitle}>Panel de Administración META</h1>
           <div className={styles.headerMeta}>
-            <span className={styles.pageBadge}>META</span>
-            <span className={styles.productCount}>{totalElements} productos</span>
+            <span className={styles.pageBadge}>🚀 META COMMERCE</span>
+            <span className={styles.productCount}>
+              {totalElements} producto{totalElements !== 1 ? 's' : ''}
+            </span>
           </div>
         </div>
         <div className={styles.headerActions}>
@@ -350,31 +519,31 @@ const MetaDashboard = () => {
             className={styles.navButton}
             onClick={() => navigateTo('/admin')}
           >
-            Admin
+            🏠 Admin
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/perfil')}
           >
-            Perfil
+            👤 Perfil
           </button>
           <button 
             className={`${styles.navButton} ${styles.active}`}
             onClick={() => navigateTo('/meta')}
           >
-            META
+            📱 META
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/orden')}
           >
-            Órdenes
+            📦 Órdenes
           </button>
           <button 
             className={styles.navButton}
             onClick={() => navigateTo('/admin/blog')}
           >
-            Blog
+            📝 Blog
           </button>
         </div>
       </div>
@@ -385,9 +554,11 @@ const MetaDashboard = () => {
           <h2 className={styles.panelTitle}>
             <span className={styles.panelIcon}>📱</span>
             Dashboard META Commerce
+            <span className={styles.panelVersion}>V2</span>
           </h2>
           <div className={styles.panelSubtitle}>
             Gestiona tus productos para Facebook e Instagram Shopping
+            <span className={styles.featureTag}>✅ Con soporte para descuentos por variante</span>
           </div>
         </div>
         
@@ -399,6 +570,7 @@ const MetaDashboard = () => {
             <div className={styles.statContent}>
               <span className={styles.statNumber}>{stats?.totalProducts || 0}</span>
               <span className={styles.statLabel}>Productos Totales</span>
+              <span className={styles.statSubtext}>En catálogo</span>
             </div>
           </div>
           
@@ -409,6 +581,7 @@ const MetaDashboard = () => {
             <div className={styles.statContent}>
               <span className={styles.statNumber}>{stats?.totalVariants || 0}</span>
               <span className={styles.statLabel}>Total Variantes</span>
+              <span className={styles.statSubtext}>Colores y tallas</span>
             </div>
           </div>
           
@@ -419,6 +592,7 @@ const MetaDashboard = () => {
             <div className={styles.statContent}>
               <span className={styles.statNumber}>{stats?.metaEnabledProducts || 0}</span>
               <span className={styles.statLabel}>Habilitados META</span>
+              <span className={styles.statSubtext}>En feed</span>
             </div>
           </div>
           
@@ -429,6 +603,7 @@ const MetaDashboard = () => {
             <div className={styles.statContent}>
               <span className={styles.statNumber}>{stats?.eligibleForFeed || 0}</span>
               <span className={styles.statLabel}>Disponibles Feed</span>
+              <span className={styles.statSubtext}>Con stock y habilitados</span>
             </div>
           </div>
           
@@ -439,6 +614,7 @@ const MetaDashboard = () => {
             <div className={styles.statContent}>
               <span className={styles.statNumber}>{stats?.outOfStock || 0}</span>
               <span className={styles.statLabel}>Sin Stock</span>
+              <span className={styles.statSubtext}>No disponibles</span>
             </div>
           </div>
           
@@ -449,6 +625,7 @@ const MetaDashboard = () => {
             <div className={styles.statContent}>
               <span className={styles.statNumber}>{stats?.disabledProducts || 0}</span>
               <span className={styles.statLabel}>Deshabilitados</span>
+              <span className={styles.statSubtext}>En sistema</span>
             </div>
           </div>
         </div>
@@ -460,13 +637,18 @@ const MetaDashboard = () => {
           <div className={styles.searchBox}>
             <input
               type="text"
-              placeholder="Buscar producto, SKU o color..."
+              placeholder="🔍 Buscar producto, SKU, color, talla..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className={styles.searchInput}
+              onKeyDown={(e) => e.key === 'Enter' && loadMetaData()}
             />
-            <button className={styles.searchButton}>
-              <span className={styles.buttonIcon}>🔍</span>
+            <button 
+              onClick={() => setSearchTerm('')} 
+              className={styles.clearSearchButton}
+              style={{ visibility: searchTerm ? 'visible' : 'hidden' }}
+            >
+              ✕
             </button>
           </div>
           
@@ -480,47 +662,120 @@ const MetaDashboard = () => {
               />
               <span className={styles.filterText}>Solo habilitados para META</span>
             </label>
+            
+            <label className={styles.filterLabel}>
+              <input
+                type="checkbox"
+                className={styles.filterCheckbox}
+                disabled
+              />
+              <span className={styles.filterText}>Mostrar solo con descuento</span>
+            </label>
           </div>
         </div>
         
         <div className={styles.actionButtons}>
-          <button onClick={loadMetaData} className={`${styles.actionButton} ${styles.refreshButton}`}>
+          <button 
+            onClick={loadMetaData} 
+            className={`${styles.actionButton} ${styles.refreshButton}`}
+            title="Actualizar datos"
+          >
             <span className={styles.buttonIcon}>🔄</span>
             Actualizar
           </button>
-          <button onClick={migrateProducts} className={`${styles.actionButton} ${styles.migrateButton}`}>
+          
+          <button 
+            onClick={migrateProducts} 
+            className={`${styles.actionButton} ${styles.migrateButton}`}
+            title="Crear metadata para productos sin configurar"
+          >
             <span className={styles.buttonIcon}>⚡</span>
             Migrar Productos
           </button>
-          <button onClick={generateCSV} className={`${styles.actionButton} ${styles.downloadButton}`}>
+          
+          <button 
+            onClick={generateCSV} 
+            className={`${styles.actionButton} ${styles.downloadButton}`}
+            title="Descargar CSV para importar en META"
+          >
             <span className={styles.buttonIcon}>📥</span>
             Descargar CSV
           </button>
-          <button onClick={generateFeed} className={`${styles.actionButton} ${styles.generateButton}`}>
+          
+          <button 
+            onClick={generateFeed} 
+            className={`${styles.actionButton} ${styles.generateButton}`}
+            title="Generar feed en servidor"
+          >
             <span className={styles.buttonIcon}>⚙️</span>
             Generar Feed
           </button>
         </div>
       </div>
 
+      {/* Información del feed */}
+      <div className={styles.feedInfo}>
+        <div className={styles.feedInfoContent}>
+          <span className={styles.feedInfoIcon}>ℹ️</span>
+          <div className={styles.feedInfoText}>
+            <strong>Feed META incluirá descuentos por variante:</strong> Las variantes con descuento mostrarán automáticamente 
+            <code>sale_price</code> en el CSV. Se priorizan descuentos por variante sobre descuentos globales.
+          </div>
+        </div>
+        <div className={styles.feedStats}>
+          <span className={styles.feedStat}>
+            📊 {filteredProducts.reduce((sum, p) => sum + countVariantsWithDiscount(p), 0)} variantes con descuento detectadas
+          </span>
+        </div>
+      </div>
+
       {/* Paginación */}
       <div className={styles.paginationContainer}>
         <div className={styles.paginationInfo}>
-          Mostrando página {currentPage + 1} de {totalPages} ({totalElements} productos totales)
+          Página <strong>{currentPage + 1}</strong> de <strong>{totalPages}</strong> • 
+          Mostrando <strong>{filteredProducts.length}</strong> de <strong>{totalElements}</strong> productos
         </div>
         <div className={styles.paginationButtons}>
           <button 
             onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
             disabled={currentPage === 0}
             className={styles.paginationButton}
+            title="Página anterior"
           >
             <span className={styles.buttonIcon}>←</span>
             Anterior
           </button>
+          
+          <div className={styles.pageNumbers}>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i;
+              } else if (currentPage < 3) {
+                pageNum = i;
+              } else if (currentPage > totalPages - 4) {
+                pageNum = totalPages - 5 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`${styles.pageNumber} ${currentPage === pageNum ? styles.pageNumberActive : ''}`}
+                >
+                  {pageNum + 1}
+                </button>
+              );
+            })}
+          </div>
+          
           <button 
             onClick={() => setCurrentPage(prev => prev + 1)}
             disabled={currentPage >= totalPages - 1}
             className={styles.paginationButton}
+            title="Página siguiente"
           >
             Siguiente
             <span className={styles.buttonIcon}>→</span>
@@ -533,139 +788,169 @@ const MetaDashboard = () => {
         <div className={styles.tableHeader}>
           <h3 className={styles.tableTitle}>
             <span className={styles.tableIcon}>📋</span>
-            Productos en Catálogo META
+            Catálogo META ({filteredProducts.length} productos)
           </h3>
           <div className={styles.tableStats}>
             <span className={styles.tableStat}>
-              {filteredProducts.length} producto{filteredProducts.length !== 1 ? 's' : ''} mostrado{filteredProducts.length !== 1 ? 's' : ''}
+              <span className={styles.statValue}>
+                {filteredProducts.filter(p => p.enabledForMeta).length}
+              </span> habilitados
+            </span>
+            <span className={styles.tableStat}>
+              <span className={styles.statValue}>
+                {filteredProducts.reduce((sum, p) => sum + countVariantsWithDiscount(p), 0)}
+              </span> variantes con descuento
             </span>
           </div>
         </div>
         
         <div className={styles.tableWrapper}>
-          <table className={styles.productsTable}>
-            <thead>
-              <tr>
-                <th className={styles.tableHeaderCell}>SKU Base</th>
-                <th className={styles.tableHeaderCell}>Producto</th>
-                <th className={styles.tableHeaderCell}>Variantes</th>
-                <th className={styles.tableHeaderCell}>Estado META</th>
-                <th className={styles.tableHeaderCell}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className={styles.emptyCell}>
-                    <div className={styles.emptyState}>
-                      <span className={styles.emptyIcon}>📦</span>
-                      <p>No hay productos que coincidan con los filtros seleccionados</p>
+          {filteredProducts.length === 0 ? (
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>📦</div>
+              <h4 className={styles.emptyTitle}>No hay productos que coincidan</h4>
+              <p className={styles.emptyText}>
+                {searchTerm 
+                  ? `No se encontraron productos para "${searchTerm}"`
+                  : 'No hay productos configurados para META'}
+              </p>
+              <button 
+                onClick={() => {
+                  setSearchTerm('');
+                  setShowOnlyEnabled(false);
+                  setCurrentPage(0);
+                }}
+                className={styles.emptyButton}
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          ) : (
+            <div className={styles.productsGrid}>
+              {filteredProducts.map(product => (
+                <div 
+                  key={product.productId} 
+                  className={`${styles.productCard} ${!product.enabledForMeta ? styles.disabledCard : ''}`}
+                >
+                  {/* Header de la tarjeta */}
+                  <div className={styles.cardHeader}>
+                    <div className={styles.cardTitle}>
+                      <h4 className={styles.productName}>
+                        {product.productName}
+                        {product.enabledForMeta && (
+                          <span className={styles.metaBadge}>META</span>
+                        )}
+                      </h4>
+                      <code className={styles.productSku}>{product.sku}</code>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredProducts.map(product => (
-                  <tr 
-                    key={product.productId} 
-                    className={`${styles.tableRow} ${!product.enabledForMeta ? styles.disabledRow : ''}`}
-                  >
-                    <td className={styles.skuCell}>
-                      <code className={styles.skuCode}>{product.sku}</code>
-                      <div className={styles.skuInfo}>ID: {product.productId}</div>
-                    </td>
                     
-                    <td className={styles.productCell}>
-                      <strong className={styles.productName}>{product.productName}</strong>
-                      {product.metaTitle && (
-                        <div className={styles.metaTitle}>{product.metaTitle}</div>
-                      )}
-                      <div className={styles.productDescription}>
-                        {product.productDescription.substring(0, 100)}...
+                    <div className={styles.cardActions}>
+                      <button
+                        onClick={() => toggleMetaEnabled(product.productId, !product.enabledForMeta)}
+                        className={`${styles.toggleButton} ${product.enabledForMeta ? styles.toggleOn : styles.toggleOff}`}
+                        title={product.enabledForMeta ? 'Desactivar de META' : 'Activar para META'}
+                      >
+                        {product.enabledForMeta ? '✅' : '❌'}
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          setShowEditModal(true);
+                        }}
+                        className={styles.editButton}
+                        title="Editar metadata"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Información del producto */}
+                  <div className={styles.cardBody}>
+                    {product.metaTitle && (
+                      <div className={styles.metaTitle}>
+                        <strong>Título META:</strong> {product.metaTitle}
                       </div>
-                    </td>
+                    )}
                     
-                    <td className={styles.variantsCell}>
-                      <div className={styles.variantStats}>
-                        <div className={styles.variantStatItem}>
-                          <span className={styles.statLabel}>Total:</span>
-                          <span className={styles.statValue}>{countTotalVariants(product)}</span>
-                        </div>
-                        <div className={styles.variantStatItem}>
-                          <span className={styles.statLabel}>Con stock:</span>
-                          <span className={styles.statValue}>{countVariantsWithStock(product)}</span>
-                        </div>
-                        <div className={styles.variantStatItem}>
-                          <span className={styles.statLabel}>Para META:</span>
-                          <span className={`${styles.statValue} ${countEnabledVariants(product) > 0 ? styles.statPositive : styles.statNegative}`}>
-                            {countEnabledVariants(product)}
-                          </span>
-                        </div>
+                    <div className={styles.productDescription}>
+                      {product.productDescription?.substring(0, 120)}...
+                    </div>
+                    
+                    {/* Badge de descuento */}
+                    {renderDiscountBadge(product)}
+                    
+                    {/* Estadísticas de variantes */}
+                    <div className={styles.variantStats}>
+                      <div className={styles.variantStat}>
+                        <span className={styles.statIcon}>🔢</span>
+                        <span className={styles.statValue}>{product.variants.length}</span>
+                        <span className={styles.statLabel}>variantes</span>
                       </div>
                       
-                      <details className={styles.variantsDetails}>
-                        <summary className={styles.variantsSummary}>
-                          Ver variantes ({product.variants.length})
-                        </summary>
-                        <div className={styles.variantsList}>
-                          {product.variants.map(variant => (
-                            <div key={variant.variantId} className={styles.variantItem}>
-                              <span className={styles.variantColor}>{variant.color}</span>
-                              <span className={styles.variantSize}>{variant.size}</span>
-                              <span className={`${styles.variantStock} ${variant.stock > 0 ? styles.inStock : styles.outOfStock}`}>
-                                Stock: {variant.stock}
-                              </span>
-                              <span className={`${styles.variantStatus} ${variant.variantEnabledForMeta ? styles.statusEnabled : styles.statusDisabled}`}>
-                                {variant.variantEnabledForMeta ? '✅' : '❌'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    </td>
-                    
-                    <td className={styles.statusCell}>
-                      <div className={styles.statusContainer}>
-                        <span className={`${styles.statusBadge} ${product.enabledForMeta ? styles.statusEnabled : styles.statusDisabled}`}>
-                          {product.enabledForMeta ? '✅ Activado' : '❌ Desactivado'}
+                      <div className={styles.variantStat}>
+                        <span className={styles.statIcon}>📦</span>
+                        <span className={styles.statValue}>
+                          {product.variants.filter(v => v.stock > 0).length}
                         </span>
-                        <div className={styles.statusDetails}>
-                          {countEnabledVariants(product) > 0 ? (
-                            <span className={styles.statusPositive}>
-                              {countEnabledVariants(product)} variante(s) en feed
-                            </span>
-                          ) : (
-                            <span className={styles.statusNegative}>
-                              Ninguna variante en feed
+                        <span className={styles.statLabel}>con stock</span>
+                      </div>
+                      
+                      <div className={styles.variantStat}>
+                        <span className={styles.statIcon}>✅</span>
+                        <span className={`${styles.statValue} ${
+                          product.variants.filter(v => v.variantEnabledForMeta).length > 0 
+                            ? styles.statPositive 
+                            : styles.statNegative
+                        }`}>
+                          {product.variants.filter(v => v.variantEnabledForMeta).length}
+                        </span>
+                        <span className={styles.statLabel}>para feed</span>
+                      </div>
+                    </div>
+                    
+                    {/* Lista de variantes (acordeón) */}
+                    <details className={styles.variantsDetails}>
+                      <summary className={styles.variantsSummary}>
+                        <span>Ver {product.variants.length} variante{product.variants.length !== 1 ? 's' : ''}</span>
+                        <span className={styles.variantsCount}>
+                          {product.variants.filter(v => v.hasDiscount).length > 0 && (
+                            <span className={styles.discountCount}>
+                              🔥 {product.variants.filter(v => v.hasDiscount).length} con descuento
                             </span>
                           )}
-                        </div>
+                        </span>
+                      </summary>
+                      
+                      <div className={styles.variantsList}>
+                        {product.variants.map(renderVariantInfo)}
                       </div>
-                    </td>
-                    
-                    <td className={styles.actionsCell}>
-                      <div className={styles.actionButtonsSmall}>
-                        <button
-                          onClick={() => toggleMetaEnabled(product.productId, !product.enabledForMeta)}
-                          className={`${styles.actionButtonSmall} ${product.enabledForMeta ? styles.disableButton : styles.enableButton}`}
-                        >
-                          {product.enabledForMeta ? 'Desactivar' : 'Activar'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedProduct(product);
-                            setShowEditModal(true);
-                          }}
-                          className={`${styles.actionButtonSmall} ${styles.editButton}`}
-                        >
-                          Editar Metadata
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </details>
+                  </div>
+                  
+                  {/* Footer de la tarjeta */}
+                  <div className={styles.cardFooter}>
+                    <div className={styles.footerStatus}>
+                      <span className={`${styles.statusBadge} ${product.enabledForMeta ? styles.statusEnabled : styles.statusDisabled}`}>
+                        {product.enabledForMeta ? '✅ Activado para META' : '❌ No en META'}
+                      </span>
+                      
+                      {product.variants.filter(v => v.variantEnabledForMeta).length > 0 ? (
+                        <span className={styles.statusPositive}>
+                          Aparecerá en feed con {product.variants.filter(v => v.variantEnabledForMeta).length} variante{product.variants.filter(v => v.variantEnabledForMeta).length !== 1 ? 's' : ''}
+                        </span>
+                      ) : (
+                        <span className={styles.statusNegative}>
+                          Ninguna variante disponible para feed
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -673,37 +958,38 @@ const MetaDashboard = () => {
       <div className={styles.infoSection}>
         <h3 className={styles.infoTitle}>
           <span className={styles.infoIcon}>ℹ️</span>
-          Información Importante sobre META Commerce
+          Información Importante - Feed META con Descuentos
         </h3>
         <div className={styles.infoGrid}>
           <div className={styles.infoCard}>
-            <h4 className={styles.infoCardTitle}>📋 Requisitos Feed META</h4>
+            <h4 className={styles.infoCardTitle}>🔥 Descuentos por Variante</h4>
             <ul className={styles.infoList}>
-              <li>Producto habilitado para META</li>
-              <li>Metadata correctamente configurada</li>
-              <li>Variante habilitada para feed</li>
-              <li>Stock disponible (mayor a 0)</li>
-              <li>Precio configurado correctamente</li>
+              <li>✅ Descuentos aplicados directamente a variantes</li>
+              <li>✅ Prioridad sobre descuentos globales</li>
+              <li>✅ Campo <code>sale_price</code> generado automáticamente</li>
+              <li>✅ Fechas de oferta auto-generadas</li>
+              <li>✅ Compatible con etiquetas de oferta META</li>
             </ul>
           </div>
           
           <div className={styles.infoCard}>
-            <h4 className={styles.infoCardTitle}>🔧 Configuración Shipping</h4>
+            <h4 className={styles.infoCardTitle}>📋 Requisitos Feed</h4>
+            <ul className={styles.infoList}>
+              <li><strong>Producto:</strong> Habilitado para META</li>
+              <li><strong>Variante:</strong> Habilitada, con stock y descuento configurado</li>
+              <li><strong>Precio:</strong> Regular y con descuento calculado</li>
+              <li><strong>Stock:</strong> Mayor a 0 unidades</li>
+              <li><strong>Imagen:</strong> Mínimo 500x500px</li>
+            </ul>
+          </div>
+          
+          <div className={styles.infoCard}>
+            <h4 className={styles.infoCardTitle}>🚚 Configuración Envío</h4>
             <ul className={styles.infoList}>
               <li><strong>Formato:</strong> <code>País:Región:Servicio:PrecioMoneda</code></li>
               <li><strong>Ejemplo gratis:</strong> <code>CO::::0.0 COP</code></li>
-              <li><strong>Ejemplo con costo:</strong> <code>CO:Medellin:Express:12000.0 COP</code></li>
-              <li><strong>Recomendado:</strong> Usar 12000 COP como costo de envío estándar</li>
-            </ul>
-          </div>
-          
-          <div className={styles.infoCard}>
-            <h4 className={styles.infoCardTitle}>📊 Formatos Exportación</h4>
-            <ul className={styles.infoList}>
-              <li><strong>CSV Feed:</strong> 27 campos específicos para META</li>
-              <li><strong>URL Producto:</strong> https://www.tudominio.com/product?id=ID</li>
-              <li><strong>SKU Base:</strong> {`MARTE-{ID_PRODUCTO}`}</li>
-              <li><strong>Migración:</strong> Automática para productos sin metadata</li>
+              <li><strong>Ejemplo estándar:</strong> <code>CO::::12000.0 COP</code></li>
+              <li><strong>Recomendado:</strong> 12000 COP para Colombia</li>
             </ul>
           </div>
         </div>
@@ -719,6 +1005,10 @@ const MetaDashboard = () => {
           }}
           onSave={async (productId, data) => {
             const result = await updateProductMetadata(productId, data);
+            if (result) {
+              setShowEditModal(false);
+              setSelectedProduct(null);
+            }
             return result;
           }}
         />
@@ -727,7 +1017,7 @@ const MetaDashboard = () => {
   );
 };
 
-// Modal de edición con validación mejorada
+// Modal de edición (versión simplificada pero funcional)
 interface EditMetaModalProps {
   product: MetaProductResponse;
   onClose: () => void;
@@ -735,25 +1025,7 @@ interface EditMetaModalProps {
 }
 
 const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave }) => {
-  const [formData, setFormData] = useState<{
-    enabledForMeta: boolean;
-    metaTitle: string;
-    metaDescription: string;
-    googleProductCategory: string;
-    fbProductCategory: string;
-    material: string;
-    pattern: string;
-    style: string;
-    gtin: string;
-    shipping?: string;
-    shippingWeight?: number;
-    salePrice?: number;
-    salePriceStartDate: string;
-    salePriceEndDate: string;
-    videoUrl: string;
-    videoTag: string;
-    customLabels: string;
-  }>({
+  const [formData, setFormData] = useState({
     enabledForMeta: product.enabledForMeta,
     metaTitle: product.metaTitle || '',
     metaDescription: product.metaDescription || '',
@@ -763,439 +1035,208 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
     pattern: product.pattern || '',
     style: product.style || '',
     gtin: product.gtin || '',
-    shipping: product.shipping || '',
-    shippingWeight: product.shippingWeight,
-    salePrice: product.salePrice,
+    shipping: product.shipping || 'CO::::12000.0 COP',
+    shippingWeight: product.shippingWeight || '',
+    salePrice: product.salePrice || '', // Descuento global
     salePriceStartDate: product.salePriceStartDate || '',
     salePriceEndDate: product.salePriceEndDate || '',
     videoUrl: product.videoUrl || '',
     videoTag: product.videoTag || '',
     customLabels: product.customLabels || '',
   });
-
-  const [shippingCountry, setShippingCountry] = useState('CO');
-  const [shippingRegion, setShippingRegion] = useState('');
-  const [shippingService, setShippingService] = useState('Standard');
-  const [shippingPrice, setShippingPrice] = useState('12000.0'); // VALOR POR DEFECTO 12000
-  const [shippingCurrency, setShippingCurrency] = useState('COP');
   
   const [saving, setSaving] = useState(false);
-  const [shippingError, setShippingError] = useState('');
-
-  // Parsear shipping existente al cargar
-  useEffect(() => {
-    if (formData.shipping) {
-      parseShippingString(formData.shipping);
-    } else {
-      // Si no hay shipping, usar valor por defecto
-      setShippingPrice('12000.0');
-    }
-  }, []);
-
-  const parseShippingString = (shippingStr: string) => {
-    if (!shippingStr) return;
-    
-    const parts = shippingStr.split(':');
-    
-    if (parts.length >= 4) {
-      setShippingCountry(parts[0] || 'CO');
-      setShippingRegion(parts[1] || '');
-      setShippingService(parts[2] || 'Standard');
-      
-      const priceCurrency = parts[3] || '0.0 COP';
-      const priceMatch = priceCurrency.match(/(\d+\.?\d*)\s*([A-Z]{3})/);
-      
-      if (priceMatch) {
-        setShippingPrice(priceMatch[1]);
-        setShippingCurrency(priceMatch[2]);
-      } else {
-        setShippingPrice('12000.0');
-        setShippingCurrency('COP');
-      }
-    }
-  };
-
-  const formatShippingString = () => {
-    // Validar y limpiar el precio
-    const cleanedPrice = shippingPrice.replace(/[^0-9.]/g, '');
-    const priceNum = parseFloat(cleanedPrice);
-    
-    if (isNaN(priceNum) || priceNum < 0) {
-      setShippingError('El precio debe ser un número válido mayor o igual a 0');
-      return null;
-    }
-    
-    const shippingFormatted = `${shippingCountry}:${shippingRegion}:${shippingService}:${priceNum.toFixed(1)} ${shippingCurrency}`;
-    
-    return shippingFormatted;
-  };
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setShippingError('');
-    
-    const formattedShipping = formatShippingString();
-    if (!formattedShipping) {
-      return;
-    }
-    
     setSaving(true);
+    setError('');
     
     try {
-      const dataToSend = {
-        ...formData,
-        shipping: formattedShipping
-      };
-      
-      const success = await onSave(product.productId, dataToSend);
-      if (success) {
-        onClose();
+      // Validar datos
+      if (formData.metaTitle && formData.metaTitle.length > 150) {
+        throw new Error('El título no puede exceder 150 caracteres');
       }
+      
+      const success = await onSave(product.productId, {
+        ...formData,
+        shippingWeight: formData.shippingWeight ? parseFloat(formData.shippingWeight as string) : null,
+        salePrice: formData.salePrice ? parseFloat(formData.salePrice as string) : null,
+      });
+      
+      if (!success) {
+        throw new Error('No se pudo guardar');
+      }
+      
     } catch (err: any) {
-      alert('Error: ' + err.message);
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePriceChange = (value: string) => {
-    // Solo permitir números y punto decimal
-    const cleaned = value.replace(/[^0-9.]/g, '');
-    // Evitar múltiples puntos decimales
-    const parts = cleaned.split('.');
-    if (parts.length > 2) {
-      setShippingPrice(parts[0] + '.' + parts.slice(1).join(''));
-    } else {
-      setShippingPrice(cleaned);
-    }
-    setShippingError('');
-  };
-
-  const shippingServices = [
-    { value: 'Standard', label: 'Estándar (4-7 días)' },
-    { value: 'Express', label: 'Express (1-3 días)' },
-    { value: 'Free', label: 'Gratis' }
-  ];
-
-  const colombiaRegions = [
-    { value: '', label: 'Todo el país' },
-    { value: 'Medellin', label: 'Medellín' },
-    { value: 'Bogota', label: 'Bogotá' },
-    { value: 'Cali', label: 'Cali' },
-    { value: 'Barranquilla', label: 'Barranquilla' }
-  ];
-
   return (
     <div className={styles.modalOverlay}>
       <div className={styles.modalContent}>
         <div className={styles.modalHeader}>
-          <div className={styles.modalTitleContainer}>
-            <h3 className={styles.modalTitle}>✏️ Editar Metadata META</h3>
-            <div className={styles.modalSubtitle}>
-              Producto: <strong>{product.productName}</strong> (ID: {product.productId})
-            </div>
-          </div>
+          <h3>✏️ Editar: {product.productName}</h3>
           <button onClick={onClose} className={styles.closeButton}>×</button>
         </div>
         
         <div className={styles.modalBody}>
-          <div className={styles.productSummary}>
-            <div className={styles.summaryItem}>
-              <span className={styles.summaryLabel}>SKU Base:</span>
-              <code className={styles.summaryValue}>{product.sku}</code>
-            </div>
-            <div className={styles.summaryItem}>
-              <span className={styles.summaryLabel}>Variantes:</span>
-              <span className={styles.summaryValue}>
-                {product.variants.length} total • {product.variants.filter(v => v.variantEnabledForMeta).length} para META
-              </span>
-            </div>
+          {error && (
+            <div className={styles.errorBanner}>{error}</div>
+          )}
+          
+          <div className={styles.productInfo}>
+            <p><strong>SKU:</strong> {product.sku}</p>
+            <p><strong>Variantes:</strong> {product.variants.length} ({countVariantsWithDiscount(product)} con descuento)</p>
           </div>
           
           <form onSubmit={handleSubmit}>
-            {/* Sección: Estado META */}
             <div className={styles.formSection}>
-              <h4 className={styles.sectionTitle}>
-                <span className={styles.sectionIcon}>⚡</span>
-                Estado META
-              </h4>
+              <h4>Estado META</h4>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={formData.enabledForMeta}
+                  onChange={(e) => setFormData({...formData, enabledForMeta: e.target.checked})}
+                />
+                Habilitar para META Commerce
+              </label>
+            </div>
+            
+            <div className={styles.formSection}>
+              <h4>Información Básica</h4>
+              
               <div className={styles.formGroup}>
-                <label className={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
-                    checked={formData.enabledForMeta}
-                    onChange={(e) => setFormData({...formData, enabledForMeta: e.target.checked})}
-                    className={styles.checkbox}
-                  />
-                  <span className={styles.checkboxText}>Habilitar producto para META Commerce</span>
-                </label>
+                <label>Título META *</label>
+                <input
+                  type="text"
+                  value={formData.metaTitle}
+                  onChange={(e) => setFormData({...formData, metaTitle: e.target.value})}
+                  placeholder="Título optimizado para META"
+                  required
+                  maxLength={150}
+                />
+                <div className={styles.charCount}>{formData.metaTitle.length}/150</div>
+              </div>
+              
+              <div className={styles.formGroup}>
+                <label>Descripción META</label>
+                <textarea
+                  value={formData.metaDescription}
+                  onChange={(e) => setFormData({...formData, metaDescription: e.target.value})}
+                  placeholder="Descripción para META"
+                  rows={3}
+                  maxLength={500}
+                />
+                <div className={styles.charCount}>{formData.metaDescription.length}/500</div>
+              </div>
+            </div>
+            
+            <div className={styles.formSection}>
+              <h4>Configuración de Envío</h4>
+              
+              <div className={styles.formGroup}>
+                <label>Shipping (Formato META)</label>
+                <input
+                  type="text"
+                  value={formData.shipping}
+                  onChange={(e) => setFormData({...formData, shipping: e.target.value})}
+                  placeholder="CO::::12000.0 COP"
+                  className={styles.codeInput}
+                />
                 <div className={styles.helpText}>
-                  Si está desactivado, NINGUNA variante aparecerá en el feed META
-                </div>
-              </div>
-            </div>
-
-            {/* Sección: Información Básica */}
-            <div className={styles.formSection}>
-              <h4 className={styles.sectionTitle}>
-                <span className={styles.sectionIcon}>📝</span>
-                Información Básica
-              </h4>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>
-                    Título META <span className={styles.required}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.metaTitle}
-                    onChange={(e) => setFormData({...formData, metaTitle: e.target.value})}
-                    className={styles.input}
-                    placeholder="Título optimizado para META (150 caracteres máx)"
-                    maxLength={150}
-                    required
-                  />
-                  <div className={styles.charCount}>
-                    {formData.metaTitle.length}/150 caracteres
-                  </div>
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Descripción META</label>
-                  <textarea
-                    value={formData.metaDescription}
-                    onChange={(e) => setFormData({...formData, metaDescription: e.target.value})}
-                    className={`${styles.input} ${styles.textarea}`}
-                    placeholder="Descripción optimizada (5000 caracteres máx)"
-                    rows={3}
-                    maxLength={5000}
-                  />
-                  <div className={styles.charCount}>
-                    {formData.metaDescription.length}/5000 caracteres
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Sección: Categorías */}
-            <div className={styles.formSection}>
-              <h4 className={styles.sectionTitle}>
-                <span className={styles.sectionIcon}>🏷️</span>
-                Categorías
-              </h4>
-              <div className={styles.formGrid}>
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Categoría Google</label>
-                  <input
-                    type="text"
-                    value={formData.googleProductCategory}
-                    onChange={(e) => setFormData({...formData, googleProductCategory: e.target.value})}
-                    className={styles.input}
-                    placeholder="Apparel & Accessories > Clothing > Dresses"
-                  />
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Categoría Facebook</label>
-                  <input
-                    type="text"
-                    value={formData.fbProductCategory}
-                    onChange={(e) => setFormData({...formData, fbProductCategory: e.target.value})}
-                    className={styles.input}
-                    placeholder="Clothing"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Sección: Envío */}
-            <div className={styles.formSection}>
-              <h4 className={styles.sectionTitle}>
-                <span className={styles.sectionIcon}>🚚</span>
-                Configuración de Envío
-                <span className={styles.sectionHelp}>
-                  Formato: <code>País:Región:Servicio:PrecioMoneda</code>
-                </span>
-              </h4>
-              
-              <div className={styles.shippingGrid}>
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>País</label>
-                  <select
-                    value={shippingCountry}
-                    onChange={(e) => setShippingCountry(e.target.value)}
-                    className={styles.select}
-                  >
-                    <option value="CO">Colombia</option>
-                    <option value="US">Estados Unidos</option>
-                  </select>
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Región (opcional)</label>
-                  <select
-                    value={shippingRegion}
-                    onChange={(e) => setShippingRegion(e.target.value)}
-                    className={styles.select}
-                  >
-                    {colombiaRegions.map(region => (
-                      <option key={region.value} value={region.value}>
-                        {region.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Servicio</label>
-                  <select
-                    value={shippingService}
-                    onChange={(e) => setShippingService(e.target.value)}
-                    className={styles.select}
-                  >
-                    {shippingServices.map(service => (
-                      <option key={service.value} value={service.value}>
-                        {service.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>
-                    Precio Envío (COP) <span className={styles.required}>*</span>
-                  </label>
-                  <div className={styles.priceInputGroup}>
-                    <input
-                      type="text"
-                      value={shippingPrice}
-                      onChange={(e) => handlePriceChange(e.target.value)}
-                      className={`${styles.input} ${styles.priceInput} ${shippingError ? styles.inputError : ''}`}
-                      placeholder="12000.0"
-                    />
-                    <select
-                      value={shippingCurrency}
-                      onChange={(e) => setShippingCurrency(e.target.value)}
-                      className={styles.currencySelect}
-                    >
-                      <option value="COP">COP</option>
-                      <option value="USD">USD</option>
-                    </select>
-                  </div>
-                  {shippingError && (
-                    <div className={styles.errorMessage}>{shippingError}</div>
-                  )}
-                  <div className={styles.helpText}>
-                    Recomendado: 12000 COP para envío estándar nacional
-                  </div>
+                  Formato: País:Región:Servicio:PrecioMoneda. Ej: CO::::12000.0 COP
                 </div>
               </div>
               
               <div className={styles.formGroup}>
-                <label className={styles.inputLabel}>Vista Previa Formato META</label>
-                <div className={styles.previewBox}>
-                  <code className={styles.previewCode}>
-                    {formatShippingString() || 'CO::::12000.0 COP'}
-                  </code>
-                  <div className={styles.previewHelp}>
-                    Este formato se incluirá automáticamente en el feed META
-                  </div>
-                </div>
+                <label>Peso (kg)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.shippingWeight}
+                  onChange={(e) => setFormData({...formData, shippingWeight: e.target.value})}
+                  placeholder="0.5"
+                />
               </div>
+            </div>
+            
+            <div className={styles.formSection}>
+              <h4>Características del Producto</h4>
               
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Peso (kg)</label>
+                  <label>Material</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={formData.shippingWeight || ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFormData({
-                        ...formData, 
-                        shippingWeight: value === '' ? undefined : parseFloat(value)
-                      });
-                    }}
-                    className={styles.input}
-                    placeholder="0.5"
+                    type="text"
+                    value={formData.material}
+                    onChange={(e) => setFormData({...formData, material: e.target.value})}
+                    placeholder="Algodón, Poliéster..."
                   />
                 </div>
                 
                 <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Precio Oferta</label>
+                  <label>Patrón</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={formData.salePrice || ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setFormData({
-                        ...formData, 
-                        salePrice: value === '' ? undefined : parseFloat(value)
-                      });
-                    }}
-                    className={styles.input}
+                    type="text"
+                    value={formData.pattern}
+                    onChange={(e) => setFormData({...formData, pattern: e.target.value})}
+                    placeholder="Sólido, Rayas..."
+                  />
+                </div>
+                
+                <div className={styles.formGroup}>
+                  <label>Estilo</label>
+                  <input
+                    type="text"
+                    value={formData.style}
+                    onChange={(e) => setFormData({...formData, style: e.target.value})}
+                    placeholder="Casual, Formal..."
+                  />
+                </div>
+                
+                <div className={styles.formGroup}>
+                  <label>GTIN (Código Barras)</label>
+                  <input
+                    type="text"
+                    value={formData.gtin}
+                    onChange={(e) => setFormData({...formData, gtin: e.target.value})}
                     placeholder="Opcional"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Sección: Características */}
+            
             <div className={styles.formSection}>
-              <h4 className={styles.sectionTitle}>
-                <span className={styles.sectionIcon}>🔍</span>
-                Características del Producto
-              </h4>
+              <h4>Categorías</h4>
+              
               <div className={styles.formGrid}>
                 <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Material</label>
+                  <label>Categoría Google</label>
                   <input
                     type="text"
-                    value={formData.material}
-                    onChange={(e) => setFormData({...formData, material: e.target.value})}
-                    className={styles.input}
-                    placeholder="Ej: Algodón 100%"
+                    value={formData.googleProductCategory}
+                    onChange={(e) => setFormData({...formData, googleProductCategory: e.target.value})}
+                    placeholder="Apparel & Accessories > Clothing"
                   />
                 </div>
                 
                 <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Patrón</label>
+                  <label>Categoría Facebook</label>
                   <input
                     type="text"
-                    value={formData.pattern}
-                    onChange={(e) => setFormData({...formData, pattern: e.target.value})}
-                    className={styles.input}
-                    placeholder="Ej: Sólido, Rayas, Flores"
-                  />
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>Estilo</label>
-                  <input
-                    type="text"
-                    value={formData.style}
-                    onChange={(e) => setFormData({...formData, style: e.target.value})}
-                    className={styles.input}
-                    placeholder="Ej: Casual, Formal, Deportivo"
-                  />
-                </div>
-                
-                <div className={styles.formGroup}>
-                  <label className={styles.inputLabel}>GTIN</label>
-                  <input
-                    type="text"
-                    value={formData.gtin}
-                    onChange={(e) => setFormData({...formData, gtin: e.target.value})}
-                    className={styles.input}
-                    placeholder="Código de barras (opcional)"
+                    value={formData.fbProductCategory}
+                    onChange={(e) => setFormData({...formData, fbProductCategory: e.target.value})}
+                    placeholder="Clothing"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Botones de acción */}
+            
             <div className={styles.formActions}>
               <button
                 type="button"
@@ -1205,22 +1246,13 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
               >
                 Cancelar
               </button>
+              
               <button
                 type="submit"
                 className={styles.saveButton}
                 disabled={saving}
               >
-                {saving ? (
-                  <>
-                    <span className={styles.spinner}></span>
-                    Guardando...
-                  </>
-                ) : (
-                  <>
-                    <span className={styles.buttonIcon}>💾</span>
-                    Guardar Cambios
-                  </>
-                )}
+                {saving ? 'Guardando...' : '💾 Guardar Cambios'}
               </button>
             </div>
           </form>
@@ -1229,5 +1261,10 @@ const EditMetaModal: React.FC<EditMetaModalProps> = ({ product, onClose, onSave 
     </div>
   );
 };
+
+// ✅ Función auxiliar para contar variantes con descuento
+function countVariantsWithDiscount(product: MetaProductResponse): number {
+  return product.variants.filter(v => v.hasDiscount).length;
+}
 
 export default MetaDashboard;

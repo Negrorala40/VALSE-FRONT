@@ -45,12 +45,17 @@ interface CartItem {
   name: string;
   image: string;
   price: number;
+  originalPrice: number;
   size: string;
   color: string;
   quantity: number;
   stock?: number;
-  maxStock?: number; // 🔴 NUEVO: stock máximo del backend
+  maxStock?: number;
   productVariantId?: string;
+  hasDiscount?: boolean;
+  discountPercentage?: number;
+  discountAmount?: number;
+  savings?: number;
 }
 
 interface Address {
@@ -132,20 +137,28 @@ interface PaymentStatusResponse {
 interface CartTotalsResponse {
   items: Array<{
     id: number;
+    productVariantId: number;
     imageUrls: string[];
     productName: string;
     price: number;
+    originalPrice: number;
+    priceWithDiscount: number;
+    hasDiscount: boolean;
+    discountPercentage: number;
+    discountAmount: number;
     size: string;
     color: string;
     quantity: number;
     stock?: number;
-    maxStock?: number; // 🔴 NUEVO: stock máximo del backend
+    maxStock?: number;
   }>;
   subtotal: number;
   shippingCost: number;
   total: number;
   totalItems: number;
   itemCount: number;
+  discountSavings: number;
+  originalSubtotal: number;
 }
 
 const CheckoutPage = () => {
@@ -155,6 +168,8 @@ const CheckoutPage = () => {
   const [shippingCost, setShippingCost] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
   const [totalItems, setTotalItems] = useState<number>(0);
+  const [discountSavings, setDiscountSavings] = useState<number>(0);
+  const [originalSubtotal, setOriginalSubtotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -290,13 +305,41 @@ const CheckoutPage = () => {
     }).format(price);
   }, []);
 
-  // 🔴 ACTUALIZADO: Calcular totales desde la respuesta del backend
+  // 🔴 ACTUALIZADO: Calcular totales desde la respuesta del backend con descuentos
   const updateTotalsFromResponse = useCallback((data: CartTotalsResponse) => {
     setSubtotal(data.subtotal || 0);
     setShippingCost(data.shippingCost || 0);
     setTotal(data.total || 0);
     setTotalItems(data.totalItems || 0);
+    setDiscountSavings(data.discountSavings || 0);
+    setOriginalSubtotal(data.originalSubtotal || data.subtotal || 0);
   }, []);
+
+  // 🔴 FUNCIÓN PARA RENDERIZAR PRECIO DE ITEM CON DESCUENTO
+  const renderItemPrice = useCallback((item: CartItem) => {
+    const itemTotal = item.price * item.quantity;
+    const itemOriginalTotal = (item.originalPrice || item.price) * item.quantity;
+    
+    if (item.hasDiscount && item.discountPercentage && item.discountPercentage > 0) {
+      return (
+        <div className="checkout-item-price-container">
+          <div className="checkout-item-price-original">
+            ${formatPrice(itemOriginalTotal).replace('$', '')}
+          </div>
+          <div className="checkout-item-price-discounted">
+            ${formatPrice(itemTotal).replace('$', '')}
+            <span className="checkout-item-discount-badge">
+              -{item.discountPercentage}%
+            </span>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <p className="checkout-cart-item-price">{formatPrice(itemTotal)}</p>
+      );
+    }
+  }, [formatPrice]);
 
   // 🔴 VERIFICAR Y MANEJAR ORDENES EXPIRADAS AUTOMÁTICAMENTE
   const checkAndHandleExpiredOrder = useCallback(async (): Promise<boolean> => {
@@ -347,7 +390,10 @@ const CheckoutPage = () => {
     
     // Verificar cada item del carrito
     for (const item of data.items) {
-      const existingItem = cartItems.find(ci => ci.productVariantId === item.id?.toString() || ci.id === item.id?.toString());
+      const existingItem = cartItems.find(ci => 
+        ci.productVariantId === item.productVariantId?.toString() || 
+        ci.id === item.id?.toString()
+      );
       
       if (item.maxStock !== undefined && existingItem && existingItem.quantity > item.maxStock) {
         console.log(`⚠️ Ajustando cantidad de ${item.productName}: ${existingItem.quantity} → ${item.maxStock}`);
@@ -384,7 +430,7 @@ const CheckoutPage = () => {
     return false;
   }, [cartItems, getRequestHeaders]);
 
-  // 🔴 ACTUALIZADO: Obtener carrito con verificación de stock máximo
+  // 🔴 ACTUALIZADO: Obtener carrito con verificación de stock máximo y descuentos
   const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
     try {
       console.log('🛒 Actualizando información del carrito...');
@@ -407,7 +453,9 @@ const CheckoutPage = () => {
             shippingCost: 0,
             total: 0,
             totalItems: 0,
-            itemCount: 0
+            itemCount: 0,
+            discountSavings: 0,
+            originalSubtotal: 0
           });
           
           cartHashRef.current = '';
@@ -427,7 +475,9 @@ const CheckoutPage = () => {
           shippingCost: 0,
           total: 0,
           totalItems: 0,
-          itemCount: 0
+          itemCount: 0,
+          discountSavings: 0,
+          originalSubtotal: 0
         });
         cartHashRef.current = '';
         return;
@@ -443,19 +493,24 @@ const CheckoutPage = () => {
         return;
       }
       
-      // Transformar items del carrito
+      // Transformar items del carrito con información de descuentos
       const items: CartItem[] = data.items.map(
         (item: any) => ({
           id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
-          image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
+image: item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || 'Producto',
-          price: item.price || 0,
+          price: item.priceWithDiscount || item.price || 0,
+          originalPrice: item.originalPrice || item.price || 0,
           size: item.size || '',
           color: item.color || '',
           quantity: item.quantity || 1,
           stock: item.stock || 100,
-          maxStock: item.maxStock || item.stock, // 🔴 AGREGAR STOCK MÁXIMO
+          maxStock: item.maxStock || item.stock,
           productVariantId: item.productVariantId?.toString() || item.id?.toString(),
+          hasDiscount: item.hasDiscount || false,
+          discountPercentage: item.discountPercentage || 0,
+          discountAmount: item.discountAmount || 0,
+          savings: item.savings || 0
         })
       );
       
@@ -487,7 +542,7 @@ const CheckoutPage = () => {
       
       setCartItems(items);
       updateTotalsFromResponse(data);
-      console.log(`✅ Carrito actualizado: ${items.length} items`);
+      console.log(`✅ Carrito actualizado: ${items.length} items, Descuento total: ${formatPrice(data.discountSavings || 0)}`);
       
     } catch (error: unknown) {
       const err = error as Error;
@@ -500,7 +555,9 @@ const CheckoutPage = () => {
           shippingCost: 0,
           total: 0,
           totalItems: 0,
-          itemCount: 0
+          itemCount: 0,
+          discountSavings: 0,
+          originalSubtotal: 0
         });
         cartHashRef.current = '';
       }
@@ -1659,6 +1716,11 @@ const CheckoutPage = () => {
                                 target.src = '/images/placeholder.png';
                               }}
                             />
+                            {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
+                              <span className="checkout-cart-item-discount-badge">
+                                -{item.discountPercentage}%
+                              </span>
+                            )}
                             <span className="checkout-cart-item-size-badge">{item.size}</span>
                           </div>
 
@@ -1670,8 +1732,14 @@ const CheckoutPage = () => {
                                 <span className="checkout-badge checkout-badge-outline checkout-badge-mint">
                                   Stock: {item.maxStock || item.stock || 'Disponible'}
                                 </span>
+                                {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
+                                  <span className="checkout-badge checkout-badge-discount">
+                                    <Star className="checkout-icon" size={12} />
+                                    Oferta especial
+                                  </span>
+                                )}
                               </div>
-                              <p className="checkout-cart-item-price">{formatPrice(item.price)}</p>
+                              {renderItemPrice(item)}
                             </div>
 
                             <div className="checkout-cart-item-actions">
@@ -2076,6 +2144,11 @@ const CheckoutPage = () => {
                                 target.src = '/images/placeholder.png';
                               }}
                             />
+                            {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
+                              <span className="checkout-order-item-preview-discount-badge">
+                                -{item.discountPercentage}%
+                              </span>
+                            )}
                           </div>
                           <div className="checkout-order-item-preview-details">
                             <p className="checkout-order-item-preview-name">{item.name}</p>
@@ -2261,6 +2334,9 @@ const CheckoutPage = () => {
                       <div key={item.id} className="checkout-summary-item">
                         <span className="checkout-summary-item-name">
                           {item.name.length > 20 ? item.name.substring(0, 20) + "..." : item.name} x{item.quantity}
+                          {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
+                            <span className="checkout-summary-item-discount"> (-{item.discountPercentage}%)</span>
+                          )}
                         </span>
                         <span className="checkout-summary-item-price">{formatPrice(item.price * item.quantity)}</span>
                       </div>
@@ -2268,10 +2344,25 @@ const CheckoutPage = () => {
                   </div>
 
                   <div className="checkout-summary-divider">
+                    {discountSavings > 0 && (
+                      <div className="checkout-summary-row checkout-summary-discount">
+                        <span>Subtotal original</span>
+                        <span className="checkout-original-price">{formatPrice(originalSubtotal)}</span>
+                      </div>
+                    )}
                     <div className="checkout-summary-row">
                       <span>Subtotal</span>
                       <span>{formatPrice(subtotal)}</span>
                     </div>
+                    {discountSavings > 0 && (
+                      <div className="checkout-summary-row checkout-discount-savings">
+                        <span>
+                          <Check className="checkout-icon" size={12} />
+                          Descuento aplicado
+                        </span>
+                        <span className="checkout-savings">-{formatPrice(discountSavings)}</span>
+                      </div>
+                    )}
                     <div className="checkout-summary-row">
                       <span>Envío</span>
                       <span className={shippingCost === 0 ? "free" : ""}>

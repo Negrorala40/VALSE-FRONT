@@ -1,5 +1,7 @@
+
 /* =============================================
-   A MARTE - PRODUCTO SUPER COMPACTO
+ 
+A MARTE - PRODUCTO SUPER COMPACTO
    ============================================= */
 
 /* Variables dentro del selector principal */
@@ -963,5 +965,387 @@
   
   .infoSection {
     max-height: 600px;
+  }
+}
+
+/* =============================================
+   ESTILOS DE DESCUENTOS
+   ============================================= */
+
+/* Contenedor de precio con descuento */
+.discountedPriceContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
+
+.originalPriceWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.originalPrice {
+  font-size: 0.95rem;
+  color: var(--text-light);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-light);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  font-weight: 500;
+}
+
+.finalPriceWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.finalPrice {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.discountBadge {
+  display: inline-block;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.3rem 0.6rem;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(244, 123, 71, 0.3);
+  animation: pulseBadge 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+@keyframes pulseBadge {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.95;
+  }
+}
+
+/* Badge de descuento en la imagen */
+.imageDiscountBadge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  padding: 0.6rem 1rem;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(244, 123, 71, 0.4);
+  z-index: 10;
+  animation: pulseDiscount 2.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discountText {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+@keyframes pulseDiscount {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(244, 123, 71, 0.4);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 6px 16px rgba(244, 123, 71, 0.6);
+  }
+}
+
+/* Indicador de descuento en opciones de color */
+.colorOption.withDiscount::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(244, 123, 71, 0.4);
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
+  }
+}
+
+/* Responsive para descuentos */
+@media (max-width: 768px) {
+  .finalPrice {
+    font-size: 1.3rem;
+  }
+  
+  .discountBadge {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .imageDiscountBadge {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+    top: 8px;
+    right: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .discountedPriceContainer {
+    gap: 0.25rem;
+  }
+  
+  .originalPrice {
+    font-size: 0.85rem;
+  }
+  
+  .finalPrice {
+    font-size: 1.1rem;
+  }
+  
+  .discountBadge {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  .imageDiscountBadge {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    top: 6px;
+    right: 6px;
+  }
+}
+
+/* =============================================
+   ESTILOS DE DESCUENTOS PARA CART
+   ============================================= */
+
+/* Precio de ítem con descuento */
+.cart-item-price-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.item-price-discounted {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.item-original-price-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item-original-price {
+  font-size: 0.8rem;
+  color: var(--cart-gray-500);
+  text-decoration: line-through;
+  text-decoration-color: var(--cart-gray-500);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.item-final-price-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.item-final-price {
+  font-size: 1rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.item-discount-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 20px;
+  box-shadow: 0 2px 6px rgba(244, 123, 71, 0.3);
+  animation: pulseBadge 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+@keyframes pulseBadge {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.95;
+  }
+}
+
+/* Badge de descuento en imagen del ítem */
+.item-image-discount-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  padding: 0.4rem 0.6rem;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  box-shadow: 0 3px 10px rgba(244, 123, 71, 0.4);
+  z-index: 10;
+  animation: pulseDiscount 2.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes pulseDiscount {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 3px 10px rgba(244, 123, 71, 0.4);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 5px 14px rgba(244, 123, 71, 0.6);
+  }
+}
+
+/* Totales con descuento */
+.subtotal-with-discount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.original-subtotal {
+  font-size: 0.8rem;
+  color: var(--cart-gray-500);
+  text-decoration: line-through;
+  text-decoration-color: var(--cart-gray-500);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.final-subtotal {
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.summary-discount {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.discount-savings {
+  font-weight: 700;
+  color: var(--success);
+}
+
+/* Responsive para descuentos en cart */
+@media (max-width: 768px) {
+  .item-final-price {
+    font-size: 0.95rem;
+  }
+  
+  .item-discount-badge {
+    font-size: 0.65rem;
+    padding: 0.15rem 0.4rem;
+  }
+  
+  .item-image-discount-badge {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.7rem;
+    top: 6px;
+    right: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .item-price-discounted {
+    gap: 0.15rem;
+  }
+  
+  .item-original-price {
+    font-size: 0.75rem;
+  }
+  
+  .item-final-price {
+    font-size: 0.9rem;
+  }
+  
+  .item-discount-badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+  }
+  
+  .item-image-discount-badge {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.65rem;
+  }
+}
+
+/* Indicador de descuento en opciones de color */
+.colorOption.withDiscount::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(244, 123, 71, 0.4);
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
   }
 }

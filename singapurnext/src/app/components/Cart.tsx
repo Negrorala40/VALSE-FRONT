@@ -8,13 +8,24 @@ import Image from 'next/image';
 
 interface ApiCartItem {
   id: number;
-  imageUrls: string[];
-  productName: string;
-  price: number;
-  size: string;
-  color: string;
   quantity: number;
+  productVariantId: number;
+  productName: string;
+  productDescription?: string;
+  color: string;
+  size: string;
   stock?: number;
+  originalPrice: number;
+  priceWithDiscount: number;
+  discountPercentage: number;
+  discountAmount: number;
+  hasDiscount: boolean;
+  itemOriginalTotal: number;
+  itemDiscountedTotal: number;
+  itemSavings: number;
+  imageUrl: string;
+  userId?: number;
+  sessionId?: string;
 }
 
 interface CartItem {
@@ -22,10 +33,15 @@ interface CartItem {
   image: string;
   name: string;
   price: number;
+  originalPrice: number;
   size: string;
   color: string;
   quantity: number;
   stock?: number;
+  hasDiscount: boolean;
+  discountPercentage: number;
+  discountAmount: number;
+  savings: number;
 }
 
 interface CartTotals {
@@ -34,6 +50,8 @@ interface CartTotals {
   total: number;
   totalItems: number;
   itemCount: number;
+  discountSavings: number;
+  originalSubtotal: number;
 }
 
 interface CartProps {
@@ -59,7 +77,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     shippingCost: 0,
     total: 0,
     totalItems: 0,
-    itemCount: 0
+    itemCount: 0,
+    discountSavings: 0,
+    originalSubtotal: 0
   });
   const maxRetries = 2;
 
@@ -76,6 +96,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const shippingCost = cartTotals.shippingCost || 0;
   const total = cartTotals.total || (localTotalPrice + shippingCost);
   const totalItems = cartTotals.totalItems || localTotalItems;
+  const discountSavings = cartTotals.discountSavings || 0;
+  const originalSubtotal = cartTotals.originalSubtotal || subtotal;
 
   // Obtener sessionId desde localStorage
   const getSessionId = () => {
@@ -132,7 +154,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     
     const response = await fetch(url, {
       ...options,
-      credentials: 'include', // IMPORTANTE para cookies
+      credentials: 'include',
       headers: {
         ...headers,
         ...options.headers
@@ -175,7 +197,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen, handleClose]);
 
-  // Obtener carrito cuando se abre (usando el nuevo endpoint con totales)
+  // Obtener carrito cuando se abre
   const fetchCart = useCallback(async (forceRefresh = false) => {
     if (isFetching && !forceRefresh) return;
     
@@ -184,14 +206,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     try {
       console.log('🛒 Obteniendo carrito con totales...');
       
-      // Usar el nuevo endpoint que incluye totales
       const response = await fetchWithSession(`${CART}/with-totals`);
       
       console.log('🛒 Fetch cart - Status:', response.status);
       console.log('🛒 SessionId actual:', getSessionId());
 
       if (response.status === 404 || response.status === 400) {
-        // Carrito vacío o sin sesión - esto es normal
         console.log('📭 Carrito vacío o sin sesión');
         setCartItems([]);
         setCartTotals({
@@ -199,29 +219,27 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           shippingCost: 0,
           total: 0,
           totalItems: 0,
-          itemCount: 0
+          itemCount: 0,
+          discountSavings: 0,
+          originalSubtotal: 0
         });
         setRetryCount(0);
       } else if (response.status === 401) {
-        console.log('🔐 No autorizado, intentando sin token...');
-        // Intentar sin token de autorización
-        const token = localStorage.getItem('token');
-        if (token) {
-          console.log('🔄 Token encontrado, pero falló la autorización');
-        }
+        console.log('🔐 No autorizado');
         setCartItems([]);
         setCartTotals({
           subtotal: 0,
           shippingCost: 0,
           total: 0,
           totalItems: 0,
-          itemCount: 0
+          itemCount: 0,
+          discountSavings: 0,
+          originalSubtotal: 0
         });
       } else if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Error en respuesta:', errorText);
         
-        // Reintentar si no superamos el máximo
         if (retryCount < maxRetries) {
           console.log(`🔄 Reintentando (${retryCount + 1}/${maxRetries})...`);
           setRetryCount(prev => prev + 1);
@@ -237,13 +255,18 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         // Transformar items del carrito
         const transformedItems: CartItem[] = data.items.map((item: ApiCartItem) => ({
           id: item.id.toString(),
-          image: item.imageUrls?.[0]?.trim() || '/images/placeholder.png',
+          image: item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || 'Producto sin nombre',
-          price: item.price,
+          price: item.priceWithDiscount || item.originalPrice || 0,
+          originalPrice: item.originalPrice || 0,
           size: item.size,
           color: item.color,
           quantity: item.quantity,
-          stock: item.stock || 100,
+          stock: item.stock || 0,
+          hasDiscount: item.hasDiscount || false,
+          discountPercentage: item.discountPercentage || 0,
+          discountAmount: item.discountAmount || 0,
+          savings: item.itemSavings || 0
         }));
 
         setCartItems(transformedItems);
@@ -254,7 +277,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           shippingCost: data.shippingCost || 0,
           total: data.total || 0,
           totalItems: data.totalItems || 0,
-          itemCount: data.itemCount || 0
+          itemCount: data.itemCount || 0,
+          discountSavings: data.discountSavings || 0,
+          originalSubtotal: data.originalSubtotal || data.subtotal || 0
         });
         
         setRetryCount(0);
@@ -268,11 +293,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         shippingCost: 0,
         total: 0,
         totalItems: 0,
-        itemCount: 0
+        itemCount: 0,
+        discountSavings: 0,
+        originalSubtotal: 0
       });
       setHasFetched(true);
       
-      // Si hay error, limpiar sessionId por si está corrupto
       if (retryCount >= maxRetries) {
         localStorage.removeItem(CART_SESSION_KEY);
         setSessionId(null);
@@ -286,7 +312,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   // Este useEffect SOLO se ejecuta cuando isOpen cambia
   useEffect(() => {
     if (isOpen && !hasFetched && !isFetching) {
-      // Verificar si hay sessionId guardado
       const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
       if (savedSessionId) {
         setSessionId(savedSessionId);
@@ -302,7 +327,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   // Efecto para refrescar automáticamente cuando cambia la sesión
   useEffect(() => {
     if (isOpen && hasFetched) {
-      // Solo refrescar si hay cambios en la sesión
       const checkSession = () => {
         const currentSessionId = getSessionId();
         const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
@@ -531,7 +555,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     }
   }, []);
 
-  // Botón para debug: mostrar sessionId actual
+  // Botón para debug
   const debugSession = () => {
     const currentSessionId = getSessionId();
     const allCookies = document.cookie;
@@ -542,12 +566,42 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     alert(`SessionId: ${currentSessionId ? currentSessionId.substring(0, 8) + '...' : 'No disponible'}\nLocalStorage: ${localStorage.getItem(CART_SESSION_KEY) ? 'Sí' : 'No'}\nCookies: ${allCookies.length > 0 ? 'Sí' : 'No'}`);
   };
 
-  // Función para formatear envío (gratis o con costo)
+  // Función para formatear envío
   const getShippingDisplay = () => {
     if (shippingCost === 0) {
       return <span className="shipping-badge">Gratis</span>;
     }
     return <span>${formatPrice(shippingCost)}</span>;
+  };
+
+  // Renderizar precio de un ítem (con o sin descuento)
+  const renderItemPrice = (item: CartItem) => {
+    if (item.hasDiscount && item.discountPercentage > 0) {
+      const totalDiscounted = item.price * item.quantity;
+      const totalOriginal = item.originalPrice * item.quantity;
+      
+      return (
+        <div className="cart-item-price-container">
+          <div className="item-price-discounted">
+            <div className="item-original-price-wrapper">
+              <span className="item-original-price">
+                ${formatPrice(totalOriginal)}
+              </span>
+            </div>
+            <div className="item-final-price-wrapper">
+              <span className="item-final-price">
+                ${formatPrice(totalDiscounted)}
+              </span>
+            
+            </div>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <p className="cart-item-price">${formatPrice(item.price * item.quantity)}</p>
+      );
+    }
   };
 
   return (
@@ -691,6 +745,11 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                             target.src = '/images/placeholder.png';
                           }}
                         />
+                        {item.hasDiscount && item.discountPercentage > 0 && (
+                          <div className="item-image-discount-badge">
+                            -{item.discountPercentage}%
+                          </div>
+                        )}
                       </div>
                       <div className="cart-item-content">
                         <div className="cart-item-header">
@@ -745,7 +804,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                               </svg>
                             </button>
                           </div>
-                          <p className="cart-item-price">${formatPrice(item.price * item.quantity)}</p>
+                          {renderItemPrice(item)}
                         </div>
                       </div>
                     </li>
@@ -757,13 +816,30 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
             <div className="cart-summary">
               <div className="summary-row summary-subtotal">
                 <span>Subtotal</span>
-                <span>${formatPrice(subtotal)}</span>
+                {discountSavings > 0 ? (
+                  <div className="subtotal-with-discount">
+                    <span className="original-subtotal">${formatPrice(originalSubtotal)}</span>
+                    <span className="final-subtotal">${formatPrice(subtotal)}</span>
+                  </div>
+                ) : (
+                  <span>${formatPrice(subtotal)}</span>
+                )}
               </div>
+              
+              {discountSavings > 0 && (
+                <div className="summary-row summary-discount">
+                  <span>Descuento</span>
+                  <span className="discount-savings">-${formatPrice(discountSavings)}</span>
+                </div>
+              )}
+              
               <div className="summary-row summary-shipping">
                 <span>Envío</span>
                 {getShippingDisplay()}
               </div>
+              
               <div className="summary-divider"></div>
+              
               <div className="cart-total">
                 <span className="total-label">Total</span>
                 <span className="total-amount">${formatPrice(total)}</span>
