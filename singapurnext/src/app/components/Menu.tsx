@@ -22,9 +22,9 @@ interface ProductVariant {
   size: string;
   stock: number;
   price?: number;
-  discountPercentage?: number; // Agregar este campo
-  priceWithDiscount?: number; // Agregar este campo - precio con descuento
-  discountAmount?: number; // Agregar este campo - monto descontado
+  discountPercentage?: number;
+  priceWithDiscount?: number;
+  discountAmount?: number;
   images: Img[];
   enabled?: boolean;
 }
@@ -61,39 +61,77 @@ interface ProductSelectionState {
   };
 }
 
-// Agrega esta función de utilidad cerca de las otras funciones:
+// Función para ordenar tallas numéricas y alfabéticas
+const sortSizes = (sizes: string[]): string[] => {
+  // Orden de tallas común
+  const sizeOrder = [
+    'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL',
+    '2', '4', '6', '8', '10', '12', '14', '16',
+    '28', '30', '32', '34', '36', '38', '40', '42',
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+    'ÚNICA'
+  ];
+  
+  // Primero intentamos ordenar según el orden predefinido
+  const sortedByOrder = [...sizes].sort((a, b) => {
+    const indexA = sizeOrder.indexOf(a.toUpperCase());
+    const indexB = sizeOrder.indexOf(b.toUpperCase());
+    
+    // Si ambos están en el orden predefinido, ordenar por ese orden
+    if (indexA !== -1 && indexB !== -1) {
+      return indexA - indexB;
+    }
+    
+    // Si solo uno está en el orden predefinido, ese va primero
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    
+    // Si ninguno está en el orden predefinido, intentar ordenar numéricamente
+    const numA = parseInt(a, 10);
+    const numB = parseInt(b, 10);
+    
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+    
+    // Si no son números, ordenar alfabéticamente
+    return a.localeCompare(b);
+  });
+  
+  return sortedByOrder;
+};
+
 const formatPrice = (price: number): string => {
   if (!price || price <= 0) return 'Consultar';
   return `$${price.toLocaleString('es-CO')}`;
 };
-// Función para filtrar variantes habilitadas y con stock > 0
+
 const filterAvailableVariants = (variants: ProductVariant[]): ProductVariant[] => {
   return variants.filter(variant => 
-    variant.enabled !== false && // Si enabled es undefined o true
+    variant.enabled !== false &&
     variant.stock > 0
   );
 };
 
-// Función para obtener colores únicos solo de variantes disponibles
 const getUniqueColorsWithStock = (variants: ProductVariant[]): string[] => {
   const availableVariants = filterAvailableVariants(variants);
   const colors = [...new Set(availableVariants.map((v) => v.color))];
   return colors.slice(0, 6);
 };
 
-// Función para obtener tallas disponibles para un color específico (solo con stock y habilitadas)
 const getSizesForColorWithStock = (variants: ProductVariant[], color: string): ProductVariant[] => {
   const availableVariants = filterAvailableVariants(variants)
     .filter(v => v.color === color);
   
-  // Ordenar por tamaño
-  const sizeOrder = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
-  return availableVariants.sort((a, b) => {
-    return sizeOrder.indexOf(a.size) - sizeOrder.indexOf(b.size);
+  // Ordenar por tamaño usando la función sortSizes
+  const sortedVariants = [...availableVariants].sort((a, b) => {
+    const sortedSizes = sortSizes([a.size, b.size]);
+    return sortedSizes.indexOf(a.size) - sortedSizes.indexOf(b.size);
   });
+  
+  return sortedVariants;
 };
 
-// Función para obtener imagen para un color específico (solo si tiene stock y está habilitada)
 const getImageForColor = (variants: ProductVariant[], color: string): string => {
   const variantWithImage = filterAvailableVariants(variants).find(v => 
     v.color === color && v.images && v.images.length > 0
@@ -101,24 +139,19 @@ const getImageForColor = (variants: ProductVariant[], color: string): string => 
   return variantWithImage?.images?.[0]?.imageUrl || '/images/placeholder.png';
 };
 
-// Función para obtener el precio para una variante específica
-// Actualiza esta función existente:
 const getPriceForVariant = (variants: ProductVariant[], color: string, size: string): number => {
   const variant = filterAvailableVariants(variants).find(v => 
     v.color === color && 
     v.size === size
   );
   
-  // Usar el precio con descuento si está disponible
   if (variant?.priceWithDiscount !== undefined) {
     return Number(variant.priceWithDiscount);
   }
   
-  // Si no, usar el precio base
   return variant?.price ? Number(variant.price) : 0;
 };
 
-// Agrega esta función para obtener el precio original sin descuento:
 const getOriginalPriceForVariant = (variants: ProductVariant[], color: string, size: string): number => {
   const variant = filterAvailableVariants(variants).find(v => 
     v.color === color && 
@@ -127,9 +160,7 @@ const getOriginalPriceForVariant = (variants: ProductVariant[], color: string, s
   
   return variant?.price ? Number(variant.price) : 0;
 };
-// Agrega estas funciones después de tus funciones existentes (después de getPriceForVariant):
 
-// Función para calcular precio con descuento
 const calculatePriceWithDiscount = (price: number, discountPercentage?: number): number => {
   if (!discountPercentage || discountPercentage <= 0 || !price) {
     return price;
@@ -138,11 +169,9 @@ const calculatePriceWithDiscount = (price: number, discountPercentage?: number):
   const discountAmount = price * (discountPercentage / 100);
   const discountedPrice = price - discountAmount;
   
-  // Asegurar que el precio no sea negativo
   return discountedPrice > 0 ? Number(discountedPrice.toFixed(0)) : 0;
 };
 
-// Función para obtener el precio con descuento para una variante específica
 const getPriceWithDiscountForVariant = (variants: ProductVariant[], color: string, size: string): number => {
   const variant = filterAvailableVariants(variants).find(v => 
     v.color === color && 
@@ -151,19 +180,16 @@ const getPriceWithDiscountForVariant = (variants: ProductVariant[], color: strin
   
   if (!variant) return 0;
   
-  // Si el backend ya proporciona el precio con descuento, usarlo
   if (variant.priceWithDiscount !== undefined) {
     return Number(variant.priceWithDiscount);
   }
   
-  // Si no, calcularlo
   const price = variant.price || 0;
   const discountPercentage = variant.discountPercentage || 0;
   
   return calculatePriceWithDiscount(price, discountPercentage);
 };
 
-// Función para obtener el porcentaje de descuento para una variante específica
 const getDiscountPercentageForVariant = (variants: ProductVariant[], color: string, size: string): number => {
   const variant = filterAvailableVariants(variants).find(v => 
     v.color === color && 
@@ -173,7 +199,6 @@ const getDiscountPercentageForVariant = (variants: ProductVariant[], color: stri
   return variant?.discountPercentage || 0;
 };
 
-// Función para verificar si una variante tiene descuento
 const hasDiscountForVariant = (variants: ProductVariant[], color: string, size: string): boolean => {
   const variant = filterAvailableVariants(variants).find(v => 
     v.color === color && 
@@ -183,7 +208,6 @@ const hasDiscountForVariant = (variants: ProductVariant[], color: string, size: 
   return (variant?.discountPercentage || 0) > 0;
 };
 
-// Función para obtener el descuento máximo de un producto
 const getMaxDiscountForProduct = (variants: ProductVariant[]): number => {
   const availableVariants = filterAvailableVariants(variants);
   if (!availableVariants || availableVariants.length === 0) return 0;
@@ -192,19 +216,15 @@ const getMaxDiscountForProduct = (variants: ProductVariant[]): number => {
   return discounts.length > 0 ? Math.max(...discounts) : 0;
 };
 
-// Función para verificar si un producto tiene al menos una variante disponible
 const hasAvailableVariants = (product: Product): boolean => {
-  return product.enabled !== false && // Producto habilitado
+  return product.enabled !== false &&
          filterAvailableVariants(product.variants).length > 0;
 };
 
-// Función para obtener el precio mínimo solo de variantes disponibles
-// Actualiza esta función existente:
 const getMinPrice = (variants: ProductVariant[]): number => {
   const availableVariants = filterAvailableVariants(variants);
   if (!availableVariants || availableVariants.length === 0) return 0;
   
-  // Usar el precio con descuento si está disponible, si no, el precio base
   const prices = availableVariants.map(v => {
     if (v.priceWithDiscount !== undefined) {
       return Number(v.priceWithDiscount);
@@ -215,7 +235,6 @@ const getMinPrice = (variants: ProductVariant[]): number => {
   return prices.length > 0 ? Math.min(...prices) : 0;
 };
 
-// Agrega esta función para obtener el precio mínimo original (sin descuento):
 const getMinOriginalPrice = (variants: ProductVariant[]): number => {
   const availableVariants = filterAvailableVariants(variants);
   if (!availableVariants || availableVariants.length === 0) return 0;
@@ -286,37 +305,34 @@ const Menu: React.FC = () => {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        // IMPORTANTE: Usar endpoint de productos activos
         const response = await axios.get<Product[]>(`${MENU_PRODUCTS}/active`);
         const productsData = response.data;
         
-        // Filtrar productos que tienen al menos una variante disponible
         const availableProducts = productsData.filter(hasAvailableVariants);
         
-        // Inicializar estados de selección para productos disponibles
         const initialSelections: ProductSelectionState = {};
         
-        // En el useEffect, dentro de la inicialización de initialSelections:
-availableProducts.forEach(product => {
-  const colors = getUniqueColorsWithStock(product.variants);
-  if (colors.length > 0) {
-    const firstColor = colors[0];
-    const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
-    const firstSize = sizesForFirstColor[0]?.size || '';
-    
-    // Obtener el precio con descuento para la primera variante seleccionada
-    const initialPrice = firstSize ? 
-      getPriceForVariant(product.variants, firstColor, firstSize) : 
-      getMinPrice(product.variants);
-    
-    initialSelections[product.id] = {
-      selectedColor: firstColor,
-      selectedSize: firstSize,
-      availableSizes: sizesForFirstColor.map(v => v.size),
-      currentPrice: initialPrice
-    };
-  }
-});
+        availableProducts.forEach(product => {
+          const colors = getUniqueColorsWithStock(product.variants);
+          if (colors.length > 0) {
+            const firstColor = colors[0];
+            const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
+            const availableSizes = sizesForFirstColor.map(v => v.size);
+            const sortedSizes = sortSizes(availableSizes);
+            const firstSize = sortedSizes[0] || '';
+            
+            const initialPrice = firstSize ? 
+              getPriceForVariant(product.variants, firstColor, firstSize) : 
+              getMinPrice(product.variants);
+            
+            initialSelections[product.id] = {
+              selectedColor: firstColor,
+              selectedSize: firstSize,
+              availableSizes: sortedSizes,
+              currentPrice: initialPrice
+            };
+          }
+        });
         
         setProducts(availableProducts);
         setFilteredProducts(availableProducts);
@@ -372,27 +388,22 @@ availableProducts.forEach(product => {
     const typeQuery = searchParams.get('type') || '';
 
     const filtered = products.filter((product) => {
-      // Verificar si el producto está habilitado
       if (product.enabled === false) {
         return false;
       }
 
-      // Lógica para categorías
       let matchesGender = true;
       
       if (categoryQuery) {
-        // Para Niños: mostrar NIÑOS y UNISEX
         if (categoryQuery === 'ninos') {
           matchesGender = product.gender === ProductGender.NINOS || 
                          product.gender === ProductGender.UNISEX;
         }
-        // Para Niñas: mostrar NIÑAS y UNISEX
         else if (categoryQuery === 'ninas') {
           matchesGender = product.gender === ProductGender.NINAS || 
                          product.gender === ProductGender.UNISEX;
         }
       }
-      // Para Unisex directo (parámetro gender)
       else if (genderQuery) {
         matchesGender = 
           (genderQuery.toLowerCase() === 'niñas' && product.gender === ProductGender.NINAS) ||
@@ -435,58 +446,56 @@ availableProducts.forEach(product => {
     }
   });
 
-  // Actualiza handleColorSelect:
-const handleColorSelect = useCallback((e: React.MouseEvent, productId: number, color: string) => {
-  e.stopPropagation();
-  
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
-  
-  const sizesForColor = getSizesForColorWithStock(product.variants, color);
-  const firstSize = sizesForColor[0]?.size || '';
-  
-  // Obtener el precio CON DESCUENTO para la nueva variante seleccionada
-  const newPrice = firstSize ? 
-    getPriceForVariant(product.variants, color, firstSize) : 
-    getMinPrice(product.variants);
-  
-  setSelectionStates(prev => ({
-    ...prev,
-    [productId]: {
-      selectedColor: color,
-      selectedSize: firstSize,
-      availableSizes: sizesForColor.map(v => v.size),
-      currentPrice: newPrice
-    }
-  }));
-}, [products]);
+  const handleColorSelect = useCallback((e: React.MouseEvent, productId: number, color: string) => {
+    e.stopPropagation();
+    
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const sizesForColor = getSizesForColorWithStock(product.variants, color);
+    const availableSizes = sizesForColor.map(v => v.size);
+    const sortedSizes = sortSizes(availableSizes);
+    const firstSize = sortedSizes[0] || '';
+    
+    const newPrice = firstSize ? 
+      getPriceForVariant(product.variants, color, firstSize) : 
+      getMinPrice(product.variants);
+    
+    setSelectionStates(prev => ({
+      ...prev,
+      [productId]: {
+        selectedColor: color,
+        selectedSize: firstSize,
+        availableSizes: sortedSizes,
+        currentPrice: newPrice
+      }
+    }));
+  }, [products]);
 
-// Actualiza handleSizeSelect:
-const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, size: string) => {
-  e.stopPropagation();
-  
-  const product = products.find(p => p.id === productId);
-  if (!product) return;
-  
-  const selectionState = selectionStates[productId];
-  if (!selectionState) return;
-  
-  // Obtener el precio CON DESCUENTO para la nueva talla seleccionada
-  const newPrice = getPriceForVariant(
-    product.variants, 
-    selectionState.selectedColor, 
-    size
-  );
-  
-  setSelectionStates(prev => ({
-    ...prev,
-    [productId]: {
-      ...prev[productId],
-      selectedSize: size,
-      currentPrice: newPrice
-    }
-  }));
-}, [products, selectionStates]);
+  const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, size: string) => {
+    e.stopPropagation();
+    
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    const selectionState = selectionStates[productId];
+    if (!selectionState) return;
+    
+    const newPrice = getPriceForVariant(
+      product.variants, 
+      selectionState.selectedColor, 
+      size
+    );
+    
+    setSelectionStates(prev => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        selectedSize: size,
+        currentPrice: newPrice
+      }
+    }));
+  }, [products, selectionStates]);
 
   const handleQuickAddClick = useCallback(async (e: React.MouseEvent, product: Product) => {
     e.stopPropagation();
@@ -499,7 +508,6 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
       return;
     }
     
-    // Buscar la variante específica seleccionada (que ya sabemos que tiene stock y está habilitada)
     const selectedVariant = filterAvailableVariants(product.variants).find(v => 
       v.color === selectionState.selectedColor && 
       v.size === selectionState.selectedSize
@@ -513,10 +521,9 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
     setQuickAddLoading(productId);
     
     try {
-          await addToCart(selectedVariant.id, 1, product.name);
+      await addToCart(selectedVariant.id, 1, product.name);
       console.log('Producto agregado al carrito:', productId);
       
-      // Mostrar notificación de éxito
       const event = new CustomEvent('show-toast', {
         detail: { 
           message: '¡Producto agregado al carrito!', 
@@ -529,7 +536,6 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
     } catch (error) {
       console.error('Error al agregar al carrito:', error);
       
-      // Mostrar notificación de error
       const event = new CustomEvent('show-toast', {
         detail: { 
           message: 'Error al agregar al carrito', 
@@ -649,38 +655,34 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
               currentPrice: getMinPrice(product.variants)
             };
             
-            // Verificar si el color seleccionado actualmente tiene stock
             const currentColorHasStock = colors.includes(selectionState.selectedColor);
             const effectiveColor = currentColorHasStock ? selectionState.selectedColor : (colors[0] || '');
             
             const currentImageUrl = getImageForColor(product.variants, effectiveColor);
             const availableSizes = getSizesForColorWithStock(product.variants, effectiveColor).map(v => v.size);
+            const sortedAvailableSizes = sortSizes(availableSizes);
             const currentPrice = selectionState.currentPrice || getMinPrice(product.variants);
 
-            // Si no hay colores disponibles, no renderizar el producto
             if (colors.length === 0) {
               return null;
             }
 
             return (
-              // En el mapeo de productos, actualiza el className del productCard:
-<div
-  key={`${product.id}-${index}`}
-  ref={(el) => setProductRef(el, index)}
-  data-index={index}
-  className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''} ${
-    getMaxDiscountForProduct(product.variants) > 0 ? styles.hasDiscount : ''
-  }`}
-  onClick={() => router.push(`/product?id=${product.id}`)}
->
+              <div
+                key={`${product.id}-${index}`}
+                ref={(el) => setProductRef(el, index)}
+                data-index={index}
+                className={`${styles.productCard} ${visibleCards[index] ? styles.visible : ''} ${
+                  getMaxDiscountForProduct(product.variants) > 0 ? styles.hasDiscount : ''
+                }`}
+                onClick={() => router.push(`/product?id=${product.id}`)}
+              >
                 {/* Badges */}
-<div className={styles.productBadges}>
-  {renderGenderBadge(product.gender)}
-  {isNew(product.createdAt) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
-  {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
-  
-  
-</div>
+                <div className={styles.productBadges}>
+                  {renderGenderBadge(product.gender)}
+                  {isNew(product.createdAt) && <span className={`${styles.badge} ${styles.badgeNew}`}>Nuevo</span>}
+                  {hasLowStock(product.variants) && <span className={`${styles.badge} ${styles.badgeLowStock}`}>Últimos</span>}
+                </div>
 
                 {/* Imagen con overlay */}
                 <div className={styles.productImageContainer}>
@@ -705,7 +707,7 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
                 <div className={styles.productDetails}>
                   <h3 className={styles.productName}>{product.name}</h3>
 
-                  {/* Selector de color - solo muestra colores con stock */}
+                  {/* Selector de color */}
                   {colors.length > 0 && (
                     <div className={styles.productColors}>
                       {colors.map((color, i) => (
@@ -725,11 +727,11 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
                     </div>
                   )}
 
-                  {/* Selector de talla - solo muestra tallas con stock para el color seleccionado */}
-                  {effectiveColor && availableSizes.length > 0 && (
+                  {/* Selector de talla - ORDENADO */}
+                  {effectiveColor && sortedAvailableSizes.length > 0 && (
                     <div className={styles.productSizes}>
                       <div className={styles.sizesSelector}>
-                        {availableSizes.map((size, i) => (
+                        {sortedAvailableSizes.map((size, i) => (
                           <button
                             key={i}
                             className={`${styles.sizeOption} ${
@@ -745,56 +747,54 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
                     </div>
                   )}
 
-                  {/* Precio - se actualiza con cada cambio de color/talla */}
-                  {/* Precio - se actualiza con cada cambio de color/talla */}
-<div className={styles.productPriceContainer}>
-  {/* Mostrar precio con descuento y precio original tachado */}
-  {(() => {
-    const selectionState = selectionStates[product.id];
-    const hasCurrentDiscount = selectionState && selectionState.selectedColor && selectionState.selectedSize
-      ? hasDiscountForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
-      : getMaxDiscountForProduct(product.variants) > 0;
-    
-    const currentDiscountPercentage = selectionState && selectionState.selectedColor && selectionState.selectedSize
-      ? getDiscountPercentageForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
-      : getMaxDiscountForProduct(product.variants);
-    
-    const originalPrice = selectionState && selectionState.selectedColor && selectionState.selectedSize
-      ? getOriginalPriceForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
-      : getMinOriginalPrice(product.variants);
-    
-    const finalPrice = selectionState?.currentPrice || getMinPrice(product.variants);
-    
-    if (hasCurrentDiscount && originalPrice > 0 && currentDiscountPercentage > 0) {
-      return (
-        <div className={styles.discountedPriceContainer}>
-          <div className={styles.originalPriceWrapper}>
-            <span className={styles.originalPrice}>
-              ${originalPrice.toLocaleString('es-CO')}
-            </span>
-          </div>
-          <div className={styles.finalPriceWrapper}>
-            <span className={styles.finalPrice}>
-              ${finalPrice.toLocaleString('es-CO')}
-            </span>
-            <span className={styles.discountBadge}>
-              -{currentDiscountPercentage}%
-            </span>
-          </div>
-        </div>
-      );
-    } else {
-      return (
-        <span className={styles.productPrice}>
-          ${finalPrice.toLocaleString('es-CO')}
-        </span>
-      );
-    }
-  })()}
-</div>
+                  {/* Precio */}
+                  <div className={styles.productPriceContainer}>
+                    {(() => {
+                      const selectionState = selectionStates[product.id];
+                      const hasCurrentDiscount = selectionState && selectionState.selectedColor && selectionState.selectedSize
+                        ? hasDiscountForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
+                        : getMaxDiscountForProduct(product.variants) > 0;
+                      
+                      const currentDiscountPercentage = selectionState && selectionState.selectedColor && selectionState.selectedSize
+                        ? getDiscountPercentageForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
+                        : getMaxDiscountForProduct(product.variants);
+                      
+                      const originalPrice = selectionState && selectionState.selectedColor && selectionState.selectedSize
+                        ? getOriginalPriceForVariant(product.variants, selectionState.selectedColor, selectionState.selectedSize)
+                        : getMinOriginalPrice(product.variants);
+                      
+                      const finalPrice = selectionState?.currentPrice || getMinPrice(product.variants);
+                      
+                      if (hasCurrentDiscount && originalPrice > 0 && currentDiscountPercentage > 0) {
+                        return (
+                          <div className={styles.discountedPriceContainer}>
+                            <div className={styles.originalPriceWrapper}>
+                              <span className={styles.originalPrice}>
+                                ${originalPrice.toLocaleString('es-CO')}
+                              </span>
+                            </div>
+                            <div className={styles.finalPriceWrapper}>
+                              <span className={styles.finalPrice}>
+                                ${finalPrice.toLocaleString('es-CO')}
+                              </span>
+                              <span className={styles.discountBadge}>
+                                -{currentDiscountPercentage}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <span className={styles.productPrice}>
+                            ${finalPrice.toLocaleString('es-CO')}
+                          </span>
+                        );
+                      }
+                    })()}
+                  </div>
                 </div>
 
-                {/* Botón de agregar rápido - solo si hay color y talla seleccionados con stock */}
+                {/* Botón de agregar rápido */}
                 {effectiveColor && selectionState.selectedSize && (
                   <button 
                     className={`${styles.quickAddBtn} ${
@@ -814,15 +814,15 @@ const handleSizeSelect = useCallback((e: React.MouseEvent, productId: number, si
                   </button>
                 )}
 
-                {/* Indicador de stock agotado si no hay tallas disponibles para el color seleccionado */}
-                {effectiveColor && availableSizes.length === 0 && (
+                {/* Indicador de stock agotado */}
+                {effectiveColor && sortedAvailableSizes.length === 0 && (
                   <div className={styles.outOfStockBadge}>
                     <span>Sin tallas disponibles</span>
                   </div>
                 )}
               </div>
             );
-          }).filter(Boolean) // Filtrar nulos
+          }).filter(Boolean)
         )}
       </div>
 
