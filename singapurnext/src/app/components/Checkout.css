@@ -1696,3 +1696,420 @@
   border-radius: 1rem !important;
   overflow: hidden !important;
 }
+
+/* =============================================
+   ESTILOS DE DESCUENTOS PARA CHECKOUT
+   ============================================= */
+
+/* Contenedor de precio de item con descuento */
+.checkout-item-price-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.checkout-item-price-original {
+  font-size: 0.85rem;
+  color: var(--checkout-gray);
+  text-decoration: line-through;
+  text-decoration-color: var(--checkout-coral);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  position: relative;
+}
+
+/* Línea de tachado más visible */
+.checkout-item-price-original::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  right: -2px;
+  height: 1.5px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  transform: rotate(-5deg);
+  opacity: 0.8;
+}
+
+.checkout-item-price-discounted {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--checkout-coral);
+}
+
+.checkout-item-discount-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--checkout-radius-full);
+  animation: pulseCheckoutBadge 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseCheckoutBadge {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Badge de descuento en imágenes del checkout */
+.checkout-cart-item-discount-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.75rem;
+  box-shadow: 0 3px 10px rgba(244, 123, 71, 0.4);
+  z-index: 10;
+  animation: pulseCheckoutDiscount 2.5s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes pulseCheckoutDiscount {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 3px 10px rgba(244, 123, 71, 0.4);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 5px 14px rgba(244, 123, 71, 0.6);
+  }
+}
+
+.checkout-order-item-preview-discount-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  color: white;
+  padding: 0.2rem 0.4rem;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.65rem;
+  box-shadow: 0 2px 8px rgba(244, 123, 71, 0.3);
+  z-index: 10;
+}
+
+/* Badge de descuento especial */
+.checkout-badge-discount {
+  background: linear-gradient(135deg, rgba(244, 123, 71, 0.15) 0%, rgba(233, 86, 109, 0.15) 100%);
+  color: #f47b47;
+  border: 1px solid rgba(244, 123, 71, 0.3);
+}
+
+/* Totales con descuento en el resumen */
+.checkout-summary-discount {
+  margin-bottom: 0.25rem;
+}
+
+.checkout-original-price {
+  font-size: 0.85rem;
+  color: var(--checkout-gray);
+  text-decoration: line-through;
+  text-decoration-color: var(--checkout-coral);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  position: relative;
+}
+
+.checkout-original-price::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  right: -2px;
+  height: 1.5px;
+  background: linear-gradient(135deg, #f47b47 0%, #e9566d 100%);
+  transform: rotate(-5deg);
+  opacity: 0.8;
+}
+
+.checkout-discount-savings {
+  background: linear-gradient(135deg, rgba(61, 178, 138, 0.1) 0%, rgba(61, 178, 138, 0.05) 100%);
+  padding: 0.5rem;
+  border-radius: var(--checkout-radius-md);
+  margin: 0.5rem 0;
+}
+
+.checkout-discount-savings span:first-child {
+  color: var(--checkout-mint) !important;
+  font-weight: 600;
+}
+
+.checkout-savings {
+  color: var(--checkout-mint) !important;
+  font-weight: 700;
+}
+
+/* Indicador de descuento en items del resumen */
+.checkout-summary-item-discount {
+  color: var(--checkout-coral);
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Estilos para productos con descuento en el checkout */
+.checkout-cart-item.has-discount {
+  position: relative;
+  overflow: hidden;
+}
+
+.checkout-cart-item.has-discount::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #f47b47 0%, #e9566d 100%);
+  z-index: 5;
+}
+
+/* Ajustes responsive para descuentos en checkout */
+@media (max-width: 768px) {
+  .checkout-item-price-discounted {
+    font-size: 0.95rem;
+  }
+  
+  .checkout-item-discount-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+  }
+  
+  .checkout-cart-item-discount-badge {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+    top: 0.25rem;
+    right: 0.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .checkout-item-price-container {
+    gap: 0.15rem;
+  }
+  
+  .checkout-item-price-original {
+    font-size: 0.75rem;
+  }
+  
+  .checkout-item-price-discounted {
+    font-size: 0.9rem;
+  }
+  
+  .checkout-item-discount-badge {
+    font-size: 0.6rem;
+    padding: 0.08rem 0.35rem;
+  }
+}
+
+/* =============================================
+   NOTIFICACIÓN DE AJUSTE DE CARRITO
+   ============================================= */
+.checkout-cart-adjustment-notification {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: 90%;
+  max-width: 500px;
+  animation: checkoutSlideDown 0.3s ease-out;
+}
+
+.checkout-cart-adjustment-content {
+  background: linear-gradient(135deg, #fff5f0 0%, #fff0f5 100%);
+  border-radius: var(--checkout-radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--checkout-shadow-lg);
+  border: 2px solid rgba(244, 123, 71, 0.3);
+}
+
+.checkout-cart-adjustment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.checkout-cart-adjustment-header h4 {
+  flex: 1;
+  margin: 0 0.75rem;
+  color: var(--checkout-orange);
+  font-size: 1rem;
+}
+
+.checkout-cart-adjustment-close {
+  background: none;
+  border: none;
+  color: var(--checkout-orange);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: var(--checkout-radius-sm);
+  transition: background-color 0.2s ease;
+}
+
+.checkout-cart-adjustment-close:hover {
+  background-color: rgba(244, 123, 71, 0.1);
+}
+
+.checkout-cart-adjustment-message {
+  color: var(--checkout-gray-dark);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.checkout-cart-adjustment-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.checkout-cart-adjustment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: var(--checkout-radius-md);
+  border: 1px solid rgba(244, 123, 71, 0.2);
+}
+
+.checkout-cart-adjustment-name {
+  color: var(--checkout-navy);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.checkout-cart-adjustment-qty {
+  color: var(--checkout-orange);
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+/* Spinning icon */
+.checkout-icon.spinning {
+  animation: checkoutSpin 1s linear infinite;
+}
+
+/* =============================================
+   TIMER DE EXPIRACIÓN DISCRETO
+   ============================================= */
+.checkout-expiration-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(61, 178, 138, 0.05);
+  border-radius: var(--checkout-radius-md);
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--checkout-gray-dark);
+}
+
+.checkout-expiration-timer .checkout-icon {
+  color: var(--checkout-mint);
+  flex-shrink: 0;
+}
+
+.checkout-expiration-progress {
+  flex: 1;
+  height: 4px;
+  background: rgba(61, 178, 138, 0.2);
+  border-radius: var(--checkout-radius-full);
+  overflow: hidden;
+  margin-left: 0.5rem;
+}
+
+.checkout-expiration-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--checkout-mint) 0%, #35a07b 100%);
+  border-radius: var(--checkout-radius-full);
+  transition: width 30s linear;
+}
+
+/* =============================================
+   BOTONES DE PAGO CON DESCUENTO
+   ============================================= */
+.checkout-payment-ready.with-discount {
+  background: linear-gradient(135deg, rgba(244, 123, 71, 0.05) 0%, rgba(233, 86, 109, 0.05) 100%);
+  border: 2px solid rgba(244, 123, 71, 0.2);
+}
+
+.checkout-payment-ready.with-discount .checkout-payment-ready-header h4 {
+  color: var(--checkout-orange);
+}
+
+.checkout-payment-ready.with-discount .checkout-payment-ready-header .checkout-icon {
+  color: var(--checkout-orange);
+}
+
+/* =============================================
+   SEGURIDAD Y BADGES DE PAGO
+   ============================================= */
+.checkout-security-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.checkout-security-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  background: rgba(61, 178, 138, 0.1);
+  border-radius: var(--checkout-radius-full);
+  font-size: 0.75rem;
+  color: var(--checkout-mint);
+  font-weight: 500;
+}
+
+.checkout-security-badge .checkout-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* =============================================
+   FALLBACK PARA PAGO
+   ============================================= */
+.checkout-fallback-buttons {
+  width: 100%;
+}
+
+.checkout-fallback-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(255, 212, 73, 0.1);
+  border-radius: var(--checkout-radius-md);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  color: var(--checkout-gray-dark);
+}
+
+.checkout-fallback-alert .checkout-icon {
+  color: var(--checkout-yellow);
+  flex-shrink: 0;
+}
