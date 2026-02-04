@@ -742,7 +742,7 @@ const ProductContent = () => {
                     {stockDisponible > 0 ? (
                       <>
                         <span className={styles.stockLabel}>Stock disponible</span>
-                        {stockDisponible < 4 && (
+                        {stockDisponible < 1 && (
                           <span className={styles.lowStock}> - ⚠️ Últimas unidades</span>
                         )}
                       </>

@@ -273,7 +273,7 @@ const getColorHex = (colorName: string): string => {
 
 const hasLowStock = (variants: ProductVariant[]) => {
   const availableVariants = filterAvailableVariants(variants);
-  return availableVariants.some((v) => v.stock > 0 && v.stock <= 3);
+  return availableVariants.some((v) => v.stock > 0 && v.stock <= 1);
 };
 
 const isNew = (createdAt?: string) => {
