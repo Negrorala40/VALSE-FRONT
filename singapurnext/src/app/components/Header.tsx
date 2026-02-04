@@ -14,9 +14,15 @@ interface CartItem {
   image: string;
   name: string;
   price: number;
+  originalPrice: number;
   size: string;
   color: string;
   quantity: number;
+  stock?: number;
+  hasDiscount: boolean;
+  discountPercentage: number;
+  discountAmount: number;
+  savings: number;
 }
 
 interface HeaderProps {

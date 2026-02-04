@@ -23,7 +23,7 @@ export interface OrderItem {
   imageUrl: string;
 }
 
-export interface AdminOrderListDTO {
+export interface OrderListType {
   id: number;
   orderDate: string;
   status: OrderStatus;
@@ -39,7 +39,7 @@ export interface AdminOrderListDTO {
   createdAt: string;
 }
 
-export interface AdminOrderDetailDTO {
+export interface OrderDetailType {
   id: number;
   orderDate: string;
   status: OrderStatus;
@@ -62,12 +62,4 @@ export interface AdminOrderDetailDTO {
   stockReservedAt: string;
   stockReservationExpired: boolean;
   cancellationReason: string;
-}
-
-export interface ApiResponse<T> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  count?: number;
-  orders?: T[];
 }

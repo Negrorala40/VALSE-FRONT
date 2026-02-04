@@ -409,13 +409,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     hideCartNotification,
     sessionId
   };
-  export type { CartItem }; // <-- Exportar el tipo
-
+  
 
   return (
     <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
-  
 };

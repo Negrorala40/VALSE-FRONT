@@ -74,6 +74,7 @@ export default function OrdersPage() {
   ];
 
   return (
+    
     <div className={styles.container}>
       {/* Verificar autenticación */}
       <LoginCheck />

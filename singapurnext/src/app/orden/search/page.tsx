@@ -1,53 +1,17 @@
+// src/app/orden/search/page.tsx
 'use client';
 
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from 'next/navigation';
-import SearchBar from '../components/SearchBar';
-import OrderList from '../components/OrderList';
-import styles from '../styles/orders.module.css';
+import { Suspense } from 'react';
+import SearchContent from './SearchContent';
 
 export default function SearchPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const searchTerm = searchParams.get('q') || '';
-
-  const handleOrderClick = (orderId: number) => {
-    router.push(`/orden/${orderId}`);
-  };
-
   return (
-    <div className={styles.container}>
-      <header className={styles.header}>
-        <button 
-          onClick={() => router.push('/orden')}
-          className={styles.backButton}
-        >
-          ← Volver
-        </button>
-        <h1>Buscar Órdenes</h1>
-      </header>
-
-      <div className={styles.searchSection}>
-        <SearchBar initialValue={searchTerm} />
+    <Suspense fallback={
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
-
-      <main className={styles.main}>
-        {searchTerm ? (
-          <>
-            <h2 className={styles.searchTitle}>
-              Resultados para: "{searchTerm}"
-            </h2>
-            <OrderList
-              searchTerm={searchTerm}
-              onOrderClick={handleOrderClick}
-            />
-          </>
-        ) : (
-          <div className={styles.emptySearch}>
-            <p>Ingresa un término de búsqueda</p>
-          </div>
-        )}
-      </main>
-    </div>
+    }>
+      <SearchContent />
+    </Suspense>
   );
 }
