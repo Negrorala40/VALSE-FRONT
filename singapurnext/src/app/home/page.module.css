@@ -436,9 +436,9 @@
   inset: 0;
   background: linear-gradient(
     to top,
-    rgba(16, 51, 89, 0.8) 0%,
-    rgba(16, 51, 89, 0.4) 50%,
-    rgba(16, 51, 89, 0.1) 80%,
+    rgba(167, 173, 179, 0.8) 0%,
+    rgba(102, 107, 112, 0.4) 30%,
+    rgba(63, 66, 68, 0.1) 50%,
     transparent 100%
   );
   z-index: 1;

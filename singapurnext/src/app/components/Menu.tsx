@@ -396,12 +396,10 @@ const Menu: React.FC = () => {
       
       if (categoryQuery) {
         if (categoryQuery === 'ninos') {
-          matchesGender = product.gender === ProductGender.NINOS || 
-                         product.gender === ProductGender.UNISEX;
+          matchesGender = product.gender === ProductGender.NINOS;
         }
         else if (categoryQuery === 'ninas') {
-          matchesGender = product.gender === ProductGender.NINAS || 
-                         product.gender === ProductGender.UNISEX;
+          matchesGender = product.gender === ProductGender.NINAS;
         }
       }
       else if (genderQuery) {
