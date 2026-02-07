@@ -1730,7 +1730,7 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
                               <div className="checkout-cart-item-badges">
                                 <span className="checkout-badge checkout-badge-outline checkout-badge-purple">{item.color}</span>
                                 <span className="checkout-badge checkout-badge-outline checkout-badge-mint">
-                                  Stock: {item.maxStock || item.stock || 'Disponible'}
+                                Disponible
                                 </span>
                                 {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
                                   <span className="checkout-badge checkout-badge-discount">
@@ -2413,8 +2413,8 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
                         <strong>¿Quieres guardar tus datos?</strong>
                         <br />
                         <small>
-                          <a href="/auth/login" className="checkout-login-link">
-                            Inicia sesión o regístrate
+                          <a href="" className="checkout-login-link">
+                          Iniciar sesión (próximamente)
                           </a>{' '}
                           para guardar direcciones y ver tu historial de pedidos.
                         </small>

@@ -614,13 +614,13 @@
 }
 
 .checkout-badge-purple {
-  border-color: rgba(128, 111, 247, 0.3);
-  color: var(--checkout-purple);
+  border-color: rgba(90, 101, 120, 0.2);
+  color: var(--checkout-gray-dark);
 }
 
 .checkout-badge-mint {
-  border-color: rgba(61, 178, 138, 0.3);
-  color: var(--checkout-mint);
+  border-color: rgba(90, 101, 120, 0.2); /* mismo gris que el anterior */
+  color: var(--checkout-gray-dark);
 }
 
 .checkout-cart-item-price {
@@ -1807,9 +1807,9 @@
 
 /* Badge de descuento especial */
 .checkout-badge-discount {
-  background: linear-gradient(135deg, rgba(244, 123, 71, 0.15) 0%, rgba(233, 86, 109, 0.15) 100%);
-  color: #f47b47;
-  border: 1px solid rgba(244, 123, 71, 0.3);
+  background: rgba(90, 101, 120, 0.1); /* fondo gris muy suave */
+  color: var(--checkout-gray-dark); /* #5A6578 */
+  border: 1px solid rgba(90, 101, 120, 0.2);
 }
 
 /* Totales con descuento en el resumen */
