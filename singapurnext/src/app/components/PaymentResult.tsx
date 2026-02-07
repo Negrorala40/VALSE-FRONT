@@ -180,47 +180,46 @@ function PaymentResultContent() {
     return params;
   };
 
-  // 🔴 DETERMINAR ESTADO DEL PAGO
+  // 🔴 DETERMINAR ESTADO DEL PAGO - SOLO SEGÚN ESTADO DE LA ORDEN EN EL BACKEND (fuente de verdad)
   const determinePaymentStatus = useCallback((orderData: any) => {
     const status = orderData.status?.toUpperCase() || '';
     const mpStatus = orderData.mercadoPagoStatus?.toLowerCase() || '';
-    
-    console.log('🔍 Determinando estado:', { status, mpStatus });
 
-    if (status === 'PAGO_APROBADO' || status === 'APROBADO' || mpStatus === 'approved') {
+    console.log('🔍 Estado desde backend (fuente de verdad):', { status, mpStatus });
+
+    // Solo mostrar "Pago aprobado" cuando el backend confirmó la orden (PAGO_APROBADO)
+    if (status === 'PAGO_APROBADO') {
       setPaymentStatus('approved');
       setSuccessMessage('✅ ¡Pago confirmado exitosamente! Tu pedido está en camino.');
-      
-      // 🔴 LIMPIAR LOCALSTORAGE DESPUÉS DE PAGO EXITOSO
+
       localStorage.removeItem('pendingOrderId');
       localStorage.removeItem('pendingOrderData');
       localStorage.removeItem('pendingPreferenceId');
       localStorage.removeItem('lastOrderCartHash');
       localStorage.removeItem('cartSessionId');
       sessionStorage.removeItem('cartSessionId');
-      
-    } else if (status === 'PENDIENTE' || mpStatus === 'pending' || mpStatus === 'in_process') {
+
+    } else if (status === 'PENDIENTE') {
       setPaymentStatus('pending');
-      
-    } else if (status === 'PAGO_RECHAZADO' || status === 'RECHAZADO' || 
-              mpStatus === 'rejected' || mpStatus === 'cancelled') {
+
+    } else if (status === 'PAGO_RECHAZADO' || status === 'RECHAZADO') {
       setPaymentStatus('rejected');
       setError(`❌ ${orderData.cancellationReason || 'El pago fue rechazado'}`);
-      
+
     } else if (status === 'CANCELADO') {
       setPaymentStatus('rejected');
       setIsOrderExpired(true);
       setError(`❌ ${orderData.cancellationReason || 'La orden fue cancelada por expiración'}`);
-      
-      // Limpiar localStorage si está cancelada
+
       localStorage.removeItem('pendingOrderId');
       localStorage.removeItem('pendingOrderData');
       localStorage.removeItem('pendingPreferenceId');
       localStorage.removeItem('lastOrderCartHash');
-      
+
     } else {
+      // Estado desconocido o no coincidente (ej. MP aprobó pero backend no confirmó)
       setPaymentStatus('unknown');
-      console.warn('Estado desconocido recibido:', orderData);
+      console.warn('Estado desde backend no reconocido:', orderData);
     }
   }, []);
 
@@ -508,29 +507,12 @@ function PaymentResultContent() {
       return;
     }
 
-    // Verificar estado del pago
+    // Verificar estado del pago en el backend (única fuente de verdad)
     await verifyPayment(orderId);
-
-    // Determinar estado preliminar desde parámetros de MP
-    if (params.collection_status) {
-      console.log('📊 Estado de MercadoPago desde parámetros:', params.collection_status);
-      switch (params.collection_status) {
-        case 'approved':
-          setPaymentStatus('approved');
-          setSuccessMessage('✅ ¡Pago aprobado por MercadoPago! Verificando detalles...');
-          break;
-        case 'pending':
-        case 'in_process':
-          setPaymentStatus('pending');
-          break;
-        case 'rejected':
-        case 'cancelled':
-          setPaymentStatus('rejected');
-          setError('❌ Pago rechazado o cancelado por MercadoPago');
-          break;
-      }
-    }
-  }, [searchParams, verifyPayment, pollForWebhookCompletion]);
+    // El estado mostrado lo define determinePaymentStatus dentro de verifyPayment,
+    // según el status de la orden en el backend. No usamos params.collection_status
+    // para evitar mostrar "Pago aprobado" si el backend no confirmó (ej. validación de monto).
+  }, [searchParams, verifyPayment]);
 
   // 🔴 EFECTO PRINCIPAL
   useEffect(() => {
