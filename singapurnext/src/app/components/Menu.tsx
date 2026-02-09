@@ -61,6 +61,9 @@ interface ProductSelectionState {
   };
 }
 
+// Lista completa de tallas para niñas
+const ALL_GIRLS_SIZES = ['2', '4', '6', '8', '10', '12'];
+
 // Función para ordenar tallas numéricas y alfabéticas
 const sortSizes = (sizes: string[]): string[] => {
   // Orden de tallas común
@@ -119,17 +122,34 @@ const getUniqueColorsWithStock = (variants: ProductVariant[]): string[] => {
   return colors.slice(0, 6);
 };
 
-const getSizesForColorWithStock = (variants: ProductVariant[], color: string): ProductVariant[] => {
+const getSizesForColor = (variants: ProductVariant[], color: string): { 
+  size: string; 
+  available: boolean; 
+  variant?: ProductVariant 
+}[] => {
   const availableVariants = filterAvailableVariants(variants)
     .filter(v => v.color === color);
   
-  // Ordenar por tamaño usando la función sortSizes
-  const sortedVariants = [...availableVariants].sort((a, b) => {
-    const sortedSizes = sortSizes([a.size, b.size]);
-    return sortedSizes.indexOf(a.size) - sortedSizes.indexOf(b.size);
+  // Crear un mapa de las tallas disponibles para este color
+  const availableSizesMap = new Map<string, ProductVariant>();
+  availableVariants.forEach(variant => {
+    availableSizesMap.set(variant.size, variant);
   });
   
-  return sortedVariants;
+  // Para cada talla en ALL_GIRLS_SIZES, verificar si está disponible
+  const allSizesWithAvailability = ALL_GIRLS_SIZES.map(size => {
+    const variant = availableSizesMap.get(size);
+    return {
+      size,
+      available: !!variant,
+      variant
+    };
+  });
+  
+  // Ordenar según el orden predefinido
+  return allSizesWithAvailability.sort((a, b) => {
+    return ALL_GIRLS_SIZES.indexOf(a.size) - ALL_GIRLS_SIZES.indexOf(b.size);
+  });
 };
 
 const getImageForColor = (variants: ProductVariant[], color: string): string => {
@@ -316,19 +336,21 @@ const Menu: React.FC = () => {
           const colors = getUniqueColorsWithStock(product.variants);
           if (colors.length > 0) {
             const firstColor = colors[0];
-            const sizesForFirstColor = getSizesForColorWithStock(product.variants, firstColor);
-            const availableSizes = sizesForFirstColor.map(v => v.size);
-            const sortedSizes = sortSizes(availableSizes);
-            const firstSize = sortedSizes[0] || '';
+            const sizesForColor = getSizesForColor(product.variants, firstColor);
+            const availableSizes = sizesForColor
+              .filter(v => v.available)
+              .map(v => v.size);
             
-            const initialPrice = firstSize ? 
-              getPriceForVariant(product.variants, firstColor, firstSize) : 
+            const firstAvailableSize = availableSizes[0] || '';
+            
+            const initialPrice = firstAvailableSize ? 
+              getPriceForVariant(product.variants, firstColor, firstAvailableSize) : 
               getMinPrice(product.variants);
             
             initialSelections[product.id] = {
               selectedColor: firstColor,
-              selectedSize: firstSize,
-              availableSizes: sortedSizes,
+              selectedSize: firstAvailableSize,
+              availableSizes: availableSizes,
               currentPrice: initialPrice
             };
           }
@@ -450,10 +472,11 @@ const Menu: React.FC = () => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
     
-    const sizesForColor = getSizesForColorWithStock(product.variants, color);
-    const availableSizes = sizesForColor.map(v => v.size);
-    const sortedSizes = sortSizes(availableSizes);
-    const firstSize = sortedSizes[0] || '';
+    const sizesForColor = getSizesForColor(product.variants, color);
+    const availableSizes = sizesForColor
+      .filter(v => v.available)
+      .map(v => v.size);
+    const firstSize = availableSizes[0] || '';
     
     const newPrice = firstSize ? 
       getPriceForVariant(product.variants, color, firstSize) : 
@@ -464,7 +487,7 @@ const Menu: React.FC = () => {
       [productId]: {
         selectedColor: color,
         selectedSize: firstSize,
-        availableSizes: sortedSizes,
+        availableSizes: availableSizes,
         currentPrice: newPrice
       }
     }));
@@ -478,6 +501,14 @@ const Menu: React.FC = () => {
     
     const selectionState = selectionStates[productId];
     if (!selectionState) return;
+    
+    // Verificar si la talla está disponible para el color seleccionado
+    const sizesForColor = getSizesForColor(product.variants, selectionState.selectedColor);
+    const sizeInfo = sizesForColor.find(s => s.size === size);
+    
+    if (!sizeInfo || !sizeInfo.available) {
+      return; // No hacer nada si la talla no está disponible
+    }
     
     const newPrice = getPriceForVariant(
       product.variants, 
@@ -657,8 +688,6 @@ const Menu: React.FC = () => {
             const effectiveColor = currentColorHasStock ? selectionState.selectedColor : (colors[0] || '');
             
             const currentImageUrl = getImageForColor(product.variants, effectiveColor);
-            const availableSizes = getSizesForColorWithStock(product.variants, effectiveColor).map(v => v.size);
-            const sortedAvailableSizes = sortSizes(availableSizes);
             const currentPrice = selectionState.currentPrice || getMinPrice(product.variants);
 
             if (colors.length === 0) {
@@ -725,20 +754,25 @@ const Menu: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Selector de talla - ORDENADO */}
-                  {effectiveColor && sortedAvailableSizes.length > 0 && (
+                  {/* Selector de talla - TODAS LAS TALLAS */}
+                  {effectiveColor && (
                     <div className={styles.productSizes}>
                       <div className={styles.sizesSelector}>
-                        {sortedAvailableSizes.map((size, i) => (
+                        {getSizesForColor(product.variants, effectiveColor).map((sizeInfo, i) => (
                           <button
                             key={i}
                             className={`${styles.sizeOption} ${
-                              selectionState.selectedSize === size ? styles.sizeOptionSelected : ''
-                            }`}
-                            onClick={(e) => handleSizeSelect(e, product.id, size)}
-                            disabled={quickAddLoading === product.id}
+                              selectionState.selectedSize === sizeInfo.size ? styles.sizeOptionSelected : ''
+                            } ${!sizeInfo.available ? styles.sizeOptionUnavailable : ''}`}
+                            onClick={(e) => {
+                              if (sizeInfo.available) {
+                                handleSizeSelect(e, product.id, sizeInfo.size);
+                              }
+                            }}
+                            disabled={!sizeInfo.available || quickAddLoading === product.id}
+                            title={!sizeInfo.available ? "Talla no disponible" : `Talla ${sizeInfo.size}`}
                           >
-                            {size}
+                            <span className={styles.sizeText}>{sizeInfo.size}</span>
                           </button>
                         ))}
                       </div>
@@ -813,7 +847,7 @@ const Menu: React.FC = () => {
                 )}
 
                 {/* Indicador de stock agotado */}
-                {effectiveColor && sortedAvailableSizes.length === 0 && (
+                {effectiveColor && getSizesForColor(product.variants, effectiveColor).filter(s => s.available).length === 0 && (
                   <div className={styles.outOfStockBadge}>
                     <span>Sin tallas disponibles</span>
                   </div>

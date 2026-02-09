@@ -1445,3 +1445,185 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+/* =============================================
+   ESTILOS PARA TALLAS NO DISPONIBLES - ESTILO APPLE
+   ============================================= */
+
+/* Contenedor del texto de la talla */
+.sizeText {
+  position: relative;
+  z-index: 1;
+}
+
+/* Talla no disponible - estilo sobrio como Apple */
+.sizeOptionUnavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #e0e0e0 !important;
+  color: #999 !important;
+  background: #f9f9f9 !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Efecto de tachado diagonal estilo Apple */
+.sizeOptionUnavailable .sizeText {
+  position: relative;
+}
+
+.sizeOptionUnavailable .sizeText::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  right: -2px;
+  height: 1.2px;
+  background: #bbb;
+  transform: rotate(-45deg);
+  transform-origin: center;
+  z-index: 2;
+  opacity: 0.8;
+}
+
+/* Deshabilitar efectos hover para tallas no disponibles */
+.sizeOptionUnavailable:hover {
+  transform: none !important;
+  border-color: #e0e0e0 !important;
+  background: #f9f9f9 !important;
+  box-shadow: none !important;
+}
+
+/* Asegurar que el texto mantenga su color cuando está deshabilitado */
+.sizeOptionUnavailable .sizeText {
+  color: #999;
+}
+
+/* Cuando una talla no disponible está seleccionada (no debería pasar) */
+.sizeOptionUnavailable.sizeOptionSelected {
+  border-color: #ddd !important;
+  background: #f5f5f5 !important;
+}
+
+/* La bolita verde no debe aparecer en tallas no disponibles */
+.sizeOptionUnavailable.sizeOptionSelected::after {
+  display: none;
+}
+
+/* Efecto de deshabilitado más sutil */
+.sizeOption:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Ajuste para el tooltip de talla no disponible */
+.sizeOptionUnavailable:hover::before {
+  content: attr(title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.sizeOptionUnavailable:hover::after {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: rgba(0, 0, 0, 0.8);
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* Ajustes responsive para las tallas no disponibles */
+@media (max-width: 768px) {
+  .sizeOptionUnavailable .sizeText::before {
+    height: 1px;
+    left: -1px;
+    right: -1px;
+  }
+  
+  .sizeOptionUnavailable:hover::before {
+    font-size: 0.65rem;
+    padding: 3px 6px;
+    bottom: calc(100% + 6px);
+  }
+  
+  .sizeOptionUnavailable:hover::after {
+    bottom: calc(100% + 2px);
+  }
+}
+
+@media (max-width: 576px) {
+  .sizeOptionUnavailable .sizeText::before {
+    height: 0.8px;
+  }
+  
+  .sizeOptionUnavailable:hover::before {
+    font-size: 0.6rem;
+    padding: 2px 5px;
+  }
+}
+
+/* =============================================
+   MEJORAS PARA EL SELECTOR DE TALLAS
+   ============================================= */
+
+/* Asegurar que todas las tallas tengan el mismo tamaño */
+.sizeOption {
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Ajustar altura mínima del contenedor de detalles */
+.productDetails {
+  min-height: 160px; /* Aumentado para acomodar todas las tallas */
+}
+
+/* Espaciado mejorado para los selectores */
+.sizesSelector {
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+
+/* Ajustes responsive */
+@media (max-width: 768px) {
+  .productDetails {
+    min-height: 150px;
+  }
+  
+  .sizeOption {
+    min-width: 32px;
+    height: 32px;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .productDetails {
+    min-height: 140px;
+  }
+  
+  .sizeOption {
+    min-width: 28px;
+    height: 28px;
+    font-size: 0.65rem;
+  }
+  
+  .sizesSelector {
+    gap: 0.25rem;
+  }
+}
