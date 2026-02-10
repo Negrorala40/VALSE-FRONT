@@ -115,7 +115,9 @@ const formatPrice = (price: number): string => {
 const PREDEFINED_COLORS = [
   "Rojo", "Azul", "Verde", "Negro", "Blanco", "Gris", "Amarillo", "Naranja",
   "Rosa", "Morado", "Marrón", "Beige", "Turquesa", "Vino", "Oliva", "Celeste",
-  "Coral", "Lavanda", "Mostaza", "Bordó"
+  "Coral", "Lavanda", "Mostaza", "Bordó", "Verde Azul", "Azul Cerúleo", 
+  "Verde Medio", "Azul Ocaso", "Amarillo Mantequilla", "Chocolate", "Verde Salvia",
+  "Terracota", "Lavanda Grisaceo", "Champaña", "Gris Carbon", "Rosa Viejo", "Arena"
 ];
 
 // Servicio de logging
