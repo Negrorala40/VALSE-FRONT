@@ -61,10 +61,10 @@ const getColorHex = (colorName: string): string => {
     'amarillo': '#FBEAD4',
     'rojo': '#E9566D',
     'celeste': '#87CEEB',
-    'gris': '#808080',
+    'gris': '#C3CAD6',
     'beige': '#F5F5DC',
     'lila': '#B0A9C6',
-    'turquesa': '#40E0D0',
+    'turquesa': '#CFDFE0',
     'coral': '#FF7F50',
     'violeta': '#EE82EE',
     'mostaza': '#FFDB58',
@@ -75,7 +75,10 @@ const getColorHex = (colorName: string): string => {
     'verde claro': '#90EE90',
     'marron': '#8B4513',
     'fucsia': '#FF00FF',
-    'aguamarina': '#7FFFD4'
+    'aguamarina': '#7FFFD4',
+    "Verde Azul": "#054365",
+    "Azul Cerúleo": "#007FB9",
+    "Verde Medio": "#47A779"
   };
   
   const lowerColor = colorName.toLowerCase();

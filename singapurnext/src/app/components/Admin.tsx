@@ -1775,21 +1775,24 @@ const getColorHex = (colorName: string): string => {
     "Verde": "#008000",
     "Negro": "#000000",
     "Blanco": "#FFFFFF",
-    "Gris": "#808080",
+    "Gris": "#C3CAD6",
     "Amarillo": "#FBEAD4",
     "Naranja": "#FFA500",
     "Rosa": "#F7D1D9",
     "Morado": "#800080",
     "Marrón": "#A52A2A",
     "Beige": "#F5F5DC",
-    "Turquesa": "#40E0D0",
+    "Turquesa": "#CFDFE0",
     "Vino": "#722F37",
     "Oliva": "#808000",
     "Celeste": "#87CEEB",
     "Coral": "#FF7F50",
     "Lavanda": "#E6E6FA",
     "Mostaza": "#FFDB58",
-    "Bordó": "#800000"
+    "Bordó": "#800000",
+    "Verde Azul": "#054365",
+    "Azul Cerúleo": "#007FB9",
+    "Verde Medio": "#47A779"
   };
   
   return colorMap[colorName] || "#CCCCCC";
