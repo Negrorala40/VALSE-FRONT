@@ -402,13 +402,13 @@ function PaymentResultContent() {
         orderData = {
           id: data.orderId?.toString() || orderId,
           status: data.status || data.orderStatus || 'UNKNOWN',
-          total: data.totalPrice || data.total || 0,
+          total: Number(data.totalPrice) || Number(data.total) || 0,
           items: data.items?.map((item: any, index: number) => ({
             id: item.id || index,
             name: item.productName || item.name || `Producto ${index + 1}`,
             image: item.imageUrls?.[0] || item.image || '/images/placeholder.png',
             quantity: item.quantity || 1,
-            price: item.price || 0,
+            price: Number(item.price) || 0,
             size: item.size,
             color: item.color
           })) || [],
@@ -437,14 +437,13 @@ function PaymentResultContent() {
         orderData = {
           id: data.id?.toString() || orderId,
           status: data.status || 'UNKNOWN',
-          total: data.totalPrice || 0,
+          total: Number(data.totalPrice) || 0,
           items: data.orderItems?.map((item: any) => ({
             id: item.id,
             name: item.product?.name || `Producto ${item.id}`,
             image: item.product?.images?.[0]?.imageUrl || '/images/placeholder.png',
-            quantity: item.quantity,
-            price: item.price,
-            size: item.productVariant?.size,
+            quantity: Number(item.quantity) || 1,
+            price: Number(item.price) || 0,            size: item.productVariant?.size,
             color: item.productVariant?.color
           })) || [],
           customer: {

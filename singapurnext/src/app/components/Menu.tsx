@@ -865,13 +865,6 @@ const Menu: React.FC = () => {
                     )}
                   </button>
                 )}
-
-                {/* Indicador de stock agotado */}
-                {effectiveColor && getSizesForColor(product.variants, effectiveColor).filter(s => s.available).length === 0 && (
-                  <div className={styles.outOfStockBadge}>
-                    <span>Sin tallas disponibles</span>
-                  </div>
-                )}
               </div>
             );
           }).filter(Boolean)
