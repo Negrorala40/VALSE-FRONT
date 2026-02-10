@@ -637,7 +637,7 @@ const Menu: React.FC = () => {
 
   return (
     <div className={styles.menuContainer}>
-      {/* Header decorativo */}
+      {/* Header decorativo
       <div className={styles.menuHeader}>
         <div className={styles.headerDecoration}></div>
         <div className={styles.headerContent}>
@@ -654,7 +654,7 @@ const Menu: React.FC = () => {
           </div>
           <p className={styles.headerSubtitle}>Pijamas que llevan a los pequeños a Marte</p>
         </div>
-      </div>
+      </div> */}
 
       {/* Barra de filtros */}
       <div className={styles.filterBar}>
