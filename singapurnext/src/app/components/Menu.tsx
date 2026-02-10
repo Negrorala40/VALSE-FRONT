@@ -287,21 +287,28 @@ const getColorHex = (colorName: string): string => {
     'verde menta': '#98FF98',
     'rosado pastel': '#FFD1DC',
     'dorado': '#FFD700',
-    "Verde Azul": "#054365",
-    "Azul Cerúleo": "#007FB9",
-    "Verde Medio": "#47A779",
-    "Azul Ocaso": "#44415C",
-    "Amarillo Mantequilla": "#F3E5AB",
-    "Chocolate": "#4B3621",
-    "Verde Salvia": "#B2AC88",
-    "Terracota": "#C07A64",
-    "Lavanda Grisaceo": "#AC9CC5",
-    "Champaña": "#F5E1DA",
-    "Gris Carbon": "#383E42",
-    "Rosa Viejo": "#C08081",
-    "Arena": "#E5D3B3"
+    'verde claro': '#90EE90',
+    'marron': '#8B4513',
+    'fucsia': '#FF00FF',
+    'aguamarina': '#7FFFD4',
+    "verde azul": "#054365",
+    "azul cerúleo": "#007FB9",
+    "verde medio": "#47A779",
+    "azul ocaso": "#44415C",
+    "amarillo mantequilla": "#F3E5AB",
+    "chocolate": "#4B3621",
+    "verde salvia": "#B2AC88",
+    "terracota": "#C07A64",
+    "lavanda grisaceo": "#AC9CC5",
+    "champaña": "#F5E1DA",
+    "gris carbon": "#383E42",
+    "rosa viejo": "#C08081",
+    "arena": "#E5D3B3",
   };
-  return colors[colorName.toLowerCase()] || '#103359';
+  
+  // Normalizar la búsqueda: convertir a minúscula y quitar espacios extra
+  const normalizedColorName = colorName.toLowerCase().trim();
+  return colors[normalizedColorName] || '#103359';
 };
 
 const hasLowStock = (variants: ProductVariant[]) => {
