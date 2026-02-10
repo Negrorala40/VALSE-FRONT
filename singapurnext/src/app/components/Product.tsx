@@ -78,7 +78,18 @@ const getColorHex = (colorName: string): string => {
     'aguamarina': '#7FFFD4',
     "Verde Azul": "#054365",
     "Azul Cerúleo": "#007FB9",
-    "Verde Medio": "#47A779"
+    "Verde Medio": "#47A779",
+    "Azul Ocaso": "#44415C",
+    "Amarillo Mantequilla": "#F3E5AB",
+    "Chocolate": "#4B3621",
+    "Verde Salvia": "#B2AC88",
+    "Terracota": "#C07A64",
+    "Lavanda Grisaceo": "#AC9CC5",
+    "Champaña": "#F5E1DA",
+    "Gris Carbon": "#383E42",
+    "Rosa Viejo": "#C08081",
+    "Arena": "#E5D3B3",
+
   };
   
   const lowerColor = colorName.toLowerCase();
