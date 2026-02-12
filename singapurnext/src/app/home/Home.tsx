@@ -90,11 +90,9 @@ const Home = () => {
         
         // CORRECCIÓN: Filtrar productos por categoría incluyendo unisex donde corresponda
         const niñosProducts = availableProducts.filter(p => 
-          p.gender === ProductGender.NIÑOS || p.gender === ProductGender.UNISEX
-        );
+          p.gender === ProductGender.NIÑOS);
         const niñasProducts = availableProducts.filter(p => 
-          p.gender === ProductGender.NIÑAS || p.gender === ProductGender.UNISEX
-        );
+          p.gender === ProductGender.NIÑAS);
         const unisexProducts = availableProducts.filter(p => 
           p.gender === ProductGender.UNISEX
         );
@@ -565,33 +563,27 @@ const Home = () => {
         }}
         aria-hidden="true"
       >
-        <h1>A Marte Kids - Tienda Online de Pijamas Espaciales para Niños en Colombia</h1>
-        <h2>Pijamas Infantiles con Diseños de Astronautas, Cohetes y Planetas</h2>
+        <h1>A Marte Kids | Tienda de Pijamas Infantiles en Medellín</h1>
+        <h2>Pijamas Infantiles para Cada Etapa</h2>
         <p>
-          Somos A Marte Kids, la tienda especializada en pijamas infantiles con temática espacial. 
-          Ofrecemos pijamas de alta calidad para niños y niñas con diseños únicos de astronautas, 
-          cohetes espaciales, planetas, estrellas y el universo. Nuestra colección incluye pijamas 
-          cómodos, suaves y duraderos perfectos para las noches de aventura de los más pequeños.
+        A Marte Kids es una tienda de pijamas infantiles en Medellín, diseñadas para acompañar a los niños dentro y fuera de casa. Creamos pijamas cómodas, seguras y llenas de color, pensadas para dormir, jugar y explorar el mundo con libertad. 
         </p>
         <p>
-          Trabajamos con tejidos 100% algodón, estampados de alta definición y tallas desde 2 hasta 12 años. 
-          Envíos a Bogotá, Medellín, Cali, Barranquilla y todo el territorio colombiano. 
-          Pijamas infantiles que inspiran la imaginación y hacen soñar con viajes a Marte y más allá.
+        Diseños pensados para el movimiento, el descanso y la rutina diaria de los más peques. 
         </p>
         <ul>
-          <li>Pijamas de astronauta para niños y niñas</li>
-          <li>Conjuntos espaciales unisex</li>
-          <li>Pijamas de cohete espacial infantil</li>
-          <li>Ropa de dormir temática del espacio</li>
-          <li>Pijamas de algodón orgánico para niños</li>
-          <li>Diseños exclusivos de planetas y galaxias</li>
-          <li>Pijamas con capucha de astronauta</li>
-          <li>Conjuntos de dos piezas espaciales</li>
+          <li>Pijamas para Niños</li>
+          <li>Pijamas para Niñas</li>
+          <li>Pijamas para Todos</li>
+          <li>Más que Pijamas Infantiles</li>
+          <li>Comodidad que se queda en su lugar</li>
+          <li>Textiles suaves y transpirables</li>
+          <li>Diseño funcional y duradero</li>
+          <li>Materiales pensados para cuidar la piel y regular la temperatura</li>
         </ul>
         <p>
-          Encuentra los mejores pijamas espaciales en Colombia. Envíos rápidos y seguros a todo el país. 
-          Calidad premium garantizada, diseños exclusivos y atención personalizada. 
-          A Marte Kids - donde los sueños espaciales se hacen realidad cada noche.
+        Nuestras pijamas no son solo para dormir. Son pijamas de casa para el mundo, diseñadas para usarse todo el día, sin necesidad de cambios.
+        Diseñamos y confeccionamos nuestras pijamas infantiles en Medellín, apoyando la producción local y cuidando cada detalle, desde el diseño hasta la confección.  
         </p>
         <p>
           Búsquedas relacionadas: pijamas niños bogotá, ropa infantil temática, 
