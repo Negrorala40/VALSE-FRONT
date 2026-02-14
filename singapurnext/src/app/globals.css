@@ -9,6 +9,8 @@
 }
 
 body {
+  margin: 0; /* ← ELIMINA EL MARGEN POR DEFECTO DEL NAVEGADOR */
+  padding: 0; /* ← POR SEGURIDAD */
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
     to bottom,
@@ -92,4 +94,24 @@ img {
   --checkout-radius-lg: 1rem;
   --checkout-radius-xl: 1.25rem;
   --checkout-radius-full: 9999px;
+}
+
+/* OPCIONAL: Si quieres un contenedor con padding consistente para toda la app */
+.app-content-wrapper {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .app-content-wrapper {
+    padding: 0 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-content-wrapper {
+    padding: 0 0.75rem;
+  }
 }

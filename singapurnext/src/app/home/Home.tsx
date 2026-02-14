@@ -61,10 +61,7 @@ const Home = () => {
   // Función para filtrar productos habilitados y con stock
   const filterAvailableProducts = (products: Product[]): Product[] => {
     return products.filter(product => {
-      // Verificar si el producto está habilitado
       if (product.enabled === false) return false;
-      
-      // Verificar si tiene al menos una variante habilitada con stock
       return product.variants.some(variant => 
         variant.enabled !== false && 
         variant.stock > 0 && 
@@ -81,23 +78,14 @@ const Home = () => {
         setLoading(true);
         setError(null);
         
-        // Usar el endpoint de productos activos
         const response = await axios.get<Product[]>(`${MENU_PRODUCTS}/active`);
         const allProducts = response.data;
-        
-        // Filtrar solo productos disponibles
         const availableProducts = filterAvailableProducts(allProducts);
         
-        // CORRECCIÓN: Filtrar productos por categoría incluyendo unisex donde corresponda
-        const niñosProducts = availableProducts.filter(p => 
-          p.gender === ProductGender.NIÑOS);
-        const niñasProducts = availableProducts.filter(p => 
-          p.gender === ProductGender.NIÑAS);
-        const unisexProducts = availableProducts.filter(p => 
-          p.gender === ProductGender.UNISEX
-        );
+        const niñosProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑOS);
+        const niñasProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑAS);
+        const unisexProducts = availableProducts.filter(p => p.gender === ProductGender.UNISEX);
         
-        // Función para obtener todas las imágenes válidas de un producto
         const getValidImagesFromProduct = (product: Product): string[] => {
           const images: string[] = [];
           product.variants.forEach(variant => {
@@ -112,11 +100,9 @@ const Home = () => {
           return images;
         };
 
-        // Función para obtener imagen aleatoria de un array de productos
         const getRandomImage = (productArray: Product[]): string => {
           if (productArray.length === 0) return '/images/placeholder.jpg';
           
-          // Coleccionar todas las imágenes disponibles
           const allImages: string[] = [];
           productArray.forEach(product => {
             const productImages = getValidImagesFromProduct(product);
@@ -124,12 +110,9 @@ const Home = () => {
           });
           
           if (allImages.length === 0) return '/images/placeholder.jpg';
-          
-          // Seleccionar una imagen aleatoria
           return allImages[Math.floor(Math.random() * allImages.length)];
         };
 
-        // Productos para ofertas (los 10 más económicos con imágenes)
         const ofertaProducts = [...availableProducts]
           .filter(p => {
             const firstVariant = p.variants.find(v => 
@@ -185,11 +168,9 @@ const Home = () => {
     );
 
     if (categoriesRef.current) observer.observe(categoriesRef.current);
-
     return () => observer.disconnect();
   }, []);
 
-  // Componente de error
   if (error) {
     return (
       <div className={styles.homeContainer}>
@@ -211,17 +192,17 @@ const Home = () => {
             {/* Top decorative line */}
             <div className={styles.heroTopLine} />
 
-            {/* Contenedor con imagen de fondo - Comentaremos el SVG después */}
+            {/* Contenedor con imágenes de fondo - Desktop y Mobile */}
             <div className={styles.heroImageContainer}>
-              {/* Imagen de fondo con forma de pijama */}
-              <div className={styles.heroBackgroundImageWrapper}>
+              {/* Imagen para Desktop */}
+              <div className={styles.heroBackgroundImageWrapperDesktop}>
                 <Image
-                  src="https://res.cloudinary.com/df2vqczm1/image/upload/v1769352232/DSC02953-Editar.jpg_eoykzw.jpg"
-                  alt="Fondo de pijama infantil espacial"
+                  src="https://res.cloudinary.com/dsdyg4l3s/image/upload/v1771084044/BANNER_cdbtes.png"
+                  alt="Fondo de pijama infantil espacial - Desktop"
                   fill
                   className={styles.heroBackgroundImage}
                   priority
-                  sizes="(max-width: 768px) 100vw, 1200px"
+                  sizes="(min-width: 769px) 100vw, 0px"
                   quality={85}
                   onError={(e) => {
                     const target = e.target as HTMLImageElement;
@@ -230,192 +211,28 @@ const Home = () => {
                 />
               </div>
 
-              {/*
-                SVG COMENTADO TEMPORALMENTE - DESCOMENTAR CUANDO TENGAS TU SVG
-                <svg
-                  className={styles.heroPajamaSvg}
-                  viewBox="0 0 300 420"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  aria-label="Ilustración de pijama infantil"
-                >
-                  <defs>
-                    <linearGradient id="pajamaBg" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#3DB28A" />
-                      <stop offset="100%" stopColor="#2a9b74" />
-                    </linearGradient>
-                    <linearGradient id="sleeveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#3DB28A" />
-                      <stop offset="100%" stopColor="#28a076" />
-                    </linearGradient>
-                    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                      <feGaussianBlur stdDeviation="4" result="coloredBlur" />
-                      <feMerge>
-                        <feMergeNode in="coloredBlur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
-
-                  <image
-                    href="https://res.cloudinary.com/df2vqczm1/image/upload/v1769352232/DSC02953-Editar.jpg_eoykzw.jpg"
-                    x="0"
-                    y="0"
-                    width="300"
-                    height="420"
-                    preserveAspectRatio="xMidYMid slice"
-                    opacity="0.7"
-                  />
-
-                  <path
-                    d="M 100 140 L 90 320 L 110 320 L 110 180 Q 110 160 115 150 L 115 140 Z"
-                    fill="url(#pajamaBg)"
-                    stroke="#103359"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    filter="url(#glow)"
-                  />
-
-                  <path
-                    d="M 150 140 L 160 320 L 180 320 L 180 180 Q 180 160 185 150 L 185 140 Z"
-                    fill="url(#pajamaBg)"
-                    stroke="#103359"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    filter="url(#glow)"
-                  />
-
-                  <path
-                    d="M 80 70 Q 75 90 75 120 L 75 140 L 185 140 L 185 120 Q 185 90 180 70 Q 150 50 150 50 Q 150 50 120 70 Z"
-                    fill="url(#pajamaBg)"
-                    stroke="#103359"
-                    strokeWidth="3"
-                    filter="url(#glow)"
-                  />
-
-                  <path
-                    d="M 80 90 Q 40 95 25 110 Q 20 115 30 130 L 75 115 Z"
-                    fill="url(#sleeveGrad)"
-                    stroke="#103359"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    filter="url(#glow)"
-                  />
-
-                  <path
-                    d="M 220 90 Q 260 95 275 110 Q 280 115 270 130 L 225 115 Z"
-                    fill="url(#sleeveGrad)"
-                    stroke="#103359"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    filter="url(#glow)"
-                  />
-
-                  <ellipse
-                    cx="150"
-                    cy="65"
-                    rx="28"
-                    ry="18"
-                    fill="#806FF7"
-                    stroke="#103359"
-                    strokeWidth="3"
-                    filter="url(#glow)"
-                  />
-
-                  <ellipse
-                    cx="150"
-                    cy="62"
-                    rx="24"
-                    ry="14"
-                    fill="none"
-                    stroke="#103359"
-                    strokeWidth="1.5"
-                    opacity="0.4"
-                  />
-
-                  <g filter="url(#glow)">
-                    <circle cx="150" cy="115" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
-                    <circle cx="150" cy="115" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
-                  </g>
-
-                  <g filter="url(#glow)">
-                    <circle cx="150" cy="155" r="6" fill="#FFD449" stroke="#103359" strokeWidth="1.5" />
-                    <circle cx="150" cy="155" r="3.5" fill="none" stroke="#103359" strokeWidth="1" opacity="0.5" />
-                  </g>
-
-                  <g opacity="0.85">
-                    <circle cx="110" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
-                    <circle cx="110" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
-                  </g>
-
-                  <g opacity="0.85">
-                    <circle cx="190" cy="110" r="4.5" fill="#FFD449" filter="url(#glow)" />
-                    <circle cx="190" cy="110" r="2.5" fill="none" stroke="#103359" strokeWidth="0.8" opacity="0.6" />
-                  </g>
-
-                  <g opacity="0.8">
-                    <circle cx="105" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
-                  </g>
-
-                  <g opacity="0.8">
-                    <circle cx="195" cy="175" r="4" fill="#E9566D" filter="url(#glow)" />
-                  </g>
-
-                  <text
-                    x="150"
-                    y="260"
-                    textAnchor="middle"
-                    fontSize="48"
-                    opacity="0.7"
-                    filter="url(#glow)"
-                  >
-                    🚀
-                  </text>
-
-                  <g opacity="0.3" stroke="#103359" strokeWidth="1.5" fill="none">
-                    <circle cx="60" cy="140" r="8" />
-                    <circle cx="240" cy="160" r="8" />
-                    <circle cx="70" cy="220" r="6" />
-                    <circle cx="230" cy="240" r="6" />
-                  </g>
-                </svg>
-              */}
+              {/* Imagen para Móvil */}
+              <div className={styles.heroBackgroundImageWrapperMobile}>
+                <Image
+                  src="https://res.cloudinary.com/dsdyg4l3s/image/upload/v1771085702/Banner2_qthzfn.png"
+                  alt="Fondo de pijama infantil espacial - Mobile"
+                  fill
+                  className={styles.heroBackgroundImage}
+                  priority
+                  sizes="(max-width: 768px) 100vw, 0px"
+                  quality={85}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.src = '/images/placeholder.jpg';
+                  }}
+                />
+              </div>
             </div>
-
-            {/* Overlay gradient for readability */}
-            <div className={styles.heroOverlay} />
 
             {/* Content - positioned over image */}
             <div className={styles.heroContent}>
               <div className={styles.heroTextBox}>
-                {/* Small brand indicator */}
-                <p className={styles.heroBadge}>Colección A MARTE</p>
-
-                {/* Title */}
-                <h1 className={styles.heroTitle}>Amarte es amor que cuida, abriga y deja explorar.</h1>
-
-                {/* Description */}
-                <p className={styles.heroDescription}>
-                  Pijamas pensadas para proteger a los más peques mientras viven su mundo con libertad.
-                </p>
-
-                {/* Mirar más link */}
-                <Link href="/menu" className={styles.heroLink}>
-                  <span>Ver Colección</span>
-                  <svg
-                    className={styles.heroLinkArrow}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 7l5 5m0 0l-5 5m5-5H6"
-                    />
-                  </svg>
-                </Link>
+                
               </div>
             </div>
           </section>
@@ -427,7 +244,7 @@ const Home = () => {
             className={`${styles.categoriesContainer} ${isVisible.categories ? styles.visible : ''}`}
           >
             <div className={styles.categoriesGrid}>
-              {/* Niños - Ahora muestra Niños + Unisex */}
+              {/* Niños */}
               <Link href="/menu?category=ninos&type=SUPERIOR" className={styles.categoryCard}>
                 <div className={styles.categoryImageContainer}>
                   {loading ? (
@@ -455,7 +272,7 @@ const Home = () => {
                 </div>
               </Link>
 
-              {/* Niñas - Ahora muestra Niñas + Unisex */}
+              {/* Niñas */}
               <Link href="/menu?category=ninas&type=SUPERIOR" className={styles.categoryCard}>
                 <div className={styles.categoryImageContainer}>
                   {loading ? (
@@ -483,7 +300,7 @@ const Home = () => {
                 </div>
               </Link>
 
-              {/* Unisex - Solo muestra Unisex */}
+              {/* Unisex */}
               <Link href="/menu?gender=UNISEX&type=SUPERIOR" className={styles.categoryCard}>
                 <div className={styles.categoryImageContainer}>
                   {loading ? (
@@ -544,9 +361,7 @@ const Home = () => {
         </main>
       </div>
 
-      {/* ============================================ */}
-      {/* CONTENIDO SEO INVISIBLE - NO AFECTA DISEÑO */}
-      {/* ============================================ */}
+      {/* CONTENIDO SEO INVISIBLE */}
       <div 
         style={{
           position: 'absolute',
@@ -566,10 +381,10 @@ const Home = () => {
         <h1>A Marte Kids | Tienda de Pijamas Infantiles en Medellín</h1>
         <h2>Pijamas Infantiles para Cada Etapa</h2>
         <p>
-        A Marte Kids es una tienda de pijamas infantiles en Medellín, diseñadas para acompañar a los niños dentro y fuera de casa. Creamos pijamas cómodas, seguras y llenas de color, pensadas para dormir, jugar y explorar el mundo con libertad. 
+          A Marte Kids es una tienda de pijamas infantiles en Medellín, diseñadas para acompañar a los niños dentro y fuera de casa. Creamos pijamas cómodas, seguras y llenas de color, pensadas para dormir, jugar y explorar el mundo con libertad. 
         </p>
         <p>
-        Diseños pensados para el movimiento, el descanso y la rutina diaria de los más peques. 
+          Diseños pensados para el movimiento, el descanso y la rutina diaria de los más peques. 
         </p>
         <ul>
           <li>Pijamas para Niños</li>
@@ -582,8 +397,8 @@ const Home = () => {
           <li>Materiales pensados para cuidar la piel y regular la temperatura</li>
         </ul>
         <p>
-        Nuestras pijamas no son solo para dormir. Son pijamas de casa para el mundo, diseñadas para usarse todo el día, sin necesidad de cambios.
-        Diseñamos y confeccionamos nuestras pijamas infantiles en Medellín, apoyando la producción local y cuidando cada detalle, desde el diseño hasta la confección.  
+          Nuestras pijamas no son solo para dormir. Son pijamas de casa para el mundo, diseñadas para usarse todo el día, sin necesidad de cambios.
+          Diseñamos y confeccionamos nuestras pijamas infantiles en Medellín, apoyando la producción local y cuidando cada detalle, desde el diseño hasta la confección.  
         </p>
         <p>
           Búsquedas relacionadas: pijamas niños bogotá, ropa infantil temática, 

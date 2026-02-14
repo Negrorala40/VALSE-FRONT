@@ -8,11 +8,12 @@ import BlogPreview from './components/BlogPreview';
 export default function HomePageWrapper() {
   return (
     <Suspense fallback={<div>Cargando página de inicio...</div>}>
-      <div>
+      {/* ← Elimina el div y usa fragment <> */}
+      <>
         <Home />
         <Menu />
         <BlogPreview />
-      </div>
+      </>
     </Suspense>
   );
 }

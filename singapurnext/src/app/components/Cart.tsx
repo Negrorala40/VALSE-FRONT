@@ -2,7 +2,7 @@
 
 import { CART } from '../utils/Api';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import './Cart.css';
+import styles from './Cart.module.css';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 
@@ -322,7 +322,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       
       fetchCart();
     }
-  }, [isOpen]);
+  }, [isOpen, fetchCart, hasFetched, isFetching]);
 
   // Efecto para refrescar automáticamente cuando cambia la sesión
   useEffect(() => {
@@ -569,7 +569,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   // Función para formatear envío
   const getShippingDisplay = () => {
     if (shippingCost === 0) {
-      return <span className="shipping-badge">Gratis</span>;
+      return <span className={styles.shippingBadge}>Gratis</span>;
     }
     return <span>${formatPrice(shippingCost)}</span>;
   };
@@ -581,15 +581,15 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       const totalOriginal = item.originalPrice * item.quantity;
       
       return (
-        <div className="cart-item-price-container">
-          <div className="item-price-discounted">
-            <div className="item-original-price-wrapper">
-              <span className="item-original-price">
+        <div className={styles.cartItemPriceContainer}>
+          <div className={styles.itemPriceDiscounted}>
+            <div className={styles.itemOriginalPriceWrapper}>
+              <span className={styles.itemOriginalPrice}>
                 ${formatPrice(totalOriginal)}
               </span>
             </div>
-            <div className="item-final-price-wrapper">
-              <span className="item-final-price">
+            <div className={styles.itemFinalPriceWrapper}>
+              <span className={styles.itemFinalPrice}>
                 ${formatPrice(totalDiscounted)}
               </span>
             
@@ -599,7 +599,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       );
     } else {
       return (
-        <p className="cart-item-price">${formatPrice(item.price * item.quantity)}</p>
+        <p className={styles.cartItemPrice}>${formatPrice(item.price * item.quantity)}</p>
       );
     }
   };
@@ -609,7 +609,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       {/* Overlay */}
       {isOpen && (
         <div 
-          className={`cart-overlay ${isOpen ? 'open' : ''} ${isClosing ? 'closing' : ''}`}
+          className={`${styles.cartOverlay} ${isOpen ? styles.open : ''} ${isClosing ? styles.closing : ''}`}
           onClick={handleClose}
         />
       )}
@@ -617,21 +617,21 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       {/* Panel del carrito */}
       <div 
         ref={cartRef} 
-        className={`cart-panel ${isOpen ? 'open' : ''} ${isClosing ? 'closing' : ''}`}
+        className={`${styles.cartPanel} ${isOpen ? styles.open : ''} ${isClosing ? styles.closing : ''}`}
       >
         {/* Botones de debug (solo en desarrollo) */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="debug-buttons">
+          <div className={styles.debugButtons}>
             <button 
               onClick={debugSession}
-              className="debug-btn"
+              className={styles.debugBtn}
               title="Debug session"
             >
               🔍 Session
             </button>
             <button 
               onClick={createNewSession}
-              className="debug-btn"
+              className={styles.debugBtn}
               title="Crear nueva sesión"
             >
               🆕 Nueva Sesión
@@ -640,26 +640,26 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         )}
 
         {/* Decoración superior con gradiente */}
-        <div className="cart-decoration-top"></div>
+        <div className={styles.cartDecorationTop}></div>
 
-        <div className="cart-header">
-          <div className="cart-title">
-            <div className="cart-icon-wrapper">
-              <svg className="cart-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className={styles.cartHeader}>
+          <div className={styles.cartTitle}>
+            <div className={styles.cartIconWrapper}>
+              <svg className={styles.cartIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
                 <line x1="3" y1="6" x2="21" y2="6" />
                 <path d="M16 10a4 4 0 0 1-8 0" />
               </svg>
-              {totalItems > 0 && <span className="cart-badge">{totalItems}</span>}
+              {totalItems > 0 && <span className={styles.cartBadge}>{totalItems}</span>}
             </div>
-            <div className="cart-title-text">
+            <div className={styles.cartTitleText}>
               <h2>Tu Carrito</h2>
-              <span className="cart-subtitle">
+              <span className={styles.cartSubtitle}>
                 {totalItems === 0 ? 'Vacío' : `${totalItems} producto${totalItems > 1 ? 's' : ''}`}
               </span>
             </div>
           </div>
-          <button className="close-btn" onClick={handleClose} aria-label="Cerrar carrito">
+          <button className={styles.closeBtn} onClick={handleClose} aria-label="Cerrar carrito">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -668,17 +668,17 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         </div>
 
         {isFetching ? (
-          <div className="cart-loading">
-            <div className="loading-spinner"></div>
+          <div className={styles.cartLoading}>
+            <div className={styles.loadingSpinner}></div>
             <p>Cargando carrito...</p>
             {retryCount > 0 && (
               <small>Reintentando... ({retryCount}/{maxRetries})</small>
             )}
           </div>
         ) : cartItems.length === 0 ? (
-          <div className="cart-empty">
-            <div className="cart-empty-illustration">
-              <div className="empty-bag">
+          <div className={styles.cartEmpty}>
+            <div className={styles.cartEmptyIllustration}>
+              <div className={styles.emptyBag}>
                 <svg viewBox="0 0 80 80" fill="none">
                   <rect x="10" y="20" width="60" height="50" rx="4" stroke="currentColor" strokeWidth="2" />
                   <path d="M25 20V15C25 10 30 5 40 5C50 5 55 10 55 15V20" stroke="currentColor" strokeWidth="2" />
@@ -692,28 +692,28 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                   />
                 </svg>
               </div>
-              <div className="empty-stars">
-                <span className="star star-1">★</span>
-                <span className="star star-2">★</span>
-                <span className="star star-3">★</span>
+              <div className={styles.emptyStars}>
+                <span className={`${styles.star} ${styles.star1}`}>★</span>
+                <span className={`${styles.star} ${styles.star2}`}>★</span>
+                <span className={`${styles.star} ${styles.star3}`}>★</span>
               </div>
             </div>
-            <h3 className="empty-title">Tu carrito está vacío</h3>
-            <p className="empty-message">
+            <h3 className={styles.emptyTitle}>Tu carrito está vacío</h3>
+            <p className={styles.emptyMessage}>
               Explora nuestra colección de pijamas y encuentra el favorito de tus pequeños
             </p>
             {!sessionId && (
-              <div className="session-status">
+              <div className={styles.sessionStatus}>
                 <small>Estado: Sin sesión activa</small>
                 <button 
                   onClick={createNewSession}
-                  className="session-btn"
+                  className={styles.sessionBtn}
                 >
                   Crear nueva sesión
                 </button>
               </div>
             )}
-            <button onClick={handleContinueShopping} className="cart-explore-btn">
+            <button onClick={handleContinueShopping} className={styles.cartExploreBtn}>
               <span>Explorar productos</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="5" y1="12" x2="19" y2="12" />
@@ -723,16 +723,16 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           </div>
         ) : (
           <>
-            <div className="cart-items-container">
-              <ul className="cart-items">
+            <div className={styles.cartItemsContainer}>
+              <ul className={styles.cartItems}>
                 {cartItems.map((item, index) => {
                   const safeImage = getSafeImageUrl(item.image);
                   const safeName = getSafeName(item.name);
                   const colorStyle = getColorStyle(item.color);
                   
                   return (
-                    <li key={`${item.id}-${index}`} className="cart-item">
-                      <div className="cart-item-image">
+                    <li key={`${item.id}-${index}`} className={styles.cartItem}>
+                      <div className={styles.cartItemImage}>
                         <Image 
                           src={safeImage} 
                           alt={safeName}
@@ -746,16 +746,16 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                           }}
                         />
                         {item.hasDiscount && item.discountPercentage > 0 && (
-                          <div className="item-image-discount-badge">
+                          <div className={styles.itemImageDiscountBadge}>
                             -{item.discountPercentage}%
                           </div>
                         )}
                       </div>
-                      <div className="cart-item-content">
-                        <div className="cart-item-header">
-                          <p className="cart-item-name">{safeName}</p>
+                      <div className={styles.cartItemContent}>
+                        <div className={styles.cartItemHeader}>
+                          <p className={styles.cartItemName}>{safeName}</p>
                           <button
-                            className="btn-remove"
+                            className={styles.btnRemove}
                             onClick={() => removeItem(item.id)}
                             aria-label="Eliminar producto"
                           >
@@ -765,24 +765,24 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                             </svg>
                           </button>
                         </div>
-                        <div className="cart-item-tags">
-                          <span className="item-tag tag-size">
+                        <div className={styles.cartItemTags}>
+                          <span className={`${styles.itemTag} ${styles.tagSize}`}>
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                               <rect x="3" y="3" width="18" height="18" rx="2" />
                               <path d="M9 9h6v6H9z" />
                             </svg>
                             {item.size || 'N/A'}
                           </span>
-                          <span className="item-tag tag-color">
+                          <span className={`${styles.itemTag} ${styles.tagColor}`}>
                             <span
-                              className="color-dot"
+                              className={styles.colorDot}
                               style={colorStyle}
                             ></span>
                             {item.color || 'N/A'}
                           </span>
                         </div>
-                        <div className="cart-item-footer">
-                          <div className="quantity-selector">
+                        <div className={styles.cartItemFooter}>
+                          <div className={styles.quantitySelector}>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity - 1)}
                               disabled={item.quantity <= 1}
@@ -792,7 +792,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                                 <line x1="5" y1="12" x2="19" y2="12" />
                               </svg>
                             </button>
-                            <span className="quantity-value">{item.quantity}</span>
+                            <span className={styles.quantityValue}>{item.quantity}</span>
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
                               disabled={item.stock !== undefined && item.quantity >= item.stock}
@@ -813,13 +813,13 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
               </ul>
             </div>
 
-            <div className="cart-summary">
-              <div className="summary-row summary-subtotal">
+            <div className={styles.cartSummary}>
+              <div className={`${styles.summaryRow} ${styles.summarySubtotal}`}>
                 <span>Subtotal</span>
                 {discountSavings > 0 ? (
-                  <div className="subtotal-with-discount">
-                    <span className="original-subtotal">${formatPrice(originalSubtotal)}</span>
-                    <span className="final-subtotal">${formatPrice(subtotal)}</span>
+                  <div className={styles.subtotalWithDiscount}>
+                    <span className={styles.originalSubtotal}>${formatPrice(originalSubtotal)}</span>
+                    <span className={styles.finalSubtotal}>${formatPrice(subtotal)}</span>
                   </div>
                 ) : (
                   <span>${formatPrice(subtotal)}</span>
@@ -827,46 +827,46 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
               </div>
               
               {discountSavings > 0 && (
-                <div className="summary-row summary-discount">
+                <div className={`${styles.summaryRow} ${styles.summaryDiscount}`}>
                   <span>Descuento</span>
-                  <span className="discount-savings">-${formatPrice(discountSavings)}</span>
+                  <span className={styles.discountSavings}>-${formatPrice(discountSavings)}</span>
                 </div>
               )}
               
-              <div className="summary-row summary-shipping">
+              <div className={`${styles.summaryRow} ${styles.summaryShipping}`}>
                 <span>Envío</span>
                 {getShippingDisplay()}
               </div>
               
-              <div className="summary-divider"></div>
+              <div className={styles.summaryDivider}></div>
               
-              <div className="cart-total">
-                <span className="total-label">Total</span>
-                <span className="total-amount">${formatPrice(total)}</span>
+              <div className={styles.cartTotal}>
+                <span className={styles.totalLabel}>Total</span>
+                <span className={styles.totalAmount}>${formatPrice(total)}</span>
               </div>
 
-              <div className="cart-actions">
-                <button className="btn-checkout" onClick={handleCheckout}>
+              <div className={styles.cartActions}>
+                <button className={styles.btnCheckout} onClick={handleCheckout}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="1" y="4" width="22" height="16" rx="2" />
                     <line x1="1" y1="10" x2="23" y2="10" />
                   </svg>
                   <span>Proceder al Pago</span>
                 </button>
-                <button className="cart-continue-btn" onClick={handleContinueShopping}>
+                <button className={styles.cartContinueBtn} onClick={handleContinueShopping}>
                   Seguir Comprando
                 </button>
               </div>
 
-              <div className="cart-trust-badges">
-                <div className="trust-badge">
+              <div className={styles.cartTrustBadges}>
+                <div className={styles.trustBadge}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     <polyline points="9 12 11 14 15 10" />
                   </svg>
                   <span>Pago seguro</span>
                 </div>
-                <div className="trust-badge">
+                <div className={styles.trustBadge}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="1" y="3" width="15" height="13" />
                     <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />

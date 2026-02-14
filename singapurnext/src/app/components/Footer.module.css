@@ -1,0 +1,661 @@
+/* ==========================================
+   FOOTER - APPLE IOS STYLE
+   A MARTE BRAND STYLING
+   ========================================== */
+
+   .footer {
+    background: #103359;
+    color: #f5f5f7;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    position: relative;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  /* Main Content */
+  .footerContainer {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 3rem;
+    padding: 3rem 2rem;
+  }
+  
+  /* Footer Column */
+  .footerColumn {
+    animation: fadeIn 0.5s ease-out;
+  }
+  
+  /* Logo Styles - Apple Style */
+  .logoWrapper {
+    position: relative;
+    margin-bottom: 1.5rem;
+    display: inline-block;
+  }
+  
+  .logoGlow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 120px;
+    height: 120px;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .logoWrapper:hover .logoGlow {
+    opacity: 1;
+  }
+  
+  .logoContainer {
+    position: relative;
+    z-index: 2;
+    background: #ffffff;
+    border-radius: 50%;
+    padding: 0.5rem;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .logoContainer:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.02);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .brandLogo {
+    width: auto;
+    height: auto;
+    max-width: 100px;
+    object-fit: contain;
+    filter: brightness(1) contrast(1.1);
+  }
+  
+  .brandTagline {
+    font-size: 0.9rem;
+    color: #86868b;
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+    font-weight: 400;
+    max-width: 250px;
+  }
+  
+  .brandDescription {
+    font-size: 0.85rem;
+    color: #6e6e73;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+    max-width: 250px;
+  }
+  
+  /* Social Icons - Apple Style */
+  .socialSection {
+    display: flex;
+    gap: 1rem;
+  }
+  
+  .socialIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f5f5f7;
+    text-decoration: none;
+    font-size: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+  }
+  
+  .socialIcon:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    color: #ffffff;
+  }
+  
+  /* Footer Titles */
+  .footerTitle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 1rem;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+    opacity: 0.8;
+  }
+  
+  /* Links */
+  .footerLinks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  
+  .footerLinks a {
+    color: #86868b;
+    text-decoration: none;
+    font-weight: 400;
+    font-size: 0.85rem;
+    transition: color 0.2s ease;
+    display: inline-block;
+  }
+  
+  .footerLinks a:hover {
+    color: #ffffff;
+  }
+  
+  /* Contact Items */
+  .contactItems {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  
+  .contactItem {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #86868b;
+    transition: color 0.2s ease;
+    font-size: 0.85rem;
+  }
+  
+  .contactItem:hover {
+    color: #ffffff;
+  }
+  
+  .contactIcon {
+    color: #3db28a;
+    font-size: 1rem;
+    opacity: 0.8;
+  }
+  
+  .contactText {
+    display: block;
+    color: #f5f5f7;
+    font-weight: 400;
+    font-size: 0.85rem;
+  }
+  
+  .contactLabel {
+    display: block;
+    font-size: 0.7rem;
+    color: #6e6e73;
+    margin-top: 0.1rem;
+  }
+  
+  /* Services List */
+  .servicesList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  
+  .serviceItem {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #86868b;
+    transition: color 0.2s ease;
+    font-size: 0.85rem;
+  }
+  
+  .serviceItem:hover {
+    color: #ffffff;
+  }
+  
+  .serviceIcon {
+    color: #3db28a;
+    font-size: 0.9rem;
+    opacity: 0.8;
+  }
+  
+  /* ==========================================
+     FOOTER BOTTOM - APPLE STYLE
+     ========================================== */
+  
+  .footerBottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1.5rem 2rem;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px);
+  }
+  
+  .bottomContent {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  /* Payment Methods */
+  .paymentMethods {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .paymentTitle {
+    color: #86868b;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  
+  .paymentIcons {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  
+  .paymentIconWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: #86868b;
+    font-size: 1.6rem;
+    transition: all 0.3s ease;
+    cursor: default;
+    position: relative;
+    backdrop-filter: blur(10px);
+  }
+  
+  .paymentIconWrapper:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    transform: translateY(-2px);
+  }
+  
+  /* Tooltip */
+  .paymentIconWrapper::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #ffffff;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .paymentIconWrapper:hover::after {
+    opacity: 1;
+    visibility: visible;
+    bottom: -35px;
+  }
+  
+  .paymentSvg {
+    width: 1.6rem;
+    height: 1.6rem;
+  }
+  
+  /* Legal Section - Apple Style */
+  .legalSection {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .legalLink {
+    background: none;
+    border: none;
+    color: #86868b;
+    font-weight: 400;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    padding: 0.2rem 0.4rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  
+  .legalLink:hover {
+    color: #ffffff;
+  }
+  
+  .separator {
+    color: #3d3d40;
+    font-size: 0.8rem;
+  }
+  
+  /* Copyright */
+  .footerCopyright {
+    text-align: center;
+    color: #6e6e73;
+    font-size: 0.75rem;
+    padding-top: 0.5rem;
+  }
+  
+  .footerCopyright strong {
+    color: #f5f5f7;
+    font-weight: 500;
+  }
+  
+  /* ==========================================
+     MODAL STYLING - APPLE STYLE
+     ========================================== */
+  
+  .modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    backdrop-filter: blur(20px);
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .modalContent {
+    background: #1c1c1e;
+    border-radius: 18px;
+    max-width: 600px;
+    width: 100%;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .modalHeader {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 18px 18px 0 0;
+  }
+  
+  .modalHeader h2 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 1.3rem;
+    font-weight: 600;
+  }
+  
+  .modalClose {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #ffffff;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+  }
+  
+  .modalClose:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  .modalBody {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+    color: #f5f5f7;
+  }
+  
+  .modalBody h3 {
+    color: #ffffff;
+    font-weight: 600;
+    margin: 1.5rem 0 0.5rem 0;
+    font-size: 1rem;
+  }
+  
+  .modalBody h3:first-child {
+    margin-top: 0;
+  }
+  
+  .modalBody p {
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    color: #a1a1a6;
+  }
+  
+  .modalBody ul,
+  .modalBody ol {
+    margin-left: 1.25rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.7;
+    color: #a1a1a6;
+  }
+  
+  .modalBody li {
+    margin-bottom: 0.4rem;
+    font-size: 0.9rem;
+  }
+  
+  .modalFooter {
+    padding: 1.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0 0 18px 18px;
+  }
+  
+  .modalBtn {
+    padding: 0.6rem 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+    font-weight: 500;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+  }
+  
+  .modalBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .modalBtn.primary {
+    background: #3db28a;
+    color: white;
+    border: none;
+  }
+  
+  .modalBtn.primary:hover {
+    background: #4ec39b;
+    transform: translateY(-1px);
+  }
+  
+  /* ==========================================
+     ANIMATIONS
+     ========================================== */
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  /* ==========================================
+     RESPONSIVE DESIGN
+     ========================================== */
+  
+  @media (max-width: 768px) {
+    .footerContainer {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2rem;
+      padding: 2rem 1.5rem;
+    }
+  
+    .logoContainer {
+      width: 100px;
+      height: 100px;
+    }
+  
+    .brandLogo {
+      max-width: 80px;
+    }
+  
+    .brandTagline,
+    .brandDescription {
+      max-width: 100%;
+    }
+  
+    .paymentIconWrapper {
+      width: 40px;
+      height: 40px;
+      font-size: 1.4rem;
+    }
+  
+    .paymentSvg {
+      width: 1.4rem;
+      height: 1.4rem;
+    }
+  
+    .legalSection {
+      gap: 0.3rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .footerContainer {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      padding: 2rem 1.5rem;
+    }
+  
+    .footerColumn {
+      text-align: center;
+    }
+  
+    .logoWrapper {
+      display: flex;
+      justify-content: center;
+    }
+  
+    .logoContainer {
+      width: 120px;
+      height: 120px;
+    }
+  
+    .brandLogo {
+      max-width: 100px;
+    }
+  
+    .brandTagline,
+    .brandDescription {
+      margin-left: auto;
+      margin-right: auto;
+    }
+  
+    .socialSection {
+      justify-content: center;
+    }
+  
+    .contactItem {
+      justify-content: center;
+    }
+  
+    .serviceItem {
+      justify-content: center;
+    }
+  
+    .footerBottom {
+      padding: 1.5rem;
+    }
+  
+    .paymentIcons {
+      gap: 0.8rem;
+    }
+  
+    .paymentIconWrapper {
+      width: 38px;
+      height: 38px;
+      font-size: 1.3rem;
+    }
+  
+    .paymentSvg {
+      width: 1.3rem;
+      height: 1.3rem;
+    }
+  
+    .legalSection {
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+  
+    .legalLink {
+      font-size: 0.75rem;
+    }
+  
+    .separator {
+      display: none;
+    }
+  
+    .legalLink {
+      flex-basis: calc(33.333% - 0.5rem);
+      text-align: center;
+    }
+  }

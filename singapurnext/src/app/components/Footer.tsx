@@ -1,20 +1,39 @@
 'use client';
 
 import { useState } from "react";
-import "./Footer.css";
+import Image from "next/image";
+import styles from "./Footer.module.css";
 import { 
   FaFacebook, 
   FaInstagram, 
-  FaTwitter, 
   FaWhatsapp,
   FaEnvelope,
-  FaPhone,
   FaHeadset,
   FaShieldAlt,
   FaTruck,
   FaCreditCard,
-  FaTimes
+  FaTimes,
+  FaCcVisa,
+  FaCcMastercard,
+  FaApple,
+  FaLock
 } from "react-icons/fa";
+import { SiMercadopago } from "react-icons/si";
+
+// Componente personalizado para PSE
+const PseIcon = () => (
+  <svg 
+    viewBox="0 0 24 24" 
+    width="1em" 
+    height="1em" 
+    className={styles.paymentSvg}
+    fill="currentColor"
+  >
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+    <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/>
+    <text x="6" y="18" fontSize="8" fontWeight="bold" fill="currentColor">PSE</text>
+  </svg>
+);
 
 interface LegalContent {
   title: string;
@@ -192,35 +211,44 @@ const Footer = () => {
 
   return (
     <>
-      <footer className="footer">
-        <div className="footer-container">
-          {/* Column 1: Brand */}
-          <div className="footer-column">
-            <h2 className="brand-title">A MARTE</h2>
-            <p className="brand-tagline">Abriga su libertad</p>
-            <p className="brand-description">
+      <footer className={styles.footer}>
+        <div className={styles.footerContainer}>
+          {/* Column 1: Brand - Apple Style */}
+          <div className={styles.footerColumn}>
+            <div className={styles.logoWrapper}>
+              <div className={styles.logoGlow}></div>
+              <div className={styles.logoContainer}>
+                <Image 
+                  src="/images/logos/logver.svg"
+                  alt="A MARTE Logo"
+                  width={140}
+                  height={140}
+                  className={styles.brandLogo}
+                  priority={false}
+                />
+              </div>
+            </div>
+            <p className={styles.brandTagline}>Nos inspira su amor, su protección, su comodidad y su libertad para explorar.</p>
+            <p className={styles.brandDescription}>
               Pijamas pensadas para soñar, moverse y explorar sin límites.
             </p>
-            <div className="social-section">
-              <a href="https://www.facebook.com/profile.php?id=100087160562926" aria-label="Facebook" target="_blank" rel="noopener noreferrer" className="social-icon">
+            <div className={styles.socialSection}>
+              <a href="https://www.facebook.com/profile.php?id=100087160562926" aria-label="Facebook" target="_blank" rel="noopener noreferrer" className={styles.socialIcon}>
                 <FaFacebook />
               </a>
-              <a href="https://www.instagram.com/amartekids.co/" aria-label="Instagram" target="_blank" rel="noopener noreferrer" className="social-icon">
+              <a href="https://www.instagram.com/amartekids.co/" aria-label="Instagram" target="_blank" rel="noopener noreferrer" className={styles.socialIcon}>
                 <FaInstagram />
               </a>
-              {/* <a href="https://twitter.com/amartepijamas" aria-label="Twitter" target="_blank" rel="noopener noreferrer" className="social-icon">
-                <FaTwitter />
-              </a> */}
-              <a href="https://wa.me/573143853248" aria-label="WhatsApp" target="_blank" rel="noopener noreferrer" className="social-icon">
+              <a href="https://wa.me/573143853248" aria-label="WhatsApp" target="_blank" rel="noopener noreferrer" className={styles.socialIcon}>
                 <FaWhatsapp />
               </a>
             </div>
           </div>
 
           {/* Column 2: Quick Links */}
-          <div className="footer-column">
-            <h4 className="footer-title">Enlaces</h4>
-            <ul className="footer-links">
+          <div className={styles.footerColumn}>
+            <h4 className={styles.footerTitle}>Enlaces</h4>
+            <ul className={styles.footerLinks}>
               <li>
                 <a href="/">Inicio</a>
               </li>
@@ -240,120 +268,132 @@ const Footer = () => {
           </div>
 
           {/* Column 3: Contact */}
-          <div className="footer-column">
-            <h4 className="footer-title">Contacto</h4>
-            <div className="contact-items">
-              <div className="contact-item">
-                {/* <FaPhone className="contact-icon" /> */}
-              </div>
-              <div className="contact-item">
-                <FaWhatsapp className="contact-icon" />
+          <div className={styles.footerColumn}>
+            <h4 className={styles.footerTitle}>Contacto</h4>
+            <div className={styles.contactItems}>
+              <div className={styles.contactItem}>
+                <FaWhatsapp className={styles.contactIcon} />
                 <div>
-                  <span className="contact-text">+57 3143853248</span>
-                  <span className="contact-label">WhatsApp</span>
+                  <span className={styles.contactText}>+57 3143853248</span>
+                  <span className={styles.contactLabel}>WhatsApp</span>
                 </div>
               </div>
-              <div className="contact-item">
-                <FaEnvelope className="contact-icon" />
+              <div className={styles.contactItem}>
+                <FaEnvelope className={styles.contactIcon} />
                 <div>
-                  <span className="contact-text">orbitaamarte@gmail.com</span>
-                  <span className="contact-label">Información</span>
+                  <span className={styles.contactText}>orbitaamarte@gmail.com</span>
+                  <span className={styles.contactLabel}>Información</span>
                 </div>
               </div>
-              <div className="contact-item">
-                <FaHeadset className="contact-icon" />
+              <div className={styles.contactItem}>
+                <FaHeadset className={styles.contactIcon} />
                 <div>
-                  <span className="contact-text">orbitaamarte@gmail.com</span>
-                  <span className="contact-label">Soporte</span>
+                  <span className={styles.contactText}>orbitaamarte@gmail.com</span>
+                  <span className={styles.contactLabel}>Soporte</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Column 4: Services */}
-          <div className="footer-column">
-            <h4 className="footer-title">Servicios</h4>
-            <div className="services-list">
-              <div className="service-item">
-                <FaShieldAlt className="service-icon" />
+          <div className={styles.footerColumn}>
+            <h4 className={styles.footerTitle}>Servicios</h4>
+            <div className={styles.servicesList}>
+              <div className={styles.serviceItem}>
+                <FaLock className={styles.serviceIcon} />
                 <span>Compra 100% Segura</span>
               </div>
-              <div className="service-item">
-                <FaTruck className="service-icon" />
+              <div className={styles.serviceItem}>
+                <FaTruck className={styles.serviceIcon} />
                 <span>Envíos a todo Colombia</span>
               </div>
-              <div className="service-item">
-                <FaCreditCard className="service-icon" />
+              <div className={styles.serviceItem}>
+                <FaCreditCard className={styles.serviceIcon} />
                 <span>Múltiples pagos</span>
               </div>
-              <div className="service-item">
-                <FaHeadset className="service-icon" />
-                <span>Lunes a viernes · 8:00 a. m. – 5:00 p. m.</span>
+              <div className={styles.serviceItem}>
+                {/* <FaApple className={styles.serviceIcon} />
+                <span>Diseño Apple Style</span> */}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Bottom Section */}
-        <div className="footer-bottom">
-          {/* Payment Methods */}
-          <div className="payment-methods">
-            <span>Métodos de pago:</span>
-            <div className="payment-icons">
-              <span className="payment-icon">Visa</span>
-              <span className="payment-icon">Mastercard</span>
-              <span className="payment-icon">Nequi</span>
-              <span className="payment-icon">Daviplata</span>
+        {/* Bottom Section - Apple Style */}
+        <div className={styles.footerBottom}>
+          <div className={styles.bottomContent}>
+            {/* Payment Methods */}
+            <div className={styles.paymentMethods}>
+              <span className={styles.paymentTitle}>Métodos de pago</span>
+              <div className={styles.paymentIcons}>
+                <div className={styles.paymentIconWrapper} title="PSE">
+                  <PseIcon />
+                </div>
+                <div className={styles.paymentIconWrapper} title="Mastercard">
+                  <FaCcMastercard />
+                </div>
+                <div className={styles.paymentIconWrapper} title="Visa">
+                  <FaCcVisa />
+                </div>
+                <div className={styles.paymentIconWrapper} title="Mercado Pago">
+                  <SiMercadopago />
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Legal Links */}
-          <div className="legal-section">
-            <button className="legal-link" onClick={() => openModal("terminos")}>
-              Términos y Condiciones
-            </button>
-            <button className="legal-link" onClick={() => openModal("privacidad")}>
-              Política de Privacidad
-            </button>
-            <button className="legal-link" onClick={() => openModal("devoluciones")}>
-              Política de Devoluciones
-            </button>
-            <button className="legal-link" onClick={() => openModal("garantias")}>
-              Garantías
-            </button>
-            <button className="legal-link" onClick={() => openModal("preguntas")}>
-              Preguntas Frecuentes
-            </button>
-            <button className="legal-link" onClick={() => openModal("aviso")}>
-              Aviso Legal
-            </button>
-          </div>
+            {/* Legal Links */}
+            <div className={styles.legalSection}>
+              <button className={styles.legalLink} onClick={() => openModal("terminos")}>
+                Términos
+              </button>
+              <span className={styles.separator}>•</span>
+              <button className={styles.legalLink} onClick={() => openModal("privacidad")}>
+                Privacidad
+              </button>
+              <span className={styles.separator}>•</span>
+              <button className={styles.legalLink} onClick={() => openModal("devoluciones")}>
+                Devoluciones
+              </button>
+              <span className={styles.separator}>•</span>
+              <button className={styles.legalLink} onClick={() => openModal("garantias")}>
+                Garantías
+              </button>
+              <span className={styles.separator}>•</span>
+              <button className={styles.legalLink} onClick={() => openModal("preguntas")}>
+                FAQ
+              </button>
+              <span className={styles.separator}>•</span>
+              <button className={styles.legalLink} onClick={() => openModal("aviso")}>
+                Aviso
+              </button>
+            </div>
 
-          {/* Copyright */}
-          <div className="footer-copyright">
-            &copy; {currentYear} <strong>A MARTE</strong> • Pijamas Infantiles • Colombia
+            {/* Copyright */}
+            <div className={styles.footerCopyright}>
+              &copy; {currentYear} <strong>A MARTE</strong> · Pijamas Infantiles · Colombia
+            </div>
           </div>
         </div>
       </footer>
 
       {/* Modal */}
       {activeModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
+        <div className={styles.modalOverlay} onClick={closeModal}>
+          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
               <h2>{legalContent[activeModal]?.title}</h2>
-              <button className="modal-close" onClick={closeModal}>
+              <button className={styles.modalClose} onClick={closeModal}>
                 <FaTimes />
               </button>
             </div>
-            <div className="modal-body">
+            <div className={styles.modalBody}>
               <div dangerouslySetInnerHTML={{ __html: legalContent[activeModal]?.content }} />
             </div>
-            <div className="modal-footer">
-              <button className="modal-btn" onClick={closeModal}>
+            <div className={styles.modalFooter}>
+              <button className={styles.modalBtn} onClick={closeModal}>
                 Cerrar
               </button>
-              <button className="modal-btn primary" onClick={() => window.print()}>
+              <button className={`${styles.modalBtn} ${styles.primary}`} onClick={() => window.print()}>
                 Imprimir
               </button>
             </div>
