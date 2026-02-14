@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import ImageUploader from "./ImageUploader";
 import styles from "./Admin.module.css";
+import FirstPurchaseDiscountControl from "../admin/discount/FirstPurchaseDiscountControl"; // 👈 IMPORTAR
+import { Toaster } from 'react-hot-toast'; // 👈 IMPORTAR TOASTER
 
 // Tipos de datos compatibles
 interface Image {
@@ -146,6 +148,8 @@ const Admin = () => {
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [showLogPanel, setShowLogPanel] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [showDiscountPanel, setShowDiscountPanel] = useState(false); // 👈 NUEVO STATE
+
 
   // Estado para formulario compacto
   const [name, setName] = useState("");
@@ -868,6 +872,17 @@ product.variants.forEach(variant => {
 
   return (
     <div className={styles.container}>
+      {/* Toaster para notificaciones */}
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+        }}
+      />
       {/* Header con navegación */}
       <div className={styles.adminHeader}>
         <div className={styles.headerLeft}>
@@ -906,6 +921,14 @@ product.variants.forEach(variant => {
             <span className={styles.buttonIcon}>📝</span>
             Blog
           </button>
+          {/* 👇 NUEVO BOTÓN PARA DESCUENTOS */}
+          <button 
+            className={`${styles.navButton} ${showDiscountPanel ? styles.active : ''}`}
+            onClick={() => setShowDiscountPanel(!showDiscountPanel)}
+          >
+            <span className={styles.buttonIcon}>🎁</span>
+            Descuento 1ra Compra
+          </button>
           <button 
             className={`${styles.logButton} ${showLogPanel ? styles.active : ''}`}
             onClick={() => setShowLogPanel(!showLogPanel)}
@@ -915,6 +938,12 @@ product.variants.forEach(variant => {
           </button>
         </div>
       </div>
+      {/* 👇 NUEVO PANEL DE DESCUENTO */}
+      {showDiscountPanel && (
+        <div className={styles.discountPanel}>
+          <FirstPurchaseDiscountControl />
+        </div>
+      )}
 
       {/* Panel de Logs */}
       {showLogPanel && (

@@ -1786,3 +1786,17 @@
     font-size: 14px;
   }
 }
+/* Para el botón de descuento */
+.navButton.active {
+  background: #8b5cf6;
+  color: white;
+}
+
+/* Panel de descuento */
+.discountPanel {
+  margin: 20px 0;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+}
