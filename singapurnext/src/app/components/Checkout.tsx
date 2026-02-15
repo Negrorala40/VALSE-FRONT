@@ -37,7 +37,8 @@ import {
   Lock,
   Shield,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Gift // 👈 NUEVO ICONO
 } from 'lucide-react';
 
 interface CartItem {
@@ -91,6 +92,10 @@ interface OrderResponse {
     productVariantId: number;
   }>;
   customerEmail?: string;
+  // 👇 NUEVOS CAMPOS PARA DESCUENTO
+  firstPurchaseDiscountApplied?: boolean;
+  firstPurchaseDiscountPercentage?: number;
+  firstPurchaseDiscountAmount?: number;
 }
 
 interface AnonymousUserInfo {
@@ -113,6 +118,12 @@ interface MercadoPagoResponse {
   validation?: string;
   hasExistingPreference?: boolean;
   message?: string;
+  // 👇 NUEVOS CAMPOS
+  subtotalWithoutDiscount?: number;
+  totalDiscount?: number;
+  hasDiscount?: boolean;
+  hasShipping?: boolean;
+  orderStatus?: string;
 }
 
 interface PaymentStatusResponse {
@@ -132,6 +143,10 @@ interface PaymentStatusResponse {
   stockReservationMinutesLeft?: number;
   paymentInfo?: any;
   cancellationReason?: string;
+  // 👇 NUEVOS CAMPOS
+  firstPurchaseDiscountApplied?: boolean;
+  firstPurchaseDiscountPercentage?: number;
+  firstPurchaseDiscountAmount?: number;
 }
 
 interface CartTotalsResponse {
@@ -170,6 +185,19 @@ const CheckoutPage = () => {
   const [totalItems, setTotalItems] = useState<number>(0);
   const [discountSavings, setDiscountSavings] = useState<number>(0);
   const [originalSubtotal, setOriginalSubtotal] = useState<number>(0);
+  
+  // 👇 NUEVOS ESTADOS PARA DESCUENTO DE PRIMERA COMPRA
+  const [firstPurchaseDiscount, setFirstPurchaseDiscount] = useState<{
+    applied: boolean;
+    percentage: number;
+    amount: number;
+    message?: string;
+  }>({
+    applied: false,
+    percentage: 0,
+    amount: 0
+  });
+
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
@@ -315,6 +343,27 @@ const CheckoutPage = () => {
     setOriginalSubtotal(data.originalSubtotal || data.subtotal || 0);
   }, []);
 
+  // 🔴 NUEVA FUNCIÓN: Actualizar descuento de primera compra desde la orden
+  const updateFirstPurchaseDiscountFromOrder = useCallback((order: OrderResponse) => {
+    if (order.firstPurchaseDiscountApplied && order.firstPurchaseDiscountAmount && order.firstPurchaseDiscountAmount > 0) {
+      setFirstPurchaseDiscount({
+        applied: true,
+        percentage: order.firstPurchaseDiscountPercentage || 0,
+        amount: order.firstPurchaseDiscountAmount,
+        message: `¡Felicidades! Por ser tu primera compra, tienes ${order.firstPurchaseDiscountPercentage}% de descuento 🎉`
+      });
+      
+      // Mostrar mensaje de felicitación
+      setSuccessMessage(`🎉 ¡Felicidades! Por ser tu primera compra, tienes ${order.firstPurchaseDiscountPercentage}% de descuento`);
+    } else {
+      setFirstPurchaseDiscount({
+        applied: false,
+        percentage: 0,
+        amount: 0
+      });
+    }
+  }, []);
+
   // 🔴 FUNCIÓN PARA RENDERIZAR PRECIO DE ITEM CON DESCUENTO
   const renderItemPrice = useCallback((item: CartItem) => {
     const itemTotal = item.price * item.quantity;
@@ -371,6 +420,13 @@ const CheckoutPage = () => {
           setOrderId('');
           setMercadoPagoData(null);
           setPaymentStatus(null);
+          
+          // Limpiar descuento de primera compra
+          setFirstPurchaseDiscount({
+            applied: false,
+            percentage: 0,
+            amount: 0
+          });
           
           // Crear nueva orden automáticamente
           await createOrderSilently();
@@ -497,7 +553,7 @@ const CheckoutPage = () => {
       const items: CartItem[] = data.items.map(
         (item: any) => ({
           id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
-image: item.imageUrl?.trim() || '/images/placeholder.png',
+          image: item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || 'Producto',
           price: item.priceWithDiscount || item.price || 0,
           originalPrice: item.originalPrice || item.price || 0,
@@ -755,6 +811,11 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         setOrderCreated(true);
         orderFromStorageRef.current = pendingOrder;
         
+        // Si hay información de descuento en la orden guardada, restaurarla
+        if (orderData.firstPurchaseDiscount) {
+          setFirstPurchaseDiscount(orderData.firstPurchaseDiscount);
+        }
+        
         if (step === 3) {
           console.log('🔄 Recuperando orden pendiente:', pendingOrder);
         }
@@ -1008,6 +1069,11 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         return null;
       }
 
+      // 🔴 ACTUALIZAR DESCUENTO DE PRIMERA COMPRA SI APLICA
+      if (orderResponse.firstPurchaseDiscountApplied) {
+        updateFirstPurchaseDiscountFromOrder(orderResponse);
+      }
+
       // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
       const currentCartHash = calculateCartHash(cartItems);
       localStorage.setItem('lastOrderCartHash', currentCartHash);
@@ -1015,14 +1081,20 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
       
       console.log('📋 Hash del carrito actualizado:', currentCartHash);
 
-      // Guardar orden en localStorage
+      // Guardar orden en localStorage con información de descuento
       localStorage.setItem('pendingOrderId', orderResponse.id.toString());
       localStorage.setItem('pendingOrderData', JSON.stringify({
         shippingAddress: selectedAddress,
         customerInfo: isAuthenticated ? userData : anonymousUserInfo,
         createdAt: new Date().toISOString(),
         total: orderResponse.totalPrice,
-        cartHash: currentCartHash
+        cartHash: currentCartHash,
+        // Guardar información de descuento
+        firstPurchaseDiscount: orderResponse.firstPurchaseDiscountApplied ? {
+          applied: true,
+          percentage: orderResponse.firstPurchaseDiscountPercentage,
+          amount: orderResponse.firstPurchaseDiscountAmount
+        } : null
       }));
 
       setOrderId(orderResponse.id.toString());
@@ -1131,6 +1203,12 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         throw new Error('No se pudo obtener el ID de la orden');
       }
 
+      // 🔴 ACTUALIZAR DESCUENTO DE PRIMERA COMPRA SI APLICA
+      if (orderResponse.firstPurchaseDiscountApplied) {
+        updateFirstPurchaseDiscountFromOrder(orderResponse);
+        setSuccessMessage(`🎉 ¡Felicidades! Por ser tu primera compra, tienes ${orderResponse.firstPurchaseDiscountPercentage}% de descuento`);
+      }
+
       // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
       const currentCartHash = calculateCartHash(cartItems);
       localStorage.setItem('lastOrderCartHash', currentCartHash);
@@ -1145,12 +1223,17 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         customerInfo: isAuthenticated ? userData : anonymousUserInfo,
         createdAt: new Date().toISOString(),
         total: orderResponse.totalPrice,
-        cartHash: currentCartHash
+        cartHash: currentCartHash,
+        // Guardar información de descuento
+        firstPurchaseDiscount: orderResponse.firstPurchaseDiscountApplied ? {
+          applied: true,
+          percentage: orderResponse.firstPurchaseDiscountPercentage,
+          amount: orderResponse.firstPurchaseDiscountAmount
+        } : null
       }));
 
       setOrderId(orderResponse.id.toString());
       setOrderCreated(true);
-      setSuccessMessage(`Orden #${orderResponse.id} creada exitosamente`);
       
       if (orderFromStorageRef.current) {
         orderFromStorageRef.current = null;
@@ -1167,7 +1250,7 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, total, calculateCartHash]);
+  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, total, calculateCartHash, updateFirstPurchaseDiscountFromOrder]);
 
   // 🔴 FUNCIÓN PARA CREAR PREFERENCIA
   const createMercadoPagoPreference = async (orderId: string) => {
@@ -1183,7 +1266,7 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
       const token = localStorage.getItem('token');
       const headers = getRequestHeaders(token);
       
-      const totalAmount = total;
+      const totalAmount = total; // Esto ya incluye el descuento de primera compra
       
       const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
@@ -1222,6 +1305,13 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
               setOrderId('');
               setMercadoPagoData(null);
               setPaymentStatus(null);
+              
+              // Limpiar descuento
+              setFirstPurchaseDiscount({
+                applied: false,
+                percentage: 0,
+                amount: 0
+              });
               
               // Crear nueva orden automáticamente
               const newOrder = await createOrderSilently();
@@ -1281,6 +1371,13 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         setOrderId('');
         setMercadoPagoData(null);
         
+        // Limpiar descuento
+        setFirstPurchaseDiscount({
+          applied: false,
+          percentage: 0,
+          amount: 0
+        });
+        
         // Forzar recarga del carrito
         const token = localStorage.getItem('token');
         await fetchCart(token);
@@ -1300,6 +1397,13 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         localStorage.removeItem('pendingOrderData');
         setOrderCreated(false);
         setOrderId('');
+        
+        // Limpiar descuento
+        setFirstPurchaseDiscount({
+          applied: false,
+          percentage: 0,
+          amount: 0
+        });
         
         // Crear nueva orden automáticamente
         await createOrderSilently();
@@ -1337,10 +1441,20 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
       console.log('📊 Estado del pago:', {
         orderStatus: data.status,
         mpStatus: data.mercadoPagoStatus,
-        reservationMinutesLeft: data.stockReservationMinutesLeft
+        reservationMinutesLeft: data.stockReservationMinutesLeft,
+        firstPurchaseDiscountApplied: data.firstPurchaseDiscountApplied
       });
       
       setPaymentStatus(data);
+      
+      // 🔴 ACTUALIZAR DESCUENTO DE PRIMERA COMPRA DESDE EL ESTADO
+      if (data.firstPurchaseDiscountApplied) {
+        setFirstPurchaseDiscount({
+          applied: true,
+          percentage: data.firstPurchaseDiscountPercentage || 0,
+          amount: data.firstPurchaseDiscountAmount || 0
+        });
+      }
       
       // 🔴 VERIFICAR SI LA ORDEN ESTÁ CANCELADA (EXPIRADA)
       if (data.status === 'CANCELADO' || data.cancellationReason?.includes('expirado')) {
@@ -1355,6 +1469,13 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
         setOrderCreated(false);
         setOrderId('');
         setMercadoPagoData(null);
+        
+        // Limpiar descuento
+        setFirstPurchaseDiscount({
+          applied: false,
+          percentage: 0,
+          amount: 0
+        });
         
         // Crear nueva orden automáticamente
         await createOrderSilently();
@@ -1381,6 +1502,13 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
           localStorage.removeItem('pendingOrderData');
           localStorage.removeItem('pendingPreferenceId');
           setOrderCreated(false);
+          
+          // Limpiar descuento
+          setFirstPurchaseDiscount({
+            applied: false,
+            percentage: 0,
+            amount: 0
+          });
           
           // Crear nueva orden automáticamente
           await createOrderSilently();
@@ -1444,6 +1572,13 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
     setOrderCreated(false);
     setOrderId('');
     setMercadoPagoData(null);
+    
+    // Limpiar descuento
+    setFirstPurchaseDiscount({
+      applied: false,
+      percentage: 0,
+      amount: 0
+    });
     
     setSuccessMessage(`✅ ¡Pago exitoso! Tu orden #${orderId} ha sido confirmada. Redirigiendo...`);
     
@@ -1550,6 +1685,20 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
     { number: 3, label: "Pago", icon: CreditCard },
   ];
 
+  // 🔴 CALCULAR TOTAL CON DESCUENTO DE PRIMERA COMPRA PARA MOSTRAR
+  const calculateTotalWithFirstPurchaseDiscount = useCallback(() => {
+    if (firstPurchaseDiscount.applied && firstPurchaseDiscount.amount > 0) {
+      // El total ya incluye el descuento de primera compra (viene del backend)
+      return total;
+    }
+    return total;
+  }, [total, firstPurchaseDiscount]);
+
+  // 🔴 CALCULAR SUBTOTAL CON DESCUENTO DE PRODUCTOS PARA MOSTRAR
+  const calculateSubtotalAfterProductDiscounts = useCallback(() => {
+    return subtotal; // Esto ya viene con los descuentos de productos del backend
+  }, [subtotal]);
+
   if (loading && step === 1) {
     return (
       <div className="checkout-page">
@@ -1617,6 +1766,19 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
             >
               Entendido
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🔴 BANNER DE DESCUENTO PRIMERA COMPRA */}
+      {firstPurchaseDiscount.applied && firstPurchaseDiscount.percentage > 0 && (
+        <div className="checkout-first-purchase-banner">
+          <div className="checkout-first-purchase-content">
+            <Gift className="checkout-icon" size={24} />
+            <div className="checkout-first-purchase-text">
+              <h4>🎉 ¡Felicidades! Tienes {firstPurchaseDiscount.percentage}% de descuento en tu primera compra</h4>
+              <p>Hemos aplicado un descuento de {formatPrice(firstPurchaseDiscount.amount)} a tu orden</p>
+            </div>
           </div>
         </div>
       )}
@@ -2161,6 +2323,64 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
                       ))}
                     </div>
 
+                    {/* 🔴 SECCIÓN DE RESUMEN CON DESCUENTO DE PRIMERA COMPRA */}
+                    <div className="checkout-total-summary">
+                      <div className="checkout-summary-row">
+                        <span>Subtotal productos:</span>
+                        <span>{formatPrice(originalSubtotal)}</span>
+                      </div>
+                      
+                      {discountSavings > 0 && (
+                        <div className="checkout-summary-row checkout-discount">
+                          <span>
+                            <Star className="checkout-icon" size={14} />
+                            Descuentos en productos:
+                          </span>
+                          <span className="checkout-discount-amount">-{formatPrice(discountSavings)}</span>
+                        </div>
+                      )}
+                      
+                      <div className="checkout-summary-row">
+                        <span>Subtotal con descuentos:</span>
+                        <span>{formatPrice(subtotal)}</span>
+                      </div>
+                      
+                      {firstPurchaseDiscount.applied && firstPurchaseDiscount.amount > 0 && (
+                        <>
+                          <div className="checkout-summary-row checkout-first-purchase">
+                            <span>
+                              <Gift className="checkout-icon" size={14} />
+                              Descuento primera compra ({firstPurchaseDiscount.percentage}%):
+                            </span>
+                            <span className="checkout-first-purchase-amount">-{formatPrice(firstPurchaseDiscount.amount)}</span>
+                          </div>
+                          <div className="checkout-summary-row checkout-subtotal-after-first">
+                            <span>Subtotal después del descuento:</span>
+                            <span>{formatPrice(subtotal - firstPurchaseDiscount.amount)}</span>
+                          </div>
+                        </>
+                      )}
+                      
+                      <div className="checkout-summary-row">
+                        <span>Envío:</span>
+                        <span className={shippingCost === 0 ? "free" : ""}>
+                          {shippingCost === 0 ? "Gratis" : formatPrice(shippingCost)}
+                        </span>
+                      </div>
+                      
+                      <div className="checkout-summary-total">
+                        <span className="checkout-total-label">TOTAL A PAGAR:</span>
+                        <span className="checkout-total-amount">{formatPrice(total)}</span>
+                      </div>
+                      
+                      {firstPurchaseDiscount.applied && (
+                        <div className="checkout-first-purchase-message">
+                          <Sparkles className="checkout-icon" size={16} />
+                          <p>¡Has ahorrado {formatPrice(firstPurchaseDiscount.amount)} en tu primera compra! 🎉</p>
+                        </div>
+                      )}
+                    </div>
+
                     {isProcessingPayment && (
                       <div className="checkout-processing-payment">
                         <div className="checkout-spinner large"></div>
@@ -2210,6 +2430,17 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
                                   ? `${paymentStatus.stockReservationMinutesLeft} minutos` 
                                   : 'Expirada'}
                               </span>
+                            </div>
+                          )}
+                          
+                          {/* 🔴 MOSTRAR DESCUENTO DE PRIMERA COMPRA EN EL ESTADO DEL PAGO */}
+                          {paymentStatus.firstPurchaseDiscountApplied && paymentStatus.firstPurchaseDiscountAmount && paymentStatus.firstPurchaseDiscountAmount > 0 && (
+                            <div className="checkout-payment-status-row checkout-success">
+                              <span>
+                                <Gift className="checkout-icon" size={14} />
+                                Descuento primera compra:
+                              </span>
+                              <span className="text-green-600">-{formatPrice(paymentStatus.firstPurchaseDiscountAmount)}</span>
                             </div>
                           )}
                         </div>
@@ -2344,25 +2575,39 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
                   </div>
 
                   <div className="checkout-summary-divider">
-                    {discountSavings > 0 && (
+                    {originalSubtotal > subtotal && (
                       <div className="checkout-summary-row checkout-summary-discount">
                         <span>Subtotal original</span>
                         <span className="checkout-original-price">{formatPrice(originalSubtotal)}</span>
                       </div>
                     )}
+                    
                     <div className="checkout-summary-row">
-                      <span>Subtotal</span>
+                      <span>Subtotal con descuentos</span>
                       <span>{formatPrice(subtotal)}</span>
                     </div>
+                    
                     {discountSavings > 0 && (
                       <div className="checkout-summary-row checkout-discount-savings">
                         <span>
                           <Check className="checkout-icon" size={12} />
-                          Descuento aplicado
+                          Descuentos en productos
                         </span>
                         <span className="checkout-savings">-{formatPrice(discountSavings)}</span>
                       </div>
                     )}
+                    
+                    {/* 🔴 MOSTRAR DESCUENTO PRIMERA COMPRA EN SIDEBAR */}
+                    {firstPurchaseDiscount.applied && firstPurchaseDiscount.amount > 0 && (
+                      <div className="checkout-summary-row checkout-first-purchase-sidebar">
+                        <span>
+                          <Gift className="checkout-icon" size={12} />
+                          Descuento primera compra ({firstPurchaseDiscount.percentage}%)
+                        </span>
+                        <span className="checkout-first-purchase-amount">-{formatPrice(firstPurchaseDiscount.amount)}</span>
+                      </div>
+                    )}
+                    
                     <div className="checkout-summary-row">
                       <span>Envío</span>
                       <span className={shippingCost === 0 ? "free" : ""}>
@@ -2466,7 +2711,7 @@ image: item.imageUrl?.trim() || '/images/placeholder.png',
                 )) || 
                 loading || 
                 isProcessingPayment ||
-                needsCartAdjustment // 🔴 NO PERMITIR AVANZAR SI HAY AJUSTES PENDIENTES
+                needsCartAdjustment
               }
             >
               Continuar
