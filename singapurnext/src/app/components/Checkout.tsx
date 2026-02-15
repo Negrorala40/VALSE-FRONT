@@ -1227,49 +1227,53 @@ const CheckoutPage = () => {
   }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, total, calculateCartHash]);
 
   // 🔴 FUNCIÓN PARA CREAR PREFERENCIA
-  const createMercadoPagoPreference = async (orderId: string) => {
-    try {
-      setMercadoPagoLoading(true);
-      setError('');
-      
-      console.log('💳 Creando preferencia para orden:', orderId);
-      
-      // 🔴 VERIFICAR EXPIRACIÓN ANTES DE CREAR PREFERENCIA
-      await checkAndHandleExpiredOrder();
-      
-      const token = localStorage.getItem('token');
-      const headers = getRequestHeaders(token);
-      
-      // 🔴 OBTENER LA ORDEN PARA USAR SU TOTAL (que ya incluye todos los descuentos)
-      const orderData = localStorage.getItem('pendingOrderData');
-      let totalAmount = total; // fallback al total del carrito
-      
-      if (orderData) {
-        try {
-          const parsedOrder = JSON.parse(orderData);
-          if (parsedOrder.total) {
-            totalAmount = parsedOrder.total; // ← USA EL TOTAL DE LA ORDEN GUARDADA
-            console.log('💰 Usando total de orden guardada:', totalAmount);
-          }
-        } catch (e) {
-          console.error('Error parseando orderData:', e);
+  // 🔴 FUNCIÓN PARA CREAR PREFERENCIA - VERSIÓN CORREGIDA
+const createMercadoPagoPreference = async (orderId: string) => {
+  try {
+    setMercadoPagoLoading(true);
+    setError('');
+    
+    console.log('💳 Creando preferencia para orden:', orderId);
+    
+    // 🔴 VERIFICAR EXPIRACIÓN ANTES DE CREAR PREFERENCIA
+    await checkAndHandleExpiredOrder();
+    
+    const token = localStorage.getItem('token');
+    const headers = getRequestHeaders(token);
+    
+    // 🔴 OBTENER LA ORDEN PARA USAR SU TOTAL
+    const orderData = localStorage.getItem('pendingOrderData');
+    let productsTotal = total; // fallback al total del carrito
+    
+    if (orderData) {
+      try {
+        const parsedOrder = JSON.parse(orderData);
+        if (parsedOrder.total) {
+          productsTotal = parsedOrder.total; // Total de productos CON descuentos
+          console.log('💰 Total productos (con descuentos):', productsTotal);
         }
-      } else {
-        // Si no hay orden guardada, obtener de la respuesta de createOrder
-        console.log('⚠️ Usando total del carrito como fallback:', totalAmount);
+      } catch (e) {
+        console.error('Error parseando orderData:', e);
       }
-      
-      const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify({
-          orderId: parseInt(orderId),
-          totalAmount: totalAmount, // ← AHORA USA EL TOTAL CORRECTO
-          paymentMethod: "MERCADO_PAGO",
-          shippingAmount: shippingCost
-        }),
-      });
+    }
+    
+    // 🔴 CALCULAR TOTAL CON ENVÍO
+    const totalWithShipping = productsTotal + shippingCost;
+    console.log('📦 Total productos:', productsTotal);
+    console.log('🚚 Costo envío:', shippingCost);
+    console.log('💰 Total con envío:', totalWithShipping);
+    
+    const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        orderId: parseInt(orderId),
+        totalAmount: totalWithShipping, // ← AHORA INCLUYE ENVÍO
+        paymentMethod: "MERCADO_PAGO",
+        shippingAmount: shippingCost
+      }),
+    });
 
       if (!response.ok) {
         const errorText = await response.text();
