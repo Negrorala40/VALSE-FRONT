@@ -2499,78 +2499,124 @@ const createMercadoPagoPreference = async (orderId: string) => {
                   </div>
 
                   <div className="checkout-summary-divider">
-                    {discountSavings > 0 && (
-                      <div className="checkout-summary-row checkout-summary-discount">
-                        <span>Subtotal original</span>
-                        <span className="checkout-original-price">{formatPrice(originalSubtotal)}</span>
-                      </div>
-                    )}
-                    <div className="checkout-summary-row">
-                      <span>Subtotal</span>
-                      <span>{formatPrice(subtotal)}</span>
-                    </div>
-                    {discountSavings > 0 && (
-                      <div className="checkout-summary-row checkout-discount-savings">
-                        <span>
-                          <Check className="checkout-icon" size={12} />
-                          Descuento aplicado
-                        </span>
-                        <span className="checkout-savings">-{formatPrice(discountSavings)}</span>
-                      </div>
-                    )}
-                    <div className="checkout-summary-row">
-                      <span>Envío</span>
-                      <span className={shippingCost === 0 ? "free" : ""}>
-                        {shippingCost === 0 ? "Gratis" : formatPrice(shippingCost)}
-                      </span>
-                    </div>
-                  </div>
+  {/* Subtotal original (sin ningún descuento) */}
+  {originalSubtotal > 0 && (
+    <div className="checkout-summary-row checkout-summary-original">
+      <span>Subtotal original</span>
+      <span className="checkout-original-price">{formatPrice(originalSubtotal)}</span>
+    </div>
+  )}
+  
+  {/* Subtotal con descuentos de producto */}
+  <div className="checkout-summary-row">
+    <span>Subtotal productos</span>
+    <span>{formatPrice(subtotal)}</span>
+  </div>
+  
+  {/* 🔴 Descuento de primera compra (si está aplicado en la orden) */}
+  {paymentStatus?.firstPurchaseDiscountApplied && (
+    <div className="checkout-summary-row checkout-first-purchase-discount">
+      <span>
+        <Gift className="checkout-icon" size={12} />
+        Descuento primera compra ({paymentStatus.firstPurchaseDiscountPercentage}%)
+      </span>
+      <span className="checkout-savings">-{formatPrice(paymentStatus.firstPurchaseDiscountAmount || 0)}</span>
+    </div>
+  )}
+  
+  {/* 🔴 Descuento de primera compra (estimado mientras no hay orden) */}
+  {!paymentStatus && discountConfig.enabled && step === 3 && (
+    (() => {
+      const appliesToUser = (isAuthenticated && !userData) || 
+                           (!isAuthenticated && discountConfig.applyToAnonymous);
+      if (!appliesToUser) return null;
+      
+      const estimatedDiscount = subtotal * (discountConfig.discountPercentage / 100);
+      return (
+        <div className="checkout-summary-row checkout-first-purchase-discount estimated">
+          <span>
+            <Gift className="checkout-icon" size={12} />
+            Descuento primera compra (estimado)
+          </span>
+          <span className="checkout-savings">-{formatPrice(estimatedDiscount)}</span>
+        </div>
+      );
+    })()
+  )}
+  
+  {/* Descuentos de producto (si existen y no hay descuento primera compra) */}
+  {discountSavings > 0 && !paymentStatus?.firstPurchaseDiscountApplied && (
+    <div className="checkout-summary-row checkout-discount-savings">
+      <span>
+        <Check className="checkout-icon" size={12} />
+        Descuento en productos
+      </span>
+      <span className="checkout-savings">-{formatPrice(discountSavings)}</span>
+    </div>
+  )}
+  
+  {/* Envío */}
+  <div className="checkout-summary-row">
+    <span>Envío</span>
+    <span className={shippingCost === 0 ? "free" : ""}>
+      {shippingCost === 0 ? "Gratis" : formatPrice(shippingCost)}
+    </span>
+  </div>
 
-                  <div className="checkout-summary-total">
-                    <span className="checkout-summary-total-label">Total</span>
-                    <span className="checkout-summary-total-value">{formatPrice(total)}</span>
-                  </div>
-                  <p className="checkout-summary-iva">Incluye IVA</p>
+  {/* 🔴 Total (UNA SOLA VEZ) */}
+  <div className="checkout-summary-total">
+    <span className="checkout-summary-total-label">Total</span>
+    <span className="checkout-summary-total-value">
+  {formatPrice(
+    paymentStatus?.firstPurchaseDiscountApplied 
+      ? (subtotal - (paymentStatus.firstPurchaseDiscountAmount || 0) + shippingCost)
+      : total
+  )}
+</span>
+  </div>
+</div>
 
-                  <div className="checkout-trust-badges">
-                    <div className="checkout-trust-badges-grid">
-                      <div className="checkout-trust-badge">
-                        <div className="checkout-trust-badge-icon mint">
-                          <Check className="checkout-icon" />
-                        </div>
-                        <span>Pago Seguro</span>
-                      </div>
-                      <div className="checkout-trust-badge">
-                        <div className="checkout-trust-badge-icon purple">
-                          <Package className="checkout-icon" />
-                        </div>
-                        <span>Envío Rápido</span>
-                      </div>
-                      <div className="checkout-trust-badge">
-                        <div className="checkout-trust-badge-icon orange">
-                          <Star className="checkout-icon" />
-                        </div>
-                        <span>Calidad Garantizada</span>
-                      </div>
-                      <div className="checkout-trust-badge">
-                        <div className="checkout-trust-badge-icon coral">
-                          <Shield size={14} />
-                        </div>
-                        <span>100% Seguro</span>
-                      </div>
-                    </div>
-                  </div>
+<p className="checkout-summary-iva">Incluye IVA</p>
 
-                  {!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && (
-                    <div className="checkout-first-purchase-prompt">
-                      <Gift className="checkout-icon" size={16} />
-                      <p>
-                        <strong>¡Primera compra!</strong>
-                        <br />
-                        <small>Recibirás {discountConfig.discountPercentage}% de descuento</small>
-                      </p>
-                    </div>
-                  )}
+<div className="checkout-trust-badges">
+  <div className="checkout-trust-badges-grid">
+    <div className="checkout-trust-badge">
+      <div className="checkout-trust-badge-icon mint">
+        <Check className="checkout-icon" />
+      </div>
+      <span>Pago Seguro</span>
+    </div>
+    <div className="checkout-trust-badge">
+      <div className="checkout-trust-badge-icon purple">
+        <Package className="checkout-icon" />
+      </div>
+      <span>Envío Rápido</span>
+    </div>
+    <div className="checkout-trust-badge">
+      <div className="checkout-trust-badge-icon orange">
+        <Star className="checkout-icon" />
+      </div>
+      <span>Calidad Garantizada</span>
+    </div>
+    <div className="checkout-trust-badge">
+      <div className="checkout-trust-badge-icon coral">
+        <Shield size={14} />
+      </div>
+      <span>100% Seguro</span>
+    </div>
+  </div>
+</div>
+
+{!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && (
+  <div className="checkout-first-purchase-prompt">
+    <Gift className="checkout-icon" size={16} />
+    <p>
+      <strong>¡Primera compra!</strong>
+      <br />
+      <small>Recibirás {discountConfig.discountPercentage}% de descuento</small>
+    </p>
+  </div>
+)}
                 </div>
               </div>
 
