@@ -92,6 +92,10 @@ export const ORDERS_MY_ORDERS = `${API_BASE_URL}/api/orders/my-orders`;
 // Detalle de orden específica
 export const ORDER_DETAIL = (id: number) => `${API_BASE_URL}/api/orders/${id}`;
 
+//inf de descuento a checkout 
+export const PUBLIC_DISCOUNT_CONFIG = `${API_BASE_URL}/api/public/discount/first-purchase`;
+
+
 // Cambiar estado de orden (administrador)
 export const ADMIN_UPDATE_ORDER_STATUS = `${API_BASE_URL}/api/payments/admin/change-status`;
 
