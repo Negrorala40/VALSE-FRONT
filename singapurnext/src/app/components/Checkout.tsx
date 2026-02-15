@@ -1240,8 +1240,24 @@ const CheckoutPage = () => {
       const token = localStorage.getItem('token');
       const headers = getRequestHeaders(token);
       
-      // 🔴 USAR EL TOTAL ACTUAL (YA INCLUYE DESCUENTOS)
-      const totalAmount = total;
+      // 🔴 OBTENER LA ORDEN PARA USAR SU TOTAL (que ya incluye todos los descuentos)
+      const orderData = localStorage.getItem('pendingOrderData');
+      let totalAmount = total; // fallback al total del carrito
+      
+      if (orderData) {
+        try {
+          const parsedOrder = JSON.parse(orderData);
+          if (parsedOrder.total) {
+            totalAmount = parsedOrder.total; // ← USA EL TOTAL DE LA ORDEN GUARDADA
+            console.log('💰 Usando total de orden guardada:', totalAmount);
+          }
+        } catch (e) {
+          console.error('Error parseando orderData:', e);
+        }
+      } else {
+        // Si no hay orden guardada, obtener de la respuesta de createOrder
+        console.log('⚠️ Usando total del carrito como fallback:', totalAmount);
+      }
       
       const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
         method: 'POST',
@@ -1249,7 +1265,7 @@ const CheckoutPage = () => {
         credentials: 'include',
         body: JSON.stringify({
           orderId: parseInt(orderId),
-          totalAmount: totalAmount,
+          totalAmount: totalAmount, // ← AHORA USA EL TOTAL CORRECTO
           paymentMethod: "MERCADO_PAGO",
           shippingAmount: shippingCost
         }),
