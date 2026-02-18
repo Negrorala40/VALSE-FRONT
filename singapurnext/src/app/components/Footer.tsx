@@ -219,7 +219,7 @@ const Footer = () => {
               <div className={styles.logoGlow}></div>
               <div className={styles.logoContainer}>
                 <Image 
-                  src="/images/logos/logver.svg"
+                  src="/images/logos/logverWhite.svg"
                   alt="A MARTE Logo"
                   width={140}
                   height={140}
