@@ -6,6 +6,7 @@ import Image from 'next/image';
 import styles from './Product.module.css';
 import { PRODUCT_DETAIL, MENU_PRODUCTS } from '../utils/Api';
 import { useCart } from '../context/CartContext';
+import { showToast } from '../utils/toast';
 
 interface Imagen {
   id?: number;
@@ -174,8 +175,6 @@ const sortSizes = (sizes: string[]): string[] => {
   });
 };
 
-let notificationId = 0;
-
 const ProductContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -192,26 +191,11 @@ const ProductContent = () => {
   const [imagenActual, setImagenActual] = useState<number>(0);
   const [imagenesActuales, setImagenesActuales] = useState<Imagen[]>([]);
   const [precioSeleccionado, setPrecioSeleccionado] = useState<number | null>(null);
-  const [notifications, setNotifications] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
   const [productNotFound, setProductNotFound] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [agregando, setAgregando] = useState<boolean>(false);
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
-
-  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
-    const id = ++notificationId;
-    const newNotification = { id, message, type };
-    setNotifications((prev) => [...prev, newNotification]);
-
-    setTimeout(() => {
-      setNotifications((prev) => prev.filter((notif) => notif.id !== id));
-    }, 3200);
-  };
-
-  const removeNotification = (id: number) => {
-    setNotifications((prev) => prev.filter((notif) => notif.id !== id));
-  };
 
   const siguienteImagen = () => {
     if (imagenesActuales.length > 1 && !isAnimating) {
@@ -352,7 +336,7 @@ const ProductContent = () => {
         } else {
           setError(errorMessage);
         }
-        showNotification('Error al cargar el producto', 'error');
+        showToast('Error al cargar el producto', 'error', 3200);
       } finally {
         setCargando(false);
       }
@@ -457,17 +441,17 @@ const ProductContent = () => {
 
   const agregarAlCarrito = async () => {
     if (!colorSeleccionado) {
-      showNotification('Selecciona un color', 'info');
+      showToast('Selecciona un color', 'info', 3000);
       return;
     }
 
     if (!tallaSeleccionada) {
-      showNotification('Selecciona una talla', 'info');
+      showToast('Selecciona una talla', 'info', 3000);
       return;
     }
 
     if (!stockDisponible || cantidad > stockDisponible) {
-      showNotification('Stock insuficiente', 'error');
+      showToast('Stock insuficiente', 'error', 3200);
       return;
     }
 
@@ -476,25 +460,25 @@ const ProductContent = () => {
     );
 
     if (!variante || !producto) {
-      showNotification('La variante seleccionada no está disponible', 'error');
+      showToast('La variante seleccionada no está disponible', 'error', 3200);
       return;
     }
 
     try {
       setAgregando(true);
       await addToCart(variante.id, cantidad, producto.name);
-      showNotification('¡Producto agregado al carrito correctamente!', 'success');
+      showToast('¡Producto agregado al carrito correctamente!', 'success', 3200);
     } catch (err: unknown) {
       console.error('Error:', err);
 
       const errorData = err as ErrorResponse;
 
       if (errorData.response?.status === 401 || errorData.response?.status === 403) {
-        showNotification('Inicia sesión para continuar', 'info');
+        showToast('Inicia sesión para continuar', 'info', 3000);
         router.push('/login');
       } else {
         const errorMessage = errorData.message || 'Error al agregar al carrito';
-        showNotification(errorMessage, 'error');
+        showToast(errorMessage, 'error', 3200);
       }
     } finally {
       setAgregando(false);
@@ -574,22 +558,6 @@ const ProductContent = () => {
 
   return (
     <>
-      <div className={styles.notifications}>
-        {notifications.map((notif) => (
-          <div
-            key={notif.id}
-            className={`${styles.notification} ${notif.type}`}
-            onClick={() => removeNotification(notif.id)}
-          >
-            <span className={styles.notifIcon}>
-              {notif.type === 'success' ? '✓' : notif.type === 'error' ? '✗' : 'ℹ'}
-            </span>
-            {notif.message}
-            <button className={styles.notifClose}>×</button>
-          </div>
-        ))}
-      </div>
-
       <div className={styles.productPage}>
         <button onClick={() => router.push('/menu')} className={styles.backBtn}>
           ← Volver al Menú

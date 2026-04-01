@@ -7,6 +7,7 @@ import axios from 'axios';
 import Image from 'next/image';
 import styles from '../menu/menu.module.css';
 import { useCart } from '../context/CartContext';
+import { showToast } from '../utils/toast';
 
 interface Img {
   id: number;
@@ -270,13 +271,6 @@ const isNew = (createdAt?: string) => {
   return productDate >= thirtyDaysAgo;
 };
 
-const showGlobalToast = (message: string, type: 'success' | 'error' | 'info', duration = 3000) => {
-  const event = new CustomEvent('show-toast', {
-    detail: { message, type, duration }
-  });
-  window.dispatchEvent(event);
-};
-
 const Menu: React.FC = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -334,7 +328,7 @@ const Menu: React.FC = () => {
         setVisibleCards(new Array(availableProducts.length).fill(false));
       } catch (error) {
         console.error('Error al cargar los productos:', error);
-        showGlobalToast('Error al cargar los productos', 'error');
+        showToast('Error al cargar los productos', 'error', 3200);
       } finally {
         setLoading(false);
       }
@@ -496,12 +490,12 @@ const Menu: React.FC = () => {
     const selectionState = selectionStates[productId];
 
     if (!selectionState || !selectionState.selectedColor) {
-      showGlobalToast('Selecciona un color disponible', 'info');
+      showToast('Selecciona un color disponible', 'info', 3000);
       return;
     }
 
     if (!selectionState.selectedSize) {
-      showGlobalToast('Selecciona una talla disponible', 'info');
+      showToast('Selecciona una talla disponible', 'info', 3000);
       return;
     }
 
@@ -511,7 +505,7 @@ const Menu: React.FC = () => {
     );
 
     if (!selectedVariant) {
-      showGlobalToast('La variante seleccionada no está disponible', 'error');
+      showToast('La variante seleccionada no está disponible', 'error', 3200);
       return;
     }
 
@@ -519,11 +513,10 @@ const Menu: React.FC = () => {
 
     try {
       await addToCart(selectedVariant.id, 1, product.name);
-
-      showGlobalToast('¡Producto agregado al carrito correctamente!', 'success', 3500);
+      showToast('¡Producto agregado al carrito correctamente!', 'success', 3500);
     } catch (error) {
       console.error('Error al agregar al carrito:', error);
-      showGlobalToast('Error al agregar al carrito', 'error');
+      showToast('Error al agregar al carrito', 'error', 3200);
     } finally {
       setQuickAddLoading(null);
     }

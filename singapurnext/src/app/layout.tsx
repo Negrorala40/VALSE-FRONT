@@ -8,6 +8,7 @@
   import Footer from "./components/Footer";
   import Providers from "./components/Providers";
   import DiscountBanner from "./components/DiscountBanner";
+  import GlobalToast from "./components/GlobalToast";
 
   // Configurar Inter para textos generales
   const inter = Inter({
@@ -170,6 +171,7 @@
           </noscript>
           
           <Providers>
+            <GlobalToast />
             <Header />
             <DiscountBanner />
             <main className="flex-grow pt-16">
