@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import styles from './Cart.module.css';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useCart } from '../context/CartContext';
 
 interface ApiCartItem {
   id: number;
@@ -28,7 +29,7 @@ interface ApiCartItem {
   sessionId?: string;
 }
 
-interface CartItem {
+interface CartItemView {
   id: string;
   image: string;
   name: string;
@@ -55,8 +56,6 @@ interface CartTotals {
 }
 
 interface CartProps {
-  cartItems: CartItem[];
-  setCartItems: React.Dispatch<React.SetStateAction<CartItem[]>>;
   onClose: () => void;
   isOpen: boolean;
 }
@@ -64,13 +63,21 @@ interface CartProps {
 const formatPrice = (price: number) =>
   new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0 }).format(price);
 
-const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen }) => {
+const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
   const cartRef = useRef<HTMLDivElement | null>(null);
   const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
+
+  const {
+    cartItems: contextCartItems,
+    refreshCart,
+    sessionId: contextSessionId
+  } = useCart();
+
+  const [cartItems, setCartItems] = useState<CartItemView[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(contextSessionId);
   const [retryCount, setRetryCount] = useState(0);
   const [cartTotals, setCartTotals] = useState<CartTotals>({
     subtotal: 0,
@@ -83,15 +90,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   });
   const maxRetries = 2;
 
-  // Constante para header
   const CART_SESSION_HEADER = 'X-Cart-Session-Id';
   const CART_SESSION_KEY = 'cartSessionId';
 
-  // Calcular totales locales (como respaldo)
   const localTotalPrice = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const localTotalItems = cartItems.reduce((total, item) => total + item.quantity, 0);
 
-  // Usar totales del backend o calcular localmente
   const subtotal = cartTotals.subtotal || localTotalPrice;
   const shippingCost = cartTotals.shippingCost || 0;
   const total = cartTotals.total || (localTotalPrice + shippingCost);
@@ -99,7 +103,34 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
   const discountSavings = cartTotals.discountSavings || 0;
   const originalSubtotal = cartTotals.originalSubtotal || subtotal;
 
-  // Obtener sessionId desde localStorage
+  const mapContextItemsToView = useCallback((items: typeof contextCartItems): CartItemView[] => {
+    return items.map((item) => ({
+      id: item.id.toString(),
+      image: item.imageUrl?.trim() || '/images/placeholder.png',
+      name: item.productName?.trim() || 'Producto sin nombre',
+      price: item.priceWithDiscount || item.originalPrice || 0,
+      originalPrice: item.originalPrice || 0,
+      size: item.size,
+      color: item.color,
+      quantity: item.quantity,
+      stock: item.stock || 0,
+      hasDiscount: item.hasDiscount || false,
+      discountPercentage: item.discountPercentage || 0,
+      discountAmount: 0,
+      savings: 0
+    }));
+  }, []);
+
+  useEffect(() => {
+    setCartItems(mapContextItemsToView(contextCartItems));
+  }, [contextCartItems, mapContextItemsToView]);
+
+  useEffect(() => {
+    if (contextSessionId !== undefined) {
+      setSessionId(contextSessionId);
+    }
+  }, [contextSessionId]);
+
   const getSessionId = () => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem(CART_SESSION_KEY) || sessionId;
@@ -107,7 +138,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     return null;
   };
 
-  // Guardar sessionId desde headers de respuesta
   const saveSessionIdFromHeaders = (headers: Headers) => {
     const newSessionId = headers.get(CART_SESSION_HEADER);
     if (newSessionId && newSessionId.trim() !== '' && newSessionId !== 'cleared') {
@@ -121,23 +151,20 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     }
   };
 
-  // Configurar headers para peticiones
   const getHeaders = () => {
     const token = localStorage.getItem('token');
     const currentSessionId = getSessionId();
-    
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
 
-    // Agregar sessionId en header SI existe
     if (currentSessionId) {
       headers[CART_SESSION_HEADER] = currentSessionId;
       console.log('📤 Enviando sessionId en header:', currentSessionId.substring(0, 8) + '...');
     }
 
-    // Agregar token de autenticación SI existe
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -145,13 +172,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     return headers;
   };
 
-  // Función de fetch que maneja sessionId
   const fetchWithSession = async (url: string, options: RequestInit = {}) => {
     const headers = getHeaders();
-    
+
     console.log('🔗 Fetch URL:', url);
     console.log('📋 Headers enviados:', Object.keys(headers));
-    
+
     const response = await fetch(url, {
       ...options,
       credentials: 'include',
@@ -164,7 +190,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     console.log('📡 Response status:', response.status);
     console.log('📡 Response headers:', Array.from(response.headers.entries()));
 
-    // Guardar sessionId si viene en la respuesta
     saveSessionIdFromHeaders(response.headers);
 
     return response;
@@ -197,17 +222,16 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     };
   }, [isOpen, handleClose]);
 
-  // Obtener carrito cuando se abre
   const fetchCart = useCallback(async (forceRefresh = false) => {
     if (isFetching && !forceRefresh) return;
-    
+
     setIsFetching(true);
-    
+
     try {
       console.log('🛒 Obteniendo carrito con totales...');
-      
+
       const response = await fetchWithSession(`${CART}/with-totals`);
-      
+
       console.log('🛒 Fetch cart - Status:', response.status);
       console.log('🛒 SessionId actual:', getSessionId());
 
@@ -239,7 +263,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       } else if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ Error en respuesta:', errorText);
-        
+
         if (retryCount < maxRetries) {
           console.log(`🔄 Reintentando (${retryCount + 1}/${maxRetries})...`);
           setRetryCount(prev => prev + 1);
@@ -251,9 +275,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       } else {
         const data = await response.json();
         console.log('✅ Carrito obtenido con totales:', data);
-        
-        // Transformar items del carrito
-        const transformedItems: CartItem[] = data.items.map((item: ApiCartItem) => ({
+
+        const transformedItems: CartItemView[] = data.items.map((item: ApiCartItem) => ({
           id: item.id.toString(),
           image: item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || 'Producto sin nombre',
@@ -270,8 +293,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         }));
 
         setCartItems(transformedItems);
-        
-        // Establecer totales del backend
+
         setCartTotals({
           subtotal: data.subtotal || 0,
           shippingCost: data.shippingCost || 0,
@@ -281,8 +303,10 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           discountSavings: data.discountSavings || 0,
           originalSubtotal: data.originalSubtotal || data.subtotal || 0
         });
-        
+
         setRetryCount(0);
+
+        refreshCart().catch(console.error);
       }
       setHasFetched(true);
     } catch (err) {
@@ -298,7 +322,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         originalSubtotal: 0
       });
       setHasFetched(true);
-      
+
       if (retryCount >= maxRetries) {
         localStorage.removeItem(CART_SESSION_KEY);
         setSessionId(null);
@@ -307,9 +331,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     } finally {
       setIsFetching(false);
     }
-  }, [setCartItems, isFetching, retryCount]);
+  }, [isFetching, retryCount, refreshCart]);
 
-  // Este useEffect SOLO se ejecuta cuando isOpen cambia
   useEffect(() => {
     if (isOpen && !hasFetched && !isFetching) {
       const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
@@ -319,24 +342,23 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       } else {
         console.log('📭 No hay sessionId guardado en localStorage');
       }
-      
+
       fetchCart();
     }
   }, [isOpen, fetchCart, hasFetched, isFetching]);
 
-  // Efecto para refrescar automáticamente cuando cambia la sesión
   useEffect(() => {
     if (isOpen && hasFetched) {
       const checkSession = () => {
         const currentSessionId = getSessionId();
         const savedSessionId = localStorage.getItem(CART_SESSION_KEY);
-        
+
         if (currentSessionId !== savedSessionId) {
           console.log('🔄 SessionId cambió, refrescando carrito...');
           setHasFetched(false);
         }
       };
-      
+
       const interval = setInterval(checkSession, 2000);
       return () => clearInterval(interval);
     }
@@ -355,7 +377,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
     try {
       console.log(`📊 Actualizando cantidad del ítem ${itemId} a ${newQuantity}`);
-      
+
       const response = await fetchWithSession(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT'
       });
@@ -367,26 +389,24 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         throw new Error('Error actualizando cantidad');
       }
 
-      // Actualizar UI localmente
       const updatedCart = cartItems.map((item) =>
         item.id === itemId ? { ...item, quantity: newQuantity } : item
       );
       setCartItems(updatedCart);
-      
+
       console.log('✅ Cantidad actualizada');
-      
-      // Refrescar totales después de actualizar
-      fetchCart();
+
+      fetchCart(true);
     } catch (err) {
       console.error('Error actualizando cantidad:', err);
       alert(err instanceof Error ? err.message : 'Error al actualizar la cantidad');
     }
-  }, [cartItems, setCartItems, fetchCart]);
+  }, [cartItems, fetchCart]);
 
   const removeItem = useCallback(async (itemId: string) => {
     try {
       console.log(`➖ Eliminando ítem ${itemId}`);
-      
+
       const response = await fetchWithSession(`${CART}/remove/${itemId}`, {
         method: 'DELETE'
       });
@@ -398,26 +418,24 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         throw new Error('Error eliminando el producto');
       }
 
-      // Actualizar UI localmente
       const updatedCart = cartItems.filter(item => item.id !== itemId);
       setCartItems(updatedCart);
-      
+
       console.log('✅ Ítem eliminado');
-      
-      // Refrescar totales después de eliminar
-      fetchCart();
+
+      fetchCart(true);
     } catch (err) {
       console.error('Error eliminando producto:', err);
       alert(err instanceof Error ? err.message : 'Error al eliminar el producto');
     }
-  }, [cartItems, setCartItems, fetchCart]);
+  }, [cartItems, fetchCart]);
 
   const handleCheckout = useCallback(() => {
     if (cartItems.length === 0) {
       alert('Tu carrito está vacío');
       return;
     }
-    
+
     router.push('/checkout');
     handleClose();
   }, [cartItems, router, handleClose]);
@@ -427,19 +445,19 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     handleClose();
   }, [router, handleClose]);
 
-  // Función para generar nueva sesión manualmente
   const createNewSession = async () => {
     try {
       console.log('🆕 Creando nueva sesión...');
       const response = await fetchWithSession(`${CART}/new-session`, {
         method: 'POST'
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Nueva sesión creada:', data.sessionId.substring(0, 8) + '...');
         alert('Nueva sesión creada. Por favor, intenta nuevamente.');
         setHasFetched(false);
+        await refreshCart();
       }
     } catch (err) {
       console.error('Error creando nueva sesión:', err);
@@ -462,8 +480,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
   const getColorStyle = useCallback((color: string): { background: string; border?: string } => {
     const colorLower = color.toLowerCase().trim();
-    
-    switch(colorLower) {
+
+    switch (colorLower) {
       case 'azul':
         return { background: '#103359' };
       case 'verde':
@@ -475,17 +493,17 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       case 'violeta':
         return { background: '#B0A9C6' };
       case 'amarillo':
-        return { 
+        return {
           background: '#FBEAD4',
           border: '1px solid rgba(0,0,0,0.1)'
         };
       case 'negro':
-        return { 
+        return {
           background: '#000000',
           border: '1px solid rgba(255,255,255,0.3)'
         };
       case 'blanco':
-        return { 
+        return {
           background: '#FFFFFF',
           border: '1px solid rgba(0,0,0,0.1)'
         };
@@ -495,7 +513,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         return { background: '#F47B47' };
       case 'beige':
       case 'beis':
-        return { 
+        return {
           background: '#F5F5DC',
           border: '1px solid rgba(0,0,0,0.1)'
         };
@@ -513,12 +531,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       case 'café':
         return { background: '#8B4513' };
       case 'dorado':
-        return { 
+        return {
           background: '#FFD700',
           border: '1px solid rgba(0,0,0,0.1)'
         };
       case 'plateado':
-        return { 
+        return {
           background: '#C0C0C0',
           border: '1px solid rgba(0,0,0,0.1)'
         };
@@ -531,7 +549,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
       case 'ocre':
         return { background: '#CC7722' };
       case 'mostaza':
-        return { 
+        return {
           background: '#FFDB58',
           border: '1px solid rgba(0,0,0,0.1)'
         };
@@ -543,30 +561,28 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
         return { background: '#808000' };
       default:
         const colors = [
-          '#103359', '#3DB28A', '#E9566D', '#806FF7', '#F47B47', 
+          '#103359', '#3DB28A', '#E9566D', '#806FF7', '#F47B47',
           '#FFD449', '#000000', '#FFFFFF', '#F5F5DC', '#808080',
           '#87CEEB', '#40E0D0', '#FF00FF', '#FF7F50', '#8B4513'
         ];
         const hash = colorLower.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-        return { 
+        return {
           background: colors[hash % colors.length],
           border: '1px solid rgba(0,0,0,0.1)'
         };
     }
   }, []);
 
-  // Botón para debug
   const debugSession = () => {
     const currentSessionId = getSessionId();
     const allCookies = document.cookie;
     console.log('🔍 SessionId actual:', currentSessionId);
     console.log('🍪 Cookies:', allCookies);
     console.log('📦 LocalStorage session:', localStorage.getItem(CART_SESSION_KEY));
-    
+
     alert(`SessionId: ${currentSessionId ? currentSessionId.substring(0, 8) + '...' : 'No disponible'}\nLocalStorage: ${localStorage.getItem(CART_SESSION_KEY) ? 'Sí' : 'No'}\nCookies: ${allCookies.length > 0 ? 'Sí' : 'No'}`);
   };
 
-  // Función para formatear envío
   const getShippingDisplay = () => {
     if (shippingCost === 0) {
       return <span className={styles.shippingBadge}>Gratis</span>;
@@ -574,12 +590,11 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
     return <span>${formatPrice(shippingCost)}</span>;
   };
 
-  // Renderizar precio de un ítem (con o sin descuento)
-  const renderItemPrice = (item: CartItem) => {
+  const renderItemPrice = (item: CartItemView) => {
     if (item.hasDiscount && item.discountPercentage > 0) {
       const totalDiscounted = item.price * item.quantity;
       const totalOriginal = item.originalPrice * item.quantity;
-      
+
       return (
         <div className={styles.cartItemPriceContainer}>
           <div className={styles.itemPriceDiscounted}>
@@ -592,7 +607,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
               <span className={styles.itemFinalPrice}>
                 ${formatPrice(totalDiscounted)}
               </span>
-            
             </div>
           </div>
         </div>
@@ -606,30 +620,27 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
 
   return (
     <>
-      {/* Overlay */}
       {isOpen && (
-        <div 
+        <div
           className={`${styles.cartOverlay} ${isOpen ? styles.open : ''} ${isClosing ? styles.closing : ''}`}
           onClick={handleClose}
         />
       )}
 
-      {/* Panel del carrito */}
-      <div 
-        ref={cartRef} 
+      <div
+        ref={cartRef}
         className={`${styles.cartPanel} ${isOpen ? styles.open : ''} ${isClosing ? styles.closing : ''}`}
       >
-        {/* Botones de debug (solo en desarrollo) */}
         {process.env.NODE_ENV === 'development' && (
           <div className={styles.debugButtons}>
-            <button 
+            <button
               onClick={debugSession}
               className={styles.debugBtn}
               title="Debug session"
             >
               🔍 Session
             </button>
-            <button 
+            <button
               onClick={createNewSession}
               className={styles.debugBtn}
               title="Crear nueva sesión"
@@ -639,7 +650,6 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
           </div>
         )}
 
-        {/* Decoración superior con gradiente */}
         <div className={styles.cartDecorationTop}></div>
 
         <div className={styles.cartHeader}>
@@ -705,7 +715,7 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
             {!sessionId && (
               <div className={styles.sessionStatus}>
                 <small>Estado: Sin sesión activa</small>
-                <button 
+                <button
                   onClick={createNewSession}
                   className={styles.sessionBtn}
                 >
@@ -729,12 +739,12 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                   const safeImage = getSafeImageUrl(item.image);
                   const safeName = getSafeName(item.name);
                   const colorStyle = getColorStyle(item.color);
-                  
+
                   return (
                     <li key={`${item.id}-${index}`} className={styles.cartItem}>
                       <div className={styles.cartItemImage}>
-                        <Image 
-                          src={safeImage} 
+                        <Image
+                          src={safeImage}
                           alt={safeName}
                           width={80}
                           height={80}
@@ -825,21 +835,21 @@ const Cart: React.FC<CartProps> = ({ cartItems, setCartItems, onClose, isOpen })
                   <span>${formatPrice(subtotal)}</span>
                 )}
               </div>
-              
+
               {discountSavings > 0 && (
                 <div className={`${styles.summaryRow} ${styles.summaryDiscount}`}>
                   <span>Descuento</span>
                   <span className={styles.discountSavings}>-${formatPrice(discountSavings)}</span>
                 </div>
               )}
-              
+
               <div className={`${styles.summaryRow} ${styles.summaryShipping}`}>
                 <span>Envío</span>
                 {getShippingDisplay()}
               </div>
-              
+
               <div className={styles.summaryDivider}></div>
-              
+
               <div className={styles.cartTotal}>
                 <span className={styles.totalLabel}>Total</span>
                 <span className={styles.totalAmount}>${formatPrice(total)}</span>

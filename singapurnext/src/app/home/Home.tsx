@@ -13,6 +13,7 @@ interface Img {
   imageUrl: string;
 }
 
+
 interface ProductVariant {
   id: number;
   color: string;
