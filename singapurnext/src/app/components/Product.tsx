@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef } from 'react';
+import React, { useState, useEffect, Suspense, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import styles from './Product.module.css';
-import { PRODUCT_DETAIL } from '../utils/Api';
+import { PRODUCT_DETAIL, MENU_PRODUCTS } from '../utils/Api';
 import { useCart } from '../context/CartContext';
-import { MENU_PRODUCTS } from '../utils/Api';
 
 interface Imagen {
   id?: number;
@@ -23,9 +22,9 @@ interface Variante {
   size: string;
   stock: number;
   price: number;
-  discountPercentage?: number; // Agregar este campo
-  priceWithDiscount?: number; // Agregar este campo
-  discountAmount?: number; // Agregar este campo
+  discountPercentage?: number;
+  priceWithDiscount?: number;
+  discountAmount?: number;
   productId: number;
   images: Imagen[];
   enabled?: boolean;
@@ -76,86 +75,103 @@ const getColorHex = (colorName: string): string => {
     'marron': '#8B4513',
     'fucsia': '#FF00FF',
     'aguamarina': '#7FFFD4',
-    "verde azul": "#054365",
-    "azul cerúleo": "#007FB9",
-    "verde medio": "#47A779",
-    "azul ocaso": "#44415C",
-    "amarillo mantequilla": "#F3E5AB",
-    "chocolate": "#4B3621",
-    "verde salvia": "#B2AC88",
-    "terracota": "#C07A64",
-    "lavanda grisaceo": "#AC9CC5",
-    "champaña": "#F5E1DA",
-    "gris carbon": "#383E42",
-    "rosa viejo": "#C08081",
-    "arena": "#E5D3B3",
-
+    'verde azul': '#054365',
+    'azul cerúleo': '#007FB9',
+    'verde medio': '#47A779',
+    'azul ocaso': '#44415C',
+    'amarillo mantequilla': '#F3E5AB',
+    'chocolate': '#4B3621',
+    'verde salvia': '#B2AC88',
+    'terracota': '#C07A64',
+    'lavanda grisaceo': '#AC9CC5',
+    'champaña': '#F5E1DA',
+    'gris carbon': '#383E42',
+    'rosa viejo': '#C08081',
+    'arena': '#E5D3B3',
   };
-  
-  const lowerColor = colorName.toLowerCase();
+
+  const lowerColor = colorName.toLowerCase().trim();
   for (const [key, value] of Object.entries(colors)) {
     if (lowerColor.includes(key) || key.includes(lowerColor)) {
       return value;
     }
   }
-  
+
   return '#103359';
 };
 
-// Función para calcular precio con descuento
 const calculatePriceWithDiscount = (price: number, discountPercentage?: number): number => {
   if (!discountPercentage || discountPercentage <= 0 || !price || price <= 0) {
     return price;
   }
-  
+
   const discountAmount = price * (discountPercentage / 100);
   const discountedPrice = price - discountAmount;
-  
-  // Asegurar que el precio no sea negativo
+
   return discountedPrice > 0 ? Number(discountedPrice.toFixed(0)) : 0;
 };
 
-// Función para calcular el monto de descuento
 const calculateDiscountAmount = (price: number, discountPercentage?: number): number => {
   if (!discountPercentage || discountPercentage <= 0 || !price || price <= 0) {
     return 0;
   }
-  
+
   return Number((price * (discountPercentage / 100)).toFixed(0));
 };
 
-// Función para obtener el precio con descuento de una variante
 const getDiscountedPrice = (variante: Variante): number => {
   if (variante.priceWithDiscount !== undefined && variante.priceWithDiscount > 0) {
     return variante.priceWithDiscount;
   }
-  
+
   if (variante.discountPercentage && variante.discountPercentage > 0 && variante.price) {
     return calculatePriceWithDiscount(variante.price, variante.discountPercentage);
   }
-  
+
   return variante.price || 0;
 };
 
-// Función para obtener el precio original de una variante
 const getOriginalPrice = (variante: Variante): number => {
   return variante.price || 0;
 };
 
-// Función para obtener el porcentaje de descuento de una variante
 const getDiscountPercentage = (variante: Variante): number => {
   return variante.discountPercentage || 0;
 };
 
-// Función para verificar si una variante tiene descuento
 const hasDiscount = (variante: Variante): boolean => {
   return (variante.discountPercentage || 0) > 0;
 };
 
-// Función para formatear precios
 const formatPrice = (price: number): string => {
   if (!price || price <= 0) return 'Consultar';
   return `$${price.toLocaleString('es-CO')}`;
+};
+
+const sortSizes = (sizes: string[]): string[] => {
+  const sizeOrder = [
+    'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL',
+    '2', '4', '6', '8', '10', '12', '14', '16',
+    '28', '30', '32', '34', '36', '38', '40', '42',
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+    'ÚNICA'
+  ];
+
+  return [...sizes].sort((a, b) => {
+    const indexA = sizeOrder.indexOf(a.toUpperCase());
+    const indexB = sizeOrder.indexOf(b.toUpperCase());
+
+    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+
+    const numA = parseInt(a, 10);
+    const numB = parseInt(b, 10);
+
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+
+    return a.localeCompare(b);
+  });
 };
 
 let notificationId = 0;
@@ -176,32 +192,31 @@ const ProductContent = () => {
   const [imagenActual, setImagenActual] = useState<number>(0);
   const [imagenesActuales, setImagenesActuales] = useState<Imagen[]>([]);
   const [precioSeleccionado, setPrecioSeleccionado] = useState<number | null>(null);
-  const [notifications, setNotifications] = useState<Array<{id: number, message: string, type: 'success' | 'error' | 'info'}>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
   const [productNotFound, setProductNotFound] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const [agregando, setAgregando] = useState<boolean>(false);
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
   const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
     const id = ++notificationId;
     const newNotification = { id, message, type };
-    setNotifications(prev => [...prev, newNotification]);
+    setNotifications((prev) => [...prev, newNotification]);
+
     setTimeout(() => {
-      setNotifications(prev => prev.filter(notif => notif.id !== id));
-    }, 3000);
+      setNotifications((prev) => prev.filter((notif) => notif.id !== id));
+    }, 3200);
   };
 
   const removeNotification = (id: number) => {
-    setNotifications(prev => prev.filter(notif => notif.id !== id));
+    setNotifications((prev) => prev.filter((notif) => notif.id !== id));
   };
 
   const siguienteImagen = () => {
     if (imagenesActuales.length > 1 && !isAnimating) {
       setIsAnimating(true);
-      setImagenActual((prev) => {
-        const next = (prev + 1) % imagenesActuales.length;
-        return next;
-      });
+      setImagenActual((prev) => (prev + 1) % imagenesActuales.length);
       setTimeout(() => setIsAnimating(false), 300);
     }
   };
@@ -209,24 +224,20 @@ const ProductContent = () => {
   const anteriorImagen = () => {
     if (imagenesActuales.length > 1 && !isAnimating) {
       setIsAnimating(true);
-      setImagenActual((prev) => {
-        const next = (prev - 1 + imagenesActuales.length) % imagenesActuales.length;
-        return next;
-      });
+      setImagenActual((prev) => (prev - 1 + imagenesActuales.length) % imagenesActuales.length);
       setTimeout(() => setIsAnimating(false), 300);
     }
   };
 
   const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (imagenesActuales.length <= 1 || isAnimating) return;
-    
+
     const rect = imageContainerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    
+
     const clickX = e.clientX - rect.left;
     const containerWidth = rect.width;
-    
-    // Dividir el contenedor en dos zonas (igual que en desktop)
+
     if (clickX < containerWidth / 2) {
       anteriorImagen();
     } else {
@@ -242,31 +253,29 @@ const ProductContent = () => {
     }
   };
 
-  // Función para obtener la variante seleccionada actual
   const obtenerVarianteSeleccionada = (): Variante | undefined => {
-    if (!producto || !colorSeleccionado || !tallaSeleccionada) {
-      return undefined;
-    }
-    
+    if (!producto || !colorSeleccionado || !tallaSeleccionada) return undefined;
+
     return producto.variants.find(
       (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
     );
   };
 
-  // Función para obtener el descuento máximo del producto
   const getMaxDiscountForProduct = (): number => {
     if (!producto) return 0;
-    const discounts = producto.variants.map(v => v.discountPercentage || 0);
+    const discounts = producto.variants.map((v) => v.discountPercentage || 0);
     return discounts.length > 0 ? Math.max(...discounts) : 0;
   };
 
-  // Función para verificar si un color tiene descuento
   const colorHasDiscount = (color: string): boolean => {
     if (!producto) return false;
-    return producto.variants.some(v => 
-      v.color === color && hasDiscount(v)
-    );
+    return producto.variants.some((v) => v.color === color && hasDiscount(v));
   };
+
+  const variantesDisponibles = useMemo(() => {
+    if (!producto) return [];
+    return producto.variants.filter((variant) => variant.enabled !== false && variant.stock > 0);
+  }, [producto]);
 
   useEffect(() => {
     if (!productId) {
@@ -279,19 +288,19 @@ const ProductContent = () => {
     const obtenerProducto = async () => {
       try {
         let response = await fetch(`${MENU_PRODUCTS}/active/${productId}`);
-        
+
         if (!response.ok) {
           if (response.status === 404) {
             response = await fetch(PRODUCT_DETAIL(productId));
           }
-          
+
           if (!response.ok) {
             throw new Error(`Error ${response.status}: ${response.statusText}`);
           }
         }
 
         const data: Producto = await response.json();
-        
+
         if (data.enabled === false) {
           setError('Este producto no está disponible actualmente');
           setProductNotFound(true);
@@ -299,7 +308,7 @@ const ProductContent = () => {
           return;
         }
 
-        const availableVariants = data.variants.filter(variant => 
+        const availableVariants = data.variants.filter((variant) =>
           variant.enabled !== false && variant.stock > 0
         );
 
@@ -316,8 +325,8 @@ const ProductContent = () => {
         });
 
         const primeraVariante = availableVariants[0];
-        
-        if (primeraVariante?.images) {
+
+        if (primeraVariante?.images?.length) {
           setImagenesActuales(primeraVariante.images);
           setImagenActual(0);
         }
@@ -326,15 +335,18 @@ const ProductContent = () => {
           setColorSeleccionado(primeraVariante.color);
         }
 
-        // Usar precio con descuento si está disponible
+        if (primeraVariante.size) {
+          setTallaSeleccionada(primeraVariante.size);
+          setStockDisponible(primeraVariante.stock);
+        }
+
         const precioInicial = primeraVariante.price ? getDiscountedPrice(primeraVariante) : 0;
         setPrecioSeleccionado(precioInicial);
-
       } catch (err: unknown) {
         console.error('Error obteniendo producto:', err);
-        
+
         const errorMessage = err instanceof Error ? err.message : 'Error al cargar el producto';
-        if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+        if (errorMessage.includes('404') || errorMessage.toLowerCase().includes('not found')) {
           setError('Producto no encontrado');
           setProductNotFound(true);
         } else {
@@ -354,12 +366,12 @@ const ProductContent = () => {
       const variante = producto.variants.find(
         (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
       );
+
       if (variante) {
         setStockDisponible(variante.stock);
-        // Usar precio con descuento si está disponible
-        const precioConDescuento = getDiscountedPrice(variante);
-        setPrecioSeleccionado(precioConDescuento);
-        if (variante.images && variante.images.length > 0) {
+        setPrecioSeleccionado(getDiscountedPrice(variante));
+
+        if (variante.images?.length > 0) {
           setImagenesActuales(variante.images);
           setImagenActual(0);
         }
@@ -367,19 +379,17 @@ const ProductContent = () => {
         setStockDisponible(null);
       }
     } else if (producto && colorSeleccionado) {
-      const primeraVarianteColor = producto.variants.find(v => v.color === colorSeleccionado);
+      const primeraVarianteColor = producto.variants.find((v) => v.color === colorSeleccionado);
+
       if (primeraVarianteColor) {
-        // Usar precio con descuento si está disponible
-        const precioConDescuento = getDiscountedPrice(primeraVarianteColor);
-        setPrecioSeleccionado(precioConDescuento);
-        if (primeraVarianteColor.images && primeraVarianteColor.images.length > 0) {
+        setPrecioSeleccionado(getDiscountedPrice(primeraVarianteColor));
+        if (primeraVarianteColor.images?.length > 0) {
           setImagenesActuales(primeraVarianteColor.images);
           setImagenActual(0);
         }
       }
     } else if (producto) {
-      // Obtener el precio mínimo con descuento aplicado
-      const precios = producto.variants.map(v => getDiscountedPrice(v));
+      const precios = producto.variants.map((v) => getDiscountedPrice(v));
       const precioMinimo = precios.length > 0 ? Math.min(...precios) : 0;
       setPrecioSeleccionado(precioMinimo);
       setStockDisponible(null);
@@ -388,31 +398,42 @@ const ProductContent = () => {
 
   const getUniqueColors = () => {
     if (!producto) return [];
-    const colors = [...new Set(producto.variants.map((v) => v.color))];
-    return colors.slice(0, 6);
+    return [...new Set(producto.variants.map((v) => v.color))].slice(0, 6);
   };
 
   const manejarCambioColor = (color: string) => {
     setColorSeleccionado(color);
-    setTallaSeleccionada('');
-    setStockDisponible(null);
-    
-    if (producto) {
-      const variante = producto.variants.find((v) => v.color === color);
-      if (variante) {
-        // Usar precio con descuento si está disponible
-        const precioConDescuento = getDiscountedPrice(variante);
-        setPrecioSeleccionado(precioConDescuento);
-        if (variante.images && variante.images.length > 0) {
-          setImagenesActuales(variante.images);
-          setImagenActual(0);
-        }
+    setCantidad(1);
+
+    if (!producto) return;
+
+    const variantesDelColor = producto.variants.filter(
+      (v) => v.color === color && v.enabled !== false && v.stock > 0
+    );
+
+    const primeraVarianteDisponible = variantesDelColor[0];
+
+    if (primeraVarianteDisponible) {
+      setTallaSeleccionada(primeraVarianteDisponible.size);
+      setStockDisponible(primeraVarianteDisponible.stock);
+      setPrecioSeleccionado(getDiscountedPrice(primeraVarianteDisponible));
+
+      if (primeraVarianteDisponible.images?.length > 0) {
+        setImagenesActuales(primeraVarianteDisponible.images);
+        setImagenActual(0);
       }
+    } else {
+      setTallaSeleccionada('');
+      setStockDisponible(null);
+      setPrecioSeleccionado(0);
+      setImagenesActuales([]);
+      setImagenActual(0);
     }
   };
 
   const manejarCambioTalla = (talla: string) => {
     setTallaSeleccionada(talla);
+    setCantidad(1);
   };
 
   const manejarCambioCantidad = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -424,19 +445,24 @@ const ProductContent = () => {
 
   const incrementarCantidad = () => {
     if (cantidad < (stockDisponible || 10)) {
-      setCantidad(prev => prev + 1);
+      setCantidad((prev) => prev + 1);
     }
   };
 
   const decrementarCantidad = () => {
     if (cantidad > 1) {
-      setCantidad(prev => prev - 1);
+      setCantidad((prev) => prev - 1);
     }
   };
 
   const agregarAlCarrito = async () => {
-    if (!tallaSeleccionada || !colorSeleccionado) {
-      showNotification('Selecciona talla y color', 'info');
+    if (!colorSeleccionado) {
+      showNotification('Selecciona un color', 'info');
+      return;
+    }
+
+    if (!tallaSeleccionada) {
+      showNotification('Selecciona una talla', 'info');
       return;
     }
 
@@ -450,21 +476,19 @@ const ProductContent = () => {
     );
 
     if (!variante || !producto) {
-      showNotification('Color no encontrado', 'error');
+      showNotification('La variante seleccionada no está disponible', 'error');
       return;
     }
 
     try {
+      setAgregando(true);
       await addToCart(variante.id, cantidad, producto.name);
-      showNotification('¡Agregado al carrito!', 'success');
-      
-      setTimeout(() => router.push('/menu'), 1500);
-      
+      showNotification('¡Producto agregado al carrito correctamente!', 'success');
     } catch (err: unknown) {
       console.error('Error:', err);
-      
+
       const errorData = err as ErrorResponse;
-      
+
       if (errorData.response?.status === 401 || errorData.response?.status === 403) {
         showNotification('Inicia sesión para continuar', 'info');
         router.push('/login');
@@ -472,50 +496,91 @@ const ProductContent = () => {
         const errorMessage = errorData.message || 'Error al agregar al carrito';
         showNotification(errorMessage, 'error');
       }
+    } finally {
+      setAgregando(false);
     }
   };
 
-  if (cargando) return (
-    <div className={styles.loadingContainer}>
-      <div className={styles.loadingSpinner}></div>
-      <p>Cargando producto...</p>
-    </div>
-  );
-  
-  if (error && productNotFound) return (
-    <div className={styles.errorContainer}>
-      <div className={styles.errorIcon}>⚠️</div>
-      <h2 className={styles.errorTitle}>Producto no disponible</h2>
-      <p className={styles.errorText}>{error}</p>
-      <button onClick={() => router.push('/menu')} className={styles.backButton}>
-        Volver al menú
-      </button>
-    </div>
-  );
-  
-  if (!producto) return (
-    <div className={styles.emptyContainer}>
-      <div className={styles.emptyIcon}>❓</div>
-      <h2 className={styles.emptyTitle}>Producto no encontrado</h2>
-      <p>El producto que buscas no está disponible o no existe.</p>
-      <button onClick={() => router.push('/menu')} className={styles.backButton}>
-        Volver al menú
-      </button>
-    </div>
-  );
+  if (cargando) {
+    return (
+      <div className={styles.loadingContainer}>
+        <div className={styles.loadingSpinner}></div>
+        <p>Cargando producto...</p>
+      </div>
+    );
+  }
+
+  if (error && productNotFound) {
+    return (
+      <div className={styles.errorContainer}>
+        <div className={styles.errorIcon}>⚠️</div>
+        <h2 className={styles.errorTitle}>Producto no disponible</h2>
+        <p className={styles.errorText}>{error}</p>
+        <button onClick={() => router.push('/menu')} className={styles.backButton}>
+          Volver al menú
+        </button>
+      </div>
+    );
+  }
+
+  if (!producto) {
+    return (
+      <div className={styles.emptyContainer}>
+        <div className={styles.emptyIcon}>❓</div>
+        <h2 className={styles.emptyTitle}>Producto no encontrado</h2>
+        <p>El producto que buscas no está disponible o no existe.</p>
+        <button onClick={() => router.push('/menu')} className={styles.backButton}>
+          Volver al menú
+        </button>
+      </div>
+    );
+  }
 
   const coloresDisponibles = getUniqueColors();
+
   const tallasDisponibles = colorSeleccionado
-    ? [...new Set(producto.variants
-        .filter((v) => v.color === colorSeleccionado)
-        .map((v) => v.size))]
+    ? sortSizes(
+        [...new Set(
+          producto.variants
+            .filter((v) => v.color === colorSeleccionado)
+            .map((v) => v.size)
+        )]
+      )
     : [];
+
+  const tallasDisponiblesDelColor = colorSeleccionado
+    ? producto.variants.filter(
+        (v) => v.color === colorSeleccionado && v.enabled !== false && v.stock > 0
+      )
+    : [];
+
+  const botonDeshabilitado =
+    agregando ||
+    !colorSeleccionado ||
+    !tallaSeleccionada ||
+    !stockDisponible ||
+    stockDisponible === 0;
+
+  const textoBoton =
+    agregando
+      ? 'AGREGANDO...'
+      : !colorSeleccionado
+        ? 'SELECCIONA COLOR'
+        : !tallaSeleccionada
+          ? 'SELECCIONA TALLA'
+          : !stockDisponible || stockDisponible === 0
+            ? 'AGOTADO'
+            : 'AGREGAR AL CARRITO';
 
   return (
     <>
       <div className={styles.notifications}>
         {notifications.map((notif) => (
-          <div key={notif.id} className={`${styles.notification} ${notif.type}`} onClick={() => removeNotification(notif.id)}>
+          <div
+            key={notif.id}
+            className={`${styles.notification} ${notif.type}`}
+            onClick={() => removeNotification(notif.id)}
+          >
             <span className={styles.notifIcon}>
               {notif.type === 'success' ? '✓' : notif.type === 'error' ? '✗' : 'ℹ'}
             </span>
@@ -533,7 +598,7 @@ const ProductContent = () => {
         <div className={styles.productContainer}>
           <div className={styles.imageSection}>
             {imagenesActuales.length > 0 ? (
-              <div 
+              <div
                 ref={imageContainerRef}
                 className={styles.imageContainer}
                 onClick={handleImageClick}
@@ -552,45 +617,39 @@ const ProductContent = () => {
                     }}
                   />
                 </div>
-                
-                {/* Flechas estilo Apple (funcionan en ambos dispositivos) */}
+
                 {imagenesActuales.length > 1 && (
                   <>
-                    <div className={`${styles.arrowNav} ${styles.arrowLeft}`} onClick={(e) => { e.stopPropagation(); anteriorImagen(); }}>
+                    <div
+                      className={`${styles.arrowNav} ${styles.arrowLeft}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        anteriorImagen();
+                      }}
+                    >
                       <div className={styles.arrow}>
                         <span className={styles.arrowIcon}>‹</span>
                       </div>
                     </div>
-                    <div className={`${styles.arrowNav} ${styles.arrowRight}`} onClick={(e) => { e.stopPropagation(); siguienteImagen(); }}>
+                    <div
+                      className={`${styles.arrowNav} ${styles.arrowRight}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        siguienteImagen();
+                      }}
+                    >
                       <div className={styles.arrow}>
                         <span className={styles.arrowIcon}>›</span>
                       </div>
                     </div>
                   </>
                 )}
-                
-                {/* Badge de descuento en imagen */}
-                {(() => {
-                  const variante = obtenerVarianteSeleccionada();
-                  const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
-                  const discountPercentage = variante ? getDiscountPercentage(variante) : getMaxDiscountForProduct();
-                  
-                  if (hasCurrentDiscount && discountPercentage > 0) {
-                    // return (
-                    //   <div className={styles.imageDiscountBadge}>
-                    //     -{discountPercentage}%
-                    //   </div>
-                    // );
-                  }
-                  return null;
-                })()}
-                
-                {/* Indicadores de puntos */}
+
                 {imagenesActuales.length > 1 && (
                   <div className={styles.imageIndicators}>
                     {imagenesActuales.map((_, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         className={`${styles.indicator} ${index === imagenActual ? styles.active : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -619,7 +678,7 @@ const ProductContent = () => {
                   const discountPercentage = variante ? getDiscountPercentage(variante) : 0;
                   const originalPrice = variante ? getOriginalPrice(variante) : (precioSeleccionado || 0);
                   const finalPrice = precioSeleccionado || 0;
-                  
+
                   if (hasCurrentDiscount && discountPercentage > 0 && originalPrice > 0) {
                     return (
                       <div className={styles.discountedPriceContainer}>
@@ -638,27 +697,26 @@ const ProductContent = () => {
                         </div>
                       </div>
                     );
-                  } else {
-                    return (
-                      <span className={styles.productPrice}>
-                        {formatPrice(finalPrice)}
-                      </span>
-                    );
                   }
+
+                  return (
+                    <span className={styles.productPrice}>
+                      {formatPrice(finalPrice)}
+                    </span>
+                  );
                 })()}
               </div>
             </div>
 
             <p className={styles.productDescription}>{producto.description}</p>
 
-            {/* Información de ahorro */}
             {(() => {
               const variante = obtenerVarianteSeleccionada();
               const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
               const discountAmount = variante ? calculateDiscountAmount(variante.price || 0, variante.discountPercentage) : 0;
-              
+
               if (hasCurrentDiscount && discountAmount > 0) {
-              
+                return null;
               }
               return null;
             })()}
@@ -680,6 +738,7 @@ const ProductContent = () => {
                   </button>
                 ))}
               </div>
+
               {coloresDisponibles.length === 0 && (
                 <p className={styles.noOptions}>No hay colores disponibles</p>
               )}
@@ -690,13 +749,13 @@ const ProductContent = () => {
                 <label className={styles.sectionLabel}>Talla</label>
                 <div className={styles.sizeOptions}>
                   {tallasDisponibles.map((talla) => {
-                    const variante = producto.variants.find(v => 
-                      v.color === colorSeleccionado && v.size === talla
+                    const variante = producto.variants.find(
+                      (v) => v.color === colorSeleccionado && v.size === talla
                     );
                     const stock = variante?.stock || 0;
                     const disabled = stock === 0;
                     const hasSizeDiscount = variante ? hasDiscount(variante) : false;
-                    
+
                     return (
                       <button
                         key={talla}
@@ -705,11 +764,10 @@ const ProductContent = () => {
                         }`}
                         onClick={() => !disabled && manejarCambioTalla(talla)}
                         disabled={disabled}
-                        title={disabled ? 'Agotado' : `Stock disponible`}
+                        title={disabled ? 'Agotado' : 'Disponible'}
                       >
                         {talla}
                         {disabled && <span className={styles.sizeBadge}>X</span>}
-                        
                       </button>
                     );
                   })}
@@ -717,10 +775,10 @@ const ProductContent = () => {
               </div>
             )}
 
-            {colorSeleccionado && tallasDisponibles.length === 0 && (
+            {colorSeleccionado && tallasDisponiblesDelColor.length === 0 && (
               <div className={styles.stockWarning}>
                 <span className={styles.warningIcon}>⚠️</span>
-                <span>No hay tallas disponibles para este color</span>
+                <span>Este color no tiene tallas disponibles. Prueba otro color.</span>
               </div>
             )}
 
@@ -728,11 +786,13 @@ const ProductContent = () => {
               <div className={styles.quantityControl}>
                 <label className={styles.quantityLabel}>Cantidad</label>
                 <div className={styles.quantityInputGroup}>
-                  <button 
-                    onClick={decrementarCantidad} 
-                    disabled={cantidad <= 1 || !stockDisponible}
+                  <button
+                    onClick={decrementarCantidad}
+                    disabled={cantidad <= 1 || !stockDisponible || agregando}
                     className={styles.qtyBtn}
-                  >−</button>
+                  >
+                    −
+                  </button>
                   <input
                     type="number"
                     value={cantidad}
@@ -740,13 +800,15 @@ const ProductContent = () => {
                     min={1}
                     max={stockDisponible || 10}
                     className={styles.qtyInput}
-                    disabled={!stockDisponible}
+                    disabled={!stockDisponible || agregando}
                   />
-                  <button 
-                    onClick={incrementarCantidad} 
-                    disabled={cantidad >= (stockDisponible || 0) || !stockDisponible}
+                  <button
+                    onClick={incrementarCantidad}
+                    disabled={cantidad >= (stockDisponible || 0) || !stockDisponible || agregando}
                     className={styles.qtyBtn}
-                  >+</button>
+                  >
+                    +
+                  </button>
                 </div>
               </div>
 
@@ -756,7 +818,7 @@ const ProductContent = () => {
                     {stockDisponible > 0 ? (
                       <>
                         <span className={styles.stockLabel}>Stock disponible</span>
-                        {stockDisponible < 1 && (
+                        {stockDisponible <= 3 && (
                           <span className={styles.lowStock}> - ⚠️ Últimas unidades</span>
                         )}
                       </>
@@ -769,17 +831,16 @@ const ProductContent = () => {
             </div>
 
             <button
-              className={`${styles.addToCartBtn} ${
-                !tallaSeleccionada || !colorSeleccionado || !stockDisponible || stockDisponible === 0 ? styles.disabled : ''
-              }`}
+              className={`${styles.addToCartBtn} ${botonDeshabilitado ? styles.disabled : ''}`}
               onClick={agregarAlCarrito}
-              disabled={!tallaSeleccionada || !colorSeleccionado || !stockDisponible || stockDisponible === 0}
+              disabled={botonDeshabilitado}
             >
-              {!stockDisponible || stockDisponible === 0 ? 'AGOTADO' : 
-              !tallaSeleccionada || !colorSeleccionado ? 'SELECCIONA OPCIONES' : 'AGREGAR AL CARRITO'}
-              
-              {precioSeleccionado && cantidad > 0 && stockDisponible && stockDisponible > 0 && (
-                <span className={styles.totalPrice}>${((precioSeleccionado) * cantidad).toLocaleString('es-CO')}</span>
+              {textoBoton}
+
+              {precioSeleccionado && cantidad > 0 && stockDisponible && stockDisponible > 0 && !agregando && (
+                <span className={styles.totalPrice}>
+                  ${((precioSeleccionado) * cantidad).toLocaleString('es-CO')}
+                </span>
               )}
             </button>
 
@@ -798,19 +859,17 @@ const ProductContent = () => {
 
 const Product = () => {
   return (
-    <>
-      <Suspense fallback={
+    <Suspense
+      fallback={
         <div className={styles.loadingContainer}>
           <div className={styles.loadingSpinner}></div>
           <p>Cargando producto...</p>
         </div>
-      }>
-        <ProductContent />
-      </Suspense>
-    </>
+      }
+    >
+      <ProductContent />
+    </Suspense>
   );
 };
 
 export default Product;
-
-//Product cambio sin revisar ERROR
