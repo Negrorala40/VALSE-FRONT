@@ -2113,3 +2113,26 @@
   color: var(--checkout-yellow);
   flex-shrink: 0;
 }
+.checkout-first-purchase-discount {
+  background: linear-gradient(135deg, rgba(61, 178, 138, 0.1) 0%, rgba(61, 178, 138, 0.05) 100%);
+  padding: 0.5rem;
+  border-radius: var(--checkout-radius-md);
+  margin: 0.5rem 0;
+}
+
+.checkout-first-purchase-discount span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+
+.checkout-first-purchase-discount.estimated {
+  background: linear-gradient(135deg, rgba(128, 111, 247, 0.12) 0%, rgba(128, 111, 247, 0.05) 100%);
+  border: 1px dashed rgba(128, 111, 247, 0.25);
+}
+
+.checkout-first-purchase-applied.estimated {
+  background: linear-gradient(135deg, rgba(128, 111, 247, 0.1) 0%, rgba(128, 111, 247, 0.04) 100%);
+  border: 1px dashed rgba(128, 111, 247, 0.25);
+}

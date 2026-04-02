@@ -17,6 +17,7 @@ export const PERFIL_ME = `${API_BASE_URL}/api/users/me`;
 export const ADDRESS = `${API_BASE_URL}/api/addresses`;
 
 // Carrito (AHORA PÚBLICO - usuarios anónimos)
+export const FIRST_PURCHASE_ELIGIBILITY = `${API_BASE_URL}/api/admin/discount/first-purchase/eligibility`;
 export const CART = `${API_BASE_URL}/api/cart`;
 export const ADD_TO_CART = `${API_BASE_URL}/api/cart/add`;
 export const MIGRATE_CART = `${API_BASE_URL}/api/cart/migrate`;

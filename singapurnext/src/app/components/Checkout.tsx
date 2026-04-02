@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import './Checkout.css';
 import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
@@ -13,7 +13,8 @@ import {
   MERCADOPAGO_CREATE_PREFERENCE,
   MERCADOPAGO_STATUS,
   ORDER_CHECK_EXPIRATION,
-  PUBLIC_DISCOUNT_CONFIG
+  PUBLIC_DISCOUNT_CONFIG,
+  FIRST_PURCHASE_ELIGIBILITY
 } from '../utils/Api';
 import { 
   ShoppingBag, 
@@ -181,6 +182,81 @@ interface FirstPurchaseDiscountConfig {
   applyToAnonymous: boolean;
 }
 
+type FirstPurchaseStatus = 'hidden' | 'estimated' | 'applied';
+
+interface CheckoutPricing {
+  originalSubtotal: number;
+  productsSubtotal: number;
+  productsDiscount: number;
+  firstPurchaseDiscount: number;
+  shippingCost: number;
+  total: number;
+  firstPurchaseStatus: FirstPurchaseStatus;
+  firstPurchasePercentage?: number;
+}
+
+function buildCheckoutPricing(params: {
+  originalSubtotal: number;
+  subtotal: number;
+  shippingCost: number;
+  paymentStatus?: PaymentStatusResponse | null;
+  orderResponse?: OrderResponse | null;
+  discountConfig?: FirstPurchaseDiscountConfig | null;
+  firstPurchaseEligibility: boolean | null;
+}) : CheckoutPricing {
+  const productsDiscount = Math.max(0, params.originalSubtotal - params.subtotal);
+
+  const appliedFromPayment =
+    params.paymentStatus?.firstPurchaseDiscountApplied
+      ? {
+          amount: params.paymentStatus.firstPurchaseDiscountAmount || 0,
+          percentage: params.paymentStatus.firstPurchaseDiscountPercentage || 0
+        }
+      : null;
+
+  const appliedFromOrder =
+    params.orderResponse?.firstPurchaseDiscountApplied
+      ? {
+          amount: params.orderResponse.firstPurchaseDiscountAmount || 0,
+          percentage: params.orderResponse.firstPurchaseDiscountPercentage || 0
+        }
+      : null;
+
+  const appliedDiscount = appliedFromPayment || appliedFromOrder;
+
+  const estimatedFirstPurchase =
+    !appliedDiscount &&
+    params.firstPurchaseEligibility === true &&
+    !!params.discountConfig?.enabled
+      ? Math.round(params.subtotal * ((params.discountConfig?.discountPercentage || 0) / 100))
+      : 0;
+
+  const firstPurchaseDiscount = appliedDiscount?.amount || estimatedFirstPurchase;
+
+  const firstPurchaseStatus: FirstPurchaseStatus =
+    appliedDiscount
+      ? 'applied'
+      : params.firstPurchaseEligibility === true && estimatedFirstPurchase > 0
+        ? 'estimated'
+        : 'hidden';
+
+  const total = Math.max(0, params.subtotal - firstPurchaseDiscount + params.shippingCost);
+
+  return {
+    originalSubtotal: params.originalSubtotal,
+    productsSubtotal: params.subtotal,
+    productsDiscount,
+    firstPurchaseDiscount,
+    shippingCost: params.shippingCost,
+    total,
+    firstPurchaseStatus,
+    firstPurchasePercentage:
+      appliedDiscount?.percentage ||
+      params.discountConfig?.discountPercentage ||
+      0
+  };
+}
+
 const CheckoutPage = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderId, setOrderId] = useState<string>('');
@@ -219,6 +295,7 @@ const CheckoutPage = () => {
   });
 
   const [orderCreated, setOrderCreated] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState<OrderResponse | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [mercadoPagoLoading, setMercadoPagoLoading] = useState(false);
   const [mercadoPagoData, setMercadoPagoData] = useState<MercadoPagoResponse | null>(null);
@@ -233,6 +310,8 @@ const CheckoutPage = () => {
     applyToAnonymous: false
   });
   const [loadingDiscountConfig, setLoadingDiscountConfig] = useState<boolean>(false);
+  const [firstPurchaseEligibility, setFirstPurchaseEligibility] = useState<boolean | null>(null);
+  const [checkingFirstPurchase, setCheckingFirstPurchase] = useState<boolean>(false);
   
   const fetchControllerRef = useRef<AbortController | null>(null);
   const hasFetchedRef = useRef(false);
@@ -350,6 +429,42 @@ const CheckoutPage = () => {
     }
   }, [getRequestHeaders]);
 
+  const checkFirstPurchaseEligibility = useCallback(async (email: string, anonymousCheckout: boolean) => {
+    try {
+      if (!email.trim()) {
+        setFirstPurchaseEligibility(null);
+        return;
+      }
+
+      setCheckingFirstPurchase(true);
+
+      const token = localStorage.getItem('token');
+      const headers = getRequestHeaders(token);
+
+      const response = await fetch(
+        `${FIRST_PURCHASE_ELIGIBILITY}?email=${encodeURIComponent(email)}&anonymousCheckout=${anonymousCheckout}`,
+        {
+          method: 'GET',
+          headers,
+          credentials: 'include'
+        }
+      );
+
+      if (!response.ok) {
+        setFirstPurchaseEligibility(null);
+        return;
+      }
+
+      const data = await response.json();
+      setFirstPurchaseEligibility(Boolean(data.eligible));
+    } catch (error) {
+      console.error('Error validando primera compra:', error);
+      setFirstPurchaseEligibility(null);
+    } finally {
+      setCheckingFirstPurchase(false);
+    }
+  }, [getRequestHeaders]);
+
   const formatPrice = useCallback((price: number) => {
     return new Intl.NumberFormat('es-CO', {
       style: 'currency',
@@ -368,6 +483,26 @@ const CheckoutPage = () => {
     setDiscountSavings(data.discountSavings || 0);
     setOriginalSubtotal(data.originalSubtotal || data.subtotal || 0);
   }, []);
+
+  const checkoutPricing = useMemo(() => {
+    return buildCheckoutPricing({
+      originalSubtotal,
+      subtotal,
+      shippingCost,
+      paymentStatus,
+      orderResponse: createdOrder,
+      discountConfig,
+      firstPurchaseEligibility
+    });
+  }, [
+    originalSubtotal,
+    subtotal,
+    shippingCost,
+    paymentStatus,
+    createdOrder,
+    discountConfig,
+    firstPurchaseEligibility
+  ]);
 
   // 🔴 FUNCIÓN PARA RENDERIZAR PRECIO DE ITEM CON DESCUENTO
   const renderItemPrice = useCallback((item: CartItem) => {
@@ -422,6 +557,7 @@ const CheckoutPage = () => {
           localStorage.removeItem('lastOrderCartHash');
           
           setOrderCreated(false);
+          setCreatedOrder(null);
           setOrderId('');
           setMercadoPagoData(null);
           setPaymentStatus(null);
@@ -681,6 +817,30 @@ const CheckoutPage = () => {
       }
     };
   }, [getSessionId, fetchDiscountConfig]);
+
+  useEffect(() => {
+    if (isAuthenticated) return;
+
+    const email = anonymousUserInfo.email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(email)) {
+      setFirstPurchaseEligibility(null);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      checkFirstPurchaseEligibility(email, true);
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [anonymousUserInfo.email, isAuthenticated, checkFirstPurchaseEligibility]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !userData?.email) return;
+
+    checkFirstPurchaseEligibility(userData.email, false);
+  }, [isAuthenticated, userData?.email, checkFirstPurchaseEligibility]);
 
   const loadAuthenticatedData = useCallback(async (token: string) => {
     setLoading(true);
@@ -1065,6 +1225,8 @@ const CheckoutPage = () => {
         return null;
       }
 
+      setCreatedOrder(orderResponse);
+
       // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
       const currentCartHash = calculateCartHash(cartItems);
       localStorage.setItem('lastOrderCartHash', currentCartHash);
@@ -1107,7 +1269,7 @@ const CheckoutPage = () => {
       return null;
     }
 
-    if (total <= 0) {
+    if (checkoutPricing.total <= 0) {
       setError('Error en el cálculo del total. Por favor, recarga la página.');
       return null;
     }
@@ -1188,6 +1350,8 @@ const CheckoutPage = () => {
         throw new Error('No se pudo obtener el ID de la orden');
       }
 
+      setCreatedOrder(orderResponse);
+
       // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
       const currentCartHash = calculateCartHash(cartItems);
       localStorage.setItem('lastOrderCartHash', currentCartHash);
@@ -1220,11 +1384,12 @@ const CheckoutPage = () => {
       console.error('🛑 Error creando orden:', error);
       setError(`Error al crear la orden: ${error.message || 'Error desconocido'}`);
       setOrderCreated(false);
+      setCreatedOrder(null);
       return null;
     } finally {
       setIsProcessingPayment(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, total, calculateCartHash]);
+  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, checkoutPricing.total, calculateCartHash]);
 
   // 🔴 FUNCIÓN PARA CREAR PREFERENCIA
   // 🔴 FUNCIÓN PARA CREAR PREFERENCIA - VERSIÓN CORREGIDA
@@ -1297,6 +1462,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
               localStorage.removeItem('lastOrderCartHash');
               
               setOrderCreated(false);
+              setCreatedOrder(null);
               setOrderId('');
               setMercadoPagoData(null);
               setPaymentStatus(null);
@@ -1356,6 +1522,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
         localStorage.removeItem('pendingOrderData');
         localStorage.removeItem('pendingPreferenceId');
         setOrderCreated(false);
+        setCreatedOrder(null);
         setOrderId('');
         setMercadoPagoData(null);
         
@@ -1377,6 +1544,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
         localStorage.removeItem('pendingOrderId');
         localStorage.removeItem('pendingOrderData');
         setOrderCreated(false);
+        setCreatedOrder(null);
         setOrderId('');
         
         // Crear nueva orden automáticamente
@@ -1433,6 +1601,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
         localStorage.removeItem('lastOrderCartHash');
         
         setOrderCreated(false);
+        setCreatedOrder(null);
         setOrderId('');
         setMercadoPagoData(null);
         
@@ -1522,6 +1691,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
     setTotal(0);
     setTotalItems(0);
     setOrderCreated(false);
+    setCreatedOrder(null);
     setOrderId('');
     setMercadoPagoData(null);
     
@@ -1644,7 +1814,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
           </div>
           <div className="checkout-first-purchase-text">
             <strong>¡Primera compra!</strong>
-            <span>Obtén un {discountConfig.discountPercentage}% de descuento en tu primer pedido</span>
+            <span>Podrías obtener un {discountConfig.discountPercentage}% de descuento en tu primera compra. Lo confirmaremos con tu correo.</span>
           </div>
           <div className="checkout-first-purchase-badge">
             <Percent className="checkout-icon" size={14} />
@@ -1655,24 +1825,26 @@ const createMercadoPagoPreference = async (orderId: string) => {
     );
   };
 
-  // 🔴 COMPONENTE PARA MOSTRAR DESCUENTO APLICADO EN LA ORDEN
-  const FirstPurchaseDiscountApplied = ({ paymentStatus }: { paymentStatus: PaymentStatusResponse | null }) => {
-    if (!paymentStatus?.firstPurchaseDiscountApplied || !paymentStatus.firstPurchaseDiscountAmount) {
+  // 🔴 COMPONENTE PARA MOSTRAR DESCUENTO PRIMERA COMPRA EN EL RESUMEN DE PAGO
+  const FirstPurchaseDiscountApplied = ({ pricing }: { pricing: CheckoutPricing }) => {
+    if (pricing.firstPurchaseStatus === 'hidden' || pricing.firstPurchaseDiscount <= 0) {
       return null;
     }
-    
+
+    const isEstimated = pricing.firstPurchaseStatus === 'estimated';
+
     return (
-      <div className="checkout-first-purchase-applied">
+      <div className={`checkout-first-purchase-applied ${isEstimated ? 'estimated' : ''}`}>
         <div className="checkout-first-purchase-applied-header">
           <Gift className="checkout-icon" size={16} />
-          <span>Descuento primera compra</span>
+          <span>{isEstimated ? 'Descuento primera compra estimado' : 'Descuento primera compra'}</span>
         </div>
         <div className="checkout-first-purchase-applied-details">
           <span className="checkout-first-purchase-applied-percentage">
-            -{paymentStatus.firstPurchaseDiscountPercentage}%
+            -{pricing.firstPurchasePercentage || 0}%
           </span>
           <span className="checkout-first-purchase-applied-amount">
-            -{formatPrice(paymentStatus.firstPurchaseDiscountAmount)}
+            -{formatPrice(pricing.firstPurchaseDiscount)}
           </span>
         </div>
       </div>
@@ -1934,10 +2106,10 @@ const createMercadoPagoPreference = async (orderId: string) => {
                     <p className="checkout-section-subtitle">
                       {isAuthenticated ? '¿A dónde enviamos tus pijamas?' : 'Necesitamos algunos datos para tu pedido'}
                     </p>
-                    {!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && (
+                    {!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && step < 3 && (
                       <p className="checkout-first-purchase-note">
                         <Gift className="checkout-icon" size={14} />
-                        Recibirás {discountConfig.discountPercentage}% de descuento en tu primera compra
+                        Validaremos con tu correo si aplica el descuento de primera compra
                       </p>
                     )}
                   </div>
@@ -2272,7 +2444,7 @@ const createMercadoPagoPreference = async (orderId: string) => {
                       )}
 
                       {/* 🔴 MOSTRAR DESCUENTO PRIMERA COMPRA SI ESTÁ APLICADO */}
-                      {paymentStatus && <FirstPurchaseDiscountApplied paymentStatus={paymentStatus} />}
+                      {checkoutPricing.firstPurchaseStatus !== 'hidden' && <FirstPurchaseDiscountApplied pricing={checkoutPricing} />}
                     </div>
 
                     <div className="checkout-order-items-preview">
@@ -2499,80 +2671,52 @@ const createMercadoPagoPreference = async (orderId: string) => {
                   </div>
 
                   <div className="checkout-summary-divider">
-  {/* Subtotal original (sin ningún descuento) */}
-  {originalSubtotal > 0 && (
+  {checkoutPricing.originalSubtotal > 0 && (
     <div className="checkout-summary-row checkout-summary-original">
       <span>Subtotal original</span>
-      <span className="checkout-original-price">{formatPrice(originalSubtotal)}</span>
+      <span className="checkout-original-price">{formatPrice(checkoutPricing.originalSubtotal)}</span>
     </div>
   )}
-  
-  {/* Subtotal con descuentos de producto */}
-  <div className="checkout-summary-row">
-    <span>Subtotal productos</span>
-    <span>{formatPrice(subtotal)}</span>
-  </div>
-  
-  {/* 🔴 Descuento de primera compra (si está aplicado en la orden) */}
-  {paymentStatus?.firstPurchaseDiscountApplied && (
-    <div className="checkout-summary-row checkout-first-purchase-discount">
-      <span>
-        <Gift className="checkout-icon" size={12} />
-        Descuento primera compra ({paymentStatus.firstPurchaseDiscountPercentage}%)
-      </span>
-      <span className="checkout-savings">-{formatPrice(paymentStatus.firstPurchaseDiscountAmount || 0)}</span>
-    </div>
-  )}
-  
-  {/* 🔴 Descuento de primera compra (estimado mientras no hay orden) */}
-  {!paymentStatus && discountConfig.enabled && step === 3 && (
-    (() => {
-      const appliesToUser = (isAuthenticated && !userData) || 
-                           (!isAuthenticated && discountConfig.applyToAnonymous);
-      if (!appliesToUser) return null;
-      
-      const estimatedDiscount = subtotal * (discountConfig.discountPercentage / 100);
-      return (
-        <div className="checkout-summary-row checkout-first-purchase-discount estimated">
-          <span>
-            <Gift className="checkout-icon" size={12} />
-            Descuento primera compra (estimado)
-          </span>
-          <span className="checkout-savings">-{formatPrice(estimatedDiscount)}</span>
-        </div>
-      );
-    })()
-  )}
-  
-  {/* Descuentos de producto (si existen y no hay descuento primera compra) */}
-  {discountSavings > 0 && !paymentStatus?.firstPurchaseDiscountApplied && (
+
+  {checkoutPricing.productsDiscount > 0 && (
     <div className="checkout-summary-row checkout-discount-savings">
       <span>
         <Check className="checkout-icon" size={12} />
         Descuento en productos
       </span>
-      <span className="checkout-savings">-{formatPrice(discountSavings)}</span>
+      <span className="checkout-savings">-{formatPrice(checkoutPricing.productsDiscount)}</span>
     </div>
   )}
-  
-  {/* Envío */}
+
+  <div className="checkout-summary-row">
+    <span>Subtotal productos</span>
+    <span>{formatPrice(checkoutPricing.productsSubtotal)}</span>
+  </div>
+
+  {checkoutPricing.firstPurchaseStatus !== 'hidden' && step === 3 && (
+    <div className={`checkout-summary-row checkout-first-purchase-discount ${checkoutPricing.firstPurchaseStatus === 'estimated' ? 'estimated' : ''}`}>
+      <span>
+        <Gift className="checkout-icon" size={12} />
+        {checkoutPricing.firstPurchaseStatus === 'estimated'
+          ? `Descuento primera compra (estimado ${checkoutPricing.firstPurchasePercentage || 0}%)`
+          : `Descuento primera compra (${checkoutPricing.firstPurchasePercentage || 0}%)`}
+      </span>
+      <span className="checkout-savings">-{formatPrice(checkoutPricing.firstPurchaseDiscount)}</span>
+    </div>
+  )}
+
   <div className="checkout-summary-row">
     <span>Envío</span>
-    <span className={shippingCost === 0 ? "free" : ""}>
-      {shippingCost === 0 ? "Gratis" : formatPrice(shippingCost)}
+    <span className={checkoutPricing.shippingCost === 0 ? "free" : ""}>
+      {checkoutPricing.shippingCost === 0 ? "Gratis" : formatPrice(checkoutPricing.shippingCost)}
     </span>
   </div>
 
-  {/* 🔴 Total (UNA SOLA VEZ) */}
   <div className="checkout-summary-total">
     <span className="checkout-summary-total-label">Total</span>
     <span className="checkout-summary-total-value">
-  {formatPrice(
-    paymentStatus?.firstPurchaseDiscountApplied 
-      ? (subtotal - (paymentStatus.firstPurchaseDiscountAmount || 0) + shippingCost)
-      : total
-  )}
-</span>
+      {formatPrice(checkoutPricing.total)}
+    </span>
   </div>
 </div>
 
@@ -2607,13 +2751,13 @@ const createMercadoPagoPreference = async (orderId: string) => {
   </div>
 </div>
 
-{!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && (
+{!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && step < 3 && (
   <div className="checkout-first-purchase-prompt">
     <Gift className="checkout-icon" size={16} />
     <p>
       <strong>¡Primera compra!</strong>
       <br />
-      <small>Recibirás {discountConfig.discountPercentage}% de descuento</small>
+      <small>{checkingFirstPurchase ? 'Validando tu correo...' : firstPurchaseEligibility === true ? `Tu correo califica para ${discountConfig.discountPercentage}% de descuento` : 'Ingresa tu correo para validar si aplica el descuento'}</small>
     </p>
   </div>
 )}
