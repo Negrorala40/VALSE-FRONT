@@ -2544,79 +2544,79 @@ const createMercadoPagoPreference = async (orderId: string) => {
                     )}
 
                     {/* 🔴 CHECKOUT PRO - INICIALIZADO DINÁMICAMENTE */}
-                    {orderCreated && mercadoPagoData?.preferenceId && !mercadoPagoLoading && !isProcessingPayment && (
-                      <div className="checkout-payment-action">
-                        <div className="checkout-payment-ready">
-                          <div className="checkout-payment-ready-header">
-                            <Check className="checkout-icon" />
-                            <h4>¡Listo para pagar!</h4>
-                          </div>
-                          <p>Tu orden ha sido creada. Completa el pago seguro con Mercado Pago.</p>
-                          
-                          <div className="checkout-payment-buttons">
-                            {/* Si MercadoPago está inicializado, mostrar el Wallet */}
-                            {isMercadoPagoInitialized && publicKey && (
-                              <div className="wallet-container" style={{ width: '100%', minHeight: '48px' }}>
-                                <Wallet 
-                                  initialization={{ 
-                                    preferenceId: mercadoPagoData.preferenceId,
-                                    redirectMode: "blank"
-                                  }}
-                                />
-                              </div>
-                            )}
-                            
-                            {/* Fallback: usar initPoint si no se inicializó MercadoPago */}
-                            {(!isMercadoPagoInitialized || !publicKey) && mercadoPagoData.initPoint && (
-                              <div className="checkout-fallback-buttons">
-                                <div className="checkout-fallback-alert">
-                                  <AlertCircle className="checkout-icon" />
-                                  <span>Usando método alternativo de pago</span>
-                                </div>
-                                <button
-                                  className="checkout-btn checkout-btn-primary checkout-btn-lg checkout-btn-full"
-                                  onClick={() => {
-                                    window.location.href = mercadoPagoData.initPoint;
-                                  }}
-                                >
-                                  <CreditCard className="checkout-icon" />
-                                  Pagar con MercadoPago
-                                </button>
-                              </div>
-                            )}
-                            
-                            <div className="checkout-security-badges">
-                              <div className="checkout-security-badge">
-                                <Lock className="checkout-icon" size={14} />
-                                <span>Pago 100% seguro</span>
-                              </div>
-                              <div className="checkout-security-badge">
-                                <Check className="checkout-icon" size={14} />
-                                <span>Certificado SSL</span>
-                              </div>
-                              <div className="checkout-security-badge">
-                                <Shield size={14} />
-                                <span>Protegido por Mercado Pago</span>
-                              </div>
-                            </div>
-                            
-                            {/* 🔴 TIMER DE EXPIRACIÓN DISCRETO */}
-                            {paymentStatus?.stockReservationMinutesLeft && paymentStatus.stockReservationMinutesLeft > 0 && (
-                              <div className="checkout-expiration-timer">
-                                <Clock className="checkout-icon" size={14} />
-                                <span>La reserva de stock expira en {paymentStatus.stockReservationMinutesLeft} minutos</span>
-                                <div className="checkout-expiration-progress">
-                                  <div 
-                                    className="checkout-expiration-progress-bar"
-                                    style={{ width: `${(paymentStatus.stockReservationMinutesLeft / 40) * 100}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+{orderCreated && mercadoPagoData?.preferenceId && !mercadoPagoLoading && !isProcessingPayment && (
+  <div className="checkout-payment-action">
+    <div className="checkout-payment-ready">
+      <div className="checkout-payment-ready-header">
+        <Check className="checkout-icon" />
+        <h4>¡Listo para pagar!</h4>
+      </div>
+      <p>Tu orden ha sido creada. Completa el pago seguro con Mercado Pago.</p>
+      
+      <div className="checkout-payment-buttons">
+        {/* Si MercadoPago está inicializado, mostrar el Wallet */}
+        {isMercadoPagoInitialized && publicKey && (
+          <div className="wallet-container" style={{ width: '100%', minHeight: '48px' }}>
+            <Wallet
+              initialization={{
+                preferenceId: mercadoPagoData.preferenceId,
+                redirectMode: "self"
+              }}
+            />
+          </div>
+        )}
+        
+        {/* Fallback: usar initPoint si no se inicializó MercadoPago */}
+        {(!isMercadoPagoInitialized || !publicKey) && mercadoPagoData.initPoint && (
+          <div className="checkout-fallback-buttons">
+            <div className="checkout-fallback-alert">
+              <AlertCircle className="checkout-icon" />
+              <span>Usando método alternativo de pago</span>
+            </div>
+            <button
+              className="checkout-btn checkout-btn-primary checkout-btn-lg checkout-btn-full"
+              onClick={() => {
+                window.location.href = mercadoPagoData.initPoint;
+              }}
+            >
+              <CreditCard className="checkout-icon" />
+              Pagar con MercadoPago
+            </button>
+          </div>
+        )}
+        
+        <div className="checkout-security-badges">
+          <div className="checkout-security-badge">
+            <Lock className="checkout-icon" size={14} />
+            <span>Pago 100% seguro</span>
+          </div>
+          <div className="checkout-security-badge">
+            <Check className="checkout-icon" size={14} />
+            <span>Certificado SSL</span>
+          </div>
+          <div className="checkout-security-badge">
+            <Shield size={14} />
+            <span>Protegido por Mercado Pago</span>
+          </div>
+        </div>
+        
+        {/* 🔴 TIMER DE EXPIRACIÓN DISCRETO */}
+        {paymentStatus?.stockReservationMinutesLeft && paymentStatus.stockReservationMinutesLeft > 0 && (
+          <div className="checkout-expiration-timer">
+            <Clock className="checkout-icon" size={14} />
+            <span>La reserva de stock expira en {paymentStatus.stockReservationMinutesLeft} minutos</span>
+            <div className="checkout-expiration-progress">
+              <div
+                className="checkout-expiration-progress-bar"
+                style={{ width: `${(paymentStatus.stockReservationMinutesLeft / 40) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
                     {orderCreated && !mercadoPagoData && !isProcessingPayment && !mercadoPagoLoading && (
                       <div className="checkout-payment-fallback">
