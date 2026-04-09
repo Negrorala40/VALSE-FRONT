@@ -1,7 +1,6 @@
-// src/app/meta/layout.tsx
 export const metadata = {
-  title: 'Dashboard META - A Marte Kids',
-  description: 'Administración de productos para Facebook e Instagram Shopping',
+  title: "Dashboard META - A Marte Kids",
+  description: "Administración de productos para Facebook e Instagram Shopping",
 };
 
 export default function MetaLayout({
