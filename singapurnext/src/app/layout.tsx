@@ -114,6 +114,11 @@ export default function RootLayout({
       className={`${inter.variable} ${fredoka.variable}`}
     >
       <head>
+        <meta
+          name="facebook-domain-verification"
+          content="e035l4licwdfamfgbistjahaoepmol"
+        />
+
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -152,7 +157,6 @@ export default function RootLayout({
         suppressHydrationWarning
         className="min-h-screen bg-white text-gray-900 font-sans antialiased"
       >
-        {/* GTM noscript */}
         <noscript>
           <iframe
             src="https://www.googletagmanager.com/ns.html?id=GTM-PSC5SCVB"
@@ -162,7 +166,6 @@ export default function RootLayout({
           />
         </noscript>
 
-        {/* META PIXEL */}
         {metaPixelId && (
           <>
             <Script id="meta-pixel-base" strategy="afterInteractive">
@@ -200,7 +203,6 @@ export default function RootLayout({
           <Footer />
         </Providers>
 
-        {/* GTM */}
         <GoogleTagManager gtmId="GTM-PSC5SCVB" />
       </body>
     </html>
