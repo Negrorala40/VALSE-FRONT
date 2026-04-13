@@ -1,7 +1,6 @@
 // app/components/PaymentResult.tsx
 'use client';
 
-import { useEffect, useState, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   CheckCircle, 
@@ -39,6 +38,8 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import './PaymentResult.css';
+import { useEffect, useState, Suspense, useCallback, useRef } from 'react';
+import { trackPurchase } from '@/app/lib/tracking';
 
 // Importar las constantes desde tu Api.ts
 import { 
@@ -69,6 +70,7 @@ interface OrderDetails {
   total: number;
   items: Array<{
     id: number;
+    productVariantId?: number | string;
     name: string;
     image: string;
     quantity: number;
@@ -106,6 +108,7 @@ interface OrderDetails {
 
 // Componente principal envuelto en Suspense
 function PaymentResultContent() {
+  const hasTrackedPurchaseRef = useRef(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -405,6 +408,7 @@ function PaymentResultContent() {
           total: Number(data.totalPrice) || Number(data.total) || 0,
           items: data.items?.map((item: any, index: number) => ({
             id: item.id || index,
+            productVariantId: item.productVariantId || item.variantId || item.id || index,
             name: item.productName || item.name || `Producto ${index + 1}`,
             image: item.imageUrls?.[0] || item.image || '/images/placeholder.png',
             quantity: item.quantity || 1,
@@ -440,10 +444,12 @@ function PaymentResultContent() {
           total: Number(data.totalPrice) || 0,
           items: data.orderItems?.map((item: any) => ({
             id: item.id,
+            productVariantId: item.productVariantId || item.productVariant?.id || item.id,
             name: item.product?.name || `Producto ${item.id}`,
             image: item.product?.images?.[0]?.imageUrl || '/images/placeholder.png',
             quantity: Number(item.quantity) || 1,
-            price: Number(item.price) || 0,            size: item.productVariant?.size,
+            price: Number(item.price) || 0,
+            size: item.productVariant?.size,
             color: item.productVariant?.color
           })) || [],
           customer: {
@@ -589,6 +595,45 @@ function PaymentResultContent() {
       return () => clearInterval(timer);
     }
   }, [timerSeconds, orderDetails?.id, checkOrderExpiration]);
+
+  useEffect(() => {
+    if (paymentStatus !== 'approved') return;
+    if (!orderDetails) return;
+    if (!orderDetails.id) return;
+    if (!orderDetails.items || orderDetails.items.length === 0) return;
+  
+    const storageKey = `meta_purchase_tracked_${orderDetails.id}`;
+  
+    if (hasTrackedPurchaseRef.current) return;
+    if (typeof window !== 'undefined' && sessionStorage.getItem(storageKey) === 'true') {
+      hasTrackedPurchaseRef.current = true;
+      return;
+    }
+  
+    const items = orderDetails.items.map((item) => ({
+      id: String(item.productVariantId ?? item.id),
+      quantity: item.quantity,
+      item_price: item.price,
+    }));
+  
+    const numItems = orderDetails.items.reduce((acc, item) => acc + item.quantity, 0);
+  
+    trackPurchase({
+      orderId: orderDetails.id,
+      items,
+      value: orderDetails.total,
+      numItems,
+      currency: 'COP',
+    });
+  
+    hasTrackedPurchaseRef.current = true;
+  
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(storageKey, 'true');
+    }
+  
+    console.log('[Meta Pixel] Purchase enviado para orden:', orderDetails.id);
+  }, [paymentStatus, orderDetails]);
 
   // Formatear precio
   const formatPrice = useCallback((price: number) => {

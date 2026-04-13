@@ -8,6 +8,7 @@ import Image from 'next/image';
 import styles from '../menu/menu.module.css';
 import { useCart } from '../context/CartContext';
 import { showToast } from '../utils/toast';
+import { trackAddToCart } from '../lib/tracking';
 
 interface Img {
   id: number;
@@ -513,7 +514,23 @@ const Menu: React.FC = () => {
 
     try {
       await addToCart(selectedVariant.id, 1, product.name);
-      showToast('¡Producto agregado al carrito correctamente!', 'success', 3500);
+
+const finalPrice =
+  selectedVariant.priceWithDiscount !== undefined
+    ? Number(selectedVariant.priceWithDiscount)
+    : Number(selectedVariant.price || 0);
+
+trackAddToCart({
+  variantId: selectedVariant.id,
+  productName: product.name,
+  price: finalPrice,
+  quantity: 1,
+  currency: "COP",
+  color: selectedVariant.color,
+  size: selectedVariant.size,
+});
+
+showToast('¡Producto agregado al carrito correctamente!', 'success', 3500);
     } catch (error) {
       console.error('Error al agregar al carrito:', error);
       showToast('Error al agregar al carrito', 'error', 3200);

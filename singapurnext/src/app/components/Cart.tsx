@@ -6,6 +6,7 @@ import styles from './Cart.module.css';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useCart } from '../context/CartContext';
+import { trackInitiateCheckout } from '../lib/tracking';
 
 interface ApiCartItem {
   id: number;
@@ -436,6 +437,17 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
       return;
     }
 
+    trackInitiateCheckout({
+      items: cartItems.map((item) => ({
+        id: String(item.id),
+        quantity: item.quantity,
+        item_price: item.price,
+      })),
+      value: total,
+      numItems: totalItems,
+      currency: "COP",
+    });
+    
     router.push('/checkout');
     handleClose();
   }, [cartItems, router, handleClose]);

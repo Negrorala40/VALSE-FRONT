@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, useRef, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import styles from './Product.module.css';
 import { PRODUCT_DETAIL, MENU_PRODUCTS } from '../utils/Api';
 import { useCart } from '../context/CartContext';
 import { showToast } from '../utils/toast';
+import { trackAddToCart, trackViewContent } from "../lib/tracking";
 
 interface Imagen {
   id?: number;
@@ -194,6 +195,7 @@ const ProductContent = () => {
   const [productNotFound, setProductNotFound] = useState<boolean>(false);
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [agregando, setAgregando] = useState<boolean>(false);
+  const hasTrackedViewContent = useRef(false);
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -380,6 +382,26 @@ const ProductContent = () => {
     }
   }, [colorSeleccionado, tallaSeleccionada, producto]);
 
+  useEffect(() => {
+    if (!producto || hasTrackedViewContent.current) return;
+  
+    const varianteInicial = obtenerVarianteSeleccionada() || producto.variants[0];
+    if (!varianteInicial) return;
+  
+    const precioFinal = getDiscountedPrice(varianteInicial);
+  
+    trackViewContent({
+      variantId: varianteInicial.id,
+      productName: producto.name,
+      price: precioFinal,
+      currency: "COP",
+      color: varianteInicial.color,
+      size: varianteInicial.size,
+    });
+  
+    hasTrackedViewContent.current = true;
+  }, [producto, colorSeleccionado, tallaSeleccionada]);
+
   const getUniqueColors = () => {
     if (!producto) return [];
     return [...new Set(producto.variants.map((v) => v.color))].slice(0, 6);
@@ -467,6 +489,18 @@ const ProductContent = () => {
     try {
       setAgregando(true);
       await addToCart(variante.id, cantidad, producto.name);
+
+trackAddToCart({
+  variantId: variante.id,
+  productName: producto.name,
+  price: getDiscountedPrice(variante),
+  quantity: cantidad,
+  currency: "COP",
+  color: variante.color,
+  size: variante.size,
+});
+
+showToast('¡Producto agregado al carrito correctamente!', 'success', 3200);
       showToast('¡Producto agregado al carrito correctamente!', 'success', 3200);
     } catch (err: unknown) {
       console.error('Error:', err);
