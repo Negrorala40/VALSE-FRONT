@@ -8,6 +8,8 @@ import Image from 'next/image';
 import { useCart } from '../context/CartContext';
 import { trackInitiateCheckout } from '../lib/tracking';
 
+
+
 interface ApiCartItem {
   id: number;
   quantity: number;
@@ -65,8 +67,73 @@ interface CartProps {
 const formatPrice = (price: number) =>
   new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0 }).format(price);
 
+const trackStandardEvent = (eventName: string, payload: Record<string, unknown>) => {
+  if (typeof window === 'undefined' || typeof window.fbq !== 'function') return;
+  window.fbq('track', eventName, payload);
+};
+
+const trackCustomEvent = (eventName: string, payload: Record<string, unknown>) => {
+  if (typeof window === 'undefined' || typeof window.fbq !== 'function') return;
+  window.fbq('trackCustom', eventName, payload);
+};
+
+const trackViewCart = (items: CartItemView[], value: number, totalItems: number) => {
+  trackCustomEvent('ViewCart', {
+    content_ids: items.map((item) => item.productVariantId),
+    contents: items.map((item) => ({
+      id: item.productVariantId,
+      quantity: item.quantity,
+      item_price: item.price,
+    })),
+    value,
+    currency: 'COP',
+    num_items: totalItems,
+  });
+};
+
+const trackRemoveFromCart = (item: CartItemView) => {
+  trackStandardEvent('RemoveFromCart', {
+    content_ids: [item.productVariantId],
+    contents: [
+      {
+        id: item.productVariantId,
+        quantity: item.quantity,
+        item_price: item.price,
+      },
+    ],
+    value: item.price * item.quantity,
+    currency: 'COP',
+  });
+};
+
+const trackUpdateCartQuantity = (
+  item: CartItemView,
+  previousQuantity: number,
+  newQuantity: number
+) => {
+  trackCustomEvent('UpdateCartQuantity', {
+    content_ids: [item.productVariantId],
+    contents: [
+      {
+        id: item.productVariantId,
+        quantity: newQuantity,
+        item_price: item.price,
+      },
+    ],
+    value: item.price * newQuantity,
+    currency: 'COP',
+    product_name: item.name,
+    color: item.color,
+    size: item.size,
+    previous_quantity: previousQuantity,
+    new_quantity: newQuantity,
+    change_type: newQuantity > previousQuantity ? 'increase' : 'decrease',
+  });
+};
+
 const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
   const cartRef = useRef<HTMLDivElement | null>(null);
+  const hasTrackedViewCart = useRef(false);
   const [isClosing, setIsClosing] = useState(false);
   const router = useRouter();
 
@@ -133,6 +200,19 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
       setSessionId(contextSessionId);
     }
   }, [contextSessionId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasTrackedViewCart.current = false;
+      return;
+    }
+
+    if (hasTrackedViewCart.current) return;
+    if (cartItems.length === 0) return;
+
+    trackViewCart(cartItems, total, totalItems);
+    hasTrackedViewCart.current = true;
+  }, [isOpen, cartItems, total, totalItems]);
 
   const getSessionId = () => {
     if (typeof window !== 'undefined') {
@@ -382,6 +462,8 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
     try {
       console.log(`📊 Actualizando cantidad del ítem ${itemId} a ${newQuantity}`);
 
+      const previousQuantity = item.quantity;
+
       const response = await fetchWithSession(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
         method: 'PUT'
       });
@@ -393,10 +475,12 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
         throw new Error('Error actualizando cantidad');
       }
 
-      const updatedCart = cartItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      const updatedCart = cartItems.map((cartItem) =>
+        cartItem.id === itemId ? { ...cartItem, quantity: newQuantity } : cartItem
       );
       setCartItems(updatedCart);
+
+      trackUpdateCartQuantity(item, previousQuantity, newQuantity);
 
       console.log('✅ Cantidad actualizada');
 
@@ -408,6 +492,9 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
   }, [cartItems, fetchCart]);
 
   const removeItem = useCallback(async (itemId: string) => {
+    const itemToRemove = cartItems.find(item => item.id === itemId);
+    if (!itemToRemove) return;
+
     try {
       console.log(`➖ Eliminando ítem ${itemId}`);
 
@@ -424,6 +511,8 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
 
       const updatedCart = cartItems.filter(item => item.id !== itemId);
       setCartItems(updatedCart);
+
+      trackRemoveFromCart(itemToRemove);
 
       console.log('✅ Ítem eliminado');
 
