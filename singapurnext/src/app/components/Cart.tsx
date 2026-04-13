@@ -32,6 +32,7 @@ interface ApiCartItem {
 
 interface CartItemView {
   id: string;
+  productVariantId: string;
   image: string;
   name: string;
   price: number;
@@ -107,6 +108,7 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
   const mapContextItemsToView = useCallback((items: typeof contextCartItems): CartItemView[] => {
     return items.map((item) => ({
       id: item.id.toString(),
+      productVariantId: item.productVariantId.toString(),
       image: item.imageUrl?.trim() || '/images/placeholder.png',
       name: item.productName?.trim() || 'Producto sin nombre',
       price: item.priceWithDiscount || item.originalPrice || 0,
@@ -279,6 +281,7 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
 
         const transformedItems: CartItemView[] = data.items.map((item: ApiCartItem) => ({
           id: item.id.toString(),
+          productVariantId: item.productVariantId.toString(),
           image: item.imageUrl?.trim() || '/images/placeholder.png',
           name: item.productName?.trim() || 'Producto sin nombre',
           price: item.priceWithDiscount || item.originalPrice || 0,
@@ -436,10 +439,10 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
       alert('Tu carrito está vacío');
       return;
     }
-
+  
     trackInitiateCheckout({
       items: cartItems.map((item) => ({
-        id: String(item.id),
+        id: String(item.productVariantId),
         quantity: item.quantity,
         item_price: item.price,
       })),
@@ -450,7 +453,7 @@ const Cart: React.FC<CartProps> = ({ onClose, isOpen }) => {
     
     router.push('/checkout');
     handleClose();
-  }, [cartItems, router, handleClose]);
+  }, [cartItems, total, totalItems, router, handleClose]);
 
   const handleContinueShopping = useCallback(() => {
     router.push('/menu');

@@ -196,6 +196,9 @@ const ProductContent = () => {
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
   const [agregando, setAgregando] = useState<boolean>(false);
   const hasTrackedViewContent = useRef(false);
+  useEffect(() => {
+    hasTrackedViewContent.current = false;
+  }, [productId]);
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
@@ -500,7 +503,6 @@ trackAddToCart({
   size: variante.size,
 });
 
-showToast('¡Producto agregado al carrito correctamente!', 'success', 3200);
       showToast('¡Producto agregado al carrito correctamente!', 'success', 3200);
     } catch (err: unknown) {
       console.error('Error:', err);
