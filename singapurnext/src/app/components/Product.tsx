@@ -1,15 +1,23 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useRef, useMemo, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import Image from 'next/image';
-import styles from './Product.module.css';
-import { PRODUCT_DETAIL, MENU_PRODUCTS } from '../utils/Api';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+import { MENU_PRODUCTS, PRODUCT_DETAIL } from '../utils/Api';
 import { useCart } from '../context/CartContext';
 import { showToast } from '../utils/toast';
-import { trackAddToCart, trackViewContent } from "../lib/tracking";
+import { trackAddToCart, trackViewContent } from '../lib/tracking';
+import styles from './Product.module.css';
 
-interface Imagen {
+interface ProductImage {
   id?: number;
   fileName: string;
   imageUrl: string;
@@ -18,7 +26,7 @@ interface Imagen {
   largeUrl?: string;
 }
 
-interface Variante {
+interface ProductVariant {
   id: number;
   color: string;
   size: string;
@@ -28,17 +36,17 @@ interface Variante {
   priceWithDiscount?: number;
   discountAmount?: number;
   productId: number;
-  images: Imagen[];
+  images: ProductImage[];
   enabled?: boolean;
 }
 
-interface Producto {
+interface Product {
   id: number;
   name: string;
   description: string;
   gender: string;
   type: string;
-  variants: Variante[];
+  variants: ProductVariant[];
   enabled?: boolean;
 }
 
@@ -49,131 +57,187 @@ interface ErrorResponse {
   message?: string;
 }
 
-const getColorHex = (colorName: string): string => {
-  const colors: Record<string, string> = {
-    'azul': '#103359',
-    'azul marino': '#0a1f33',
-    'rosa': '#F7D1D9',
-    'verde': '#3DB28A',
-    'morado': '#806FF7',
-    'negro': '#1a1a1a',
-    'blanco': '#ffffff',
-    'naranja': '#F47B47',
-    'amarillo': '#FBEAD4',
-    'rojo': '#E9566D',
-    'celeste': '#87CEEB',
-    'gris': '#C3CAD6',
-    'beige': '#F5F5DC',
-    'lila': '#B0A9C6',
-    'turquesa': '#CFDFE0',
-    'coral': '#FF7F50',
-    'violeta': '#EE82EE',
-    'mostaza': '#FFDB58',
-    'azul claro': '#87CEEB',
-    'verde menta': '#98FF98',
-    'rosado pastel': '#FFD1DC',
-    'dorado': '#FFD700',
-    'verde claro': '#90EE90',
-    'marron': '#8B4513',
-    'fucsia': '#FF00FF',
-    'aguamarina': '#7FFFD4',
-    'verde azul': '#054365',
-    'azul cerúleo': '#007FB9',
-    'verde medio': '#47A779',
-    'azul ocaso': '#44415C',
-    'amarillo mantequilla': '#F3E5AB',
-    'chocolate': '#4B3621',
-    'verde salvia': '#B2AC88',
-    'terracota': '#C07A64',
-    'lavanda grisaceo': '#AC9CC5',
-    'champaña': '#F5E1DA',
-    'gris carbon': '#383E42',
-    'rosa viejo': '#C08081',
-    'arena': '#E5D3B3',
-  };
+type ProductState =
+  | { type: 'ready'; message: '' }
+  | { type: 'not-found'; message: string }
+  | { type: 'unavailable'; message: string }
+  | { type: 'error'; message: string };
 
-  const lowerColor = colorName.toLowerCase().trim();
-  for (const [key, value] of Object.entries(colors)) {
-    if (lowerColor.includes(key) || key.includes(lowerColor)) {
-      return value;
+const SIZE_ORDER = [
+  'XXS',
+  'XS',
+  'S',
+  'M',
+  'L',
+  'XL',
+  'XXL',
+  'XXXL',
+  '2',
+  '4',
+  '6',
+  '8',
+  '10',
+  '12',
+  '14',
+  '16',
+  '28',
+  '30',
+  '32',
+  '34',
+  '36',
+  '38',
+  '40',
+  '42',
+  '1',
+  '2',
+  '3',
+  '4',
+  '5',
+  '6',
+  '7',
+  '8',
+  '9',
+  '10',
+  'ÚNICA'
+];
+
+const COLOR_MAP: Record<string, string> = {
+  azul: '#28435d',
+  'azul marino': '#172635',
+  rosa: '#dbc5c8',
+  verde: '#697867',
+  morado: '#80758f',
+  negro: '#111111',
+  blanco: '#ffffff',
+  naranja: '#b46e4e',
+  amarillo: '#dccb8c',
+  rojo: '#8e4343',
+  celeste: '#91aebd',
+  gris: '#898989',
+  beige: '#d8cfbd',
+  lila: '#aaa1b5',
+  turquesa: '#8ba8a5',
+  coral: '#ba7866',
+  violeta: '#766b82',
+  mostaza: '#b89a4d',
+  'azul claro': '#91aebd',
+  'verde menta': '#afc1b0',
+  'rosado pastel': '#dbc5c8',
+  dorado: '#b99a52',
+  'verde claro': '#a9b9a8',
+  marron: '#684838',
+  café: '#684838',
+  fucsia: '#9e5b83',
+  aguamarina: '#91b4b1',
+  'verde azul': '#355d67',
+  'azul cerúleo': '#397899',
+  'verde medio': '#678b71',
+  'azul ocaso': '#5b586c',
+  'amarillo mantequilla': '#d9cda4',
+  chocolate: '#51392f',
+  'verde salvia': '#a7aa8e',
+  terracota: '#ae705f',
+  'lavanda grisaceo': '#a79db5',
+  champaña: '#e3d8cf',
+  'gris carbon': '#414548',
+  'rosa viejo': '#a87577',
+  arena: '#d4c5aa'
+};
+
+const normalizeLabel = (value: string) =>
+  value
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const getColorHex = (colorName: string) => {
+  const normalized = colorName.toLowerCase().trim();
+
+  const exactMatch = COLOR_MAP[normalized];
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const partialMatch = Object.entries(COLOR_MAP).find(
+    ([name]) => normalized.includes(name) || name.includes(normalized)
+  );
+
+  return partialMatch?.[1] || '#77736c';
+};
+
+const sortSizes = (sizes: string[]) =>
+  [...sizes].sort((first, second) => {
+    const firstIndex = SIZE_ORDER.indexOf(first.toUpperCase());
+    const secondIndex = SIZE_ORDER.indexOf(second.toUpperCase());
+
+    if (firstIndex !== -1 && secondIndex !== -1) {
+      return firstIndex - secondIndex;
     }
-  }
 
-  return '#103359';
-};
+    if (firstIndex !== -1) return -1;
+    if (secondIndex !== -1) return 1;
 
-const calculatePriceWithDiscount = (price: number, discountPercentage?: number): number => {
-  if (!discountPercentage || discountPercentage <= 0 || !price || price <= 0) {
-    return price;
-  }
+    const firstNumber = Number.parseInt(first, 10);
+    const secondNumber = Number.parseInt(second, 10);
 
-  const discountAmount = price * (discountPercentage / 100);
-  const discountedPrice = price - discountAmount;
+    if (!Number.isNaN(firstNumber) && !Number.isNaN(secondNumber)) {
+      return firstNumber - secondNumber;
+    }
 
-  return discountedPrice > 0 ? Number(discountedPrice.toFixed(0)) : 0;
-};
-
-const calculateDiscountAmount = (price: number, discountPercentage?: number): number => {
-  if (!discountPercentage || discountPercentage <= 0 || !price || price <= 0) {
-    return 0;
-  }
-
-  return Number((price * (discountPercentage / 100)).toFixed(0));
-};
-
-const getDiscountedPrice = (variante: Variante): number => {
-  if (variante.priceWithDiscount !== undefined && variante.priceWithDiscount > 0) {
-    return variante.priceWithDiscount;
-  }
-
-  if (variante.discountPercentage && variante.discountPercentage > 0 && variante.price) {
-    return calculatePriceWithDiscount(variante.price, variante.discountPercentage);
-  }
-
-  return variante.price || 0;
-};
-
-const getOriginalPrice = (variante: Variante): number => {
-  return variante.price || 0;
-};
-
-const getDiscountPercentage = (variante: Variante): number => {
-  return variante.discountPercentage || 0;
-};
-
-const hasDiscount = (variante: Variante): boolean => {
-  return (variante.discountPercentage || 0) > 0;
-};
-
-const formatPrice = (price: number): string => {
-  if (!price || price <= 0) return 'Consultar';
-  return `$${price.toLocaleString('es-CO')}`;
-};
-
-const sortSizes = (sizes: string[]): string[] => {
-  const sizeOrder = [
-    'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL',
-    '2', '4', '6', '8', '10', '12', '14', '16',
-    '28', '30', '32', '34', '36', '38', '40', '42',
-    '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-    'ÚNICA'
-  ];
-
-  return [...sizes].sort((a, b) => {
-    const indexA = sizeOrder.indexOf(a.toUpperCase());
-    const indexB = sizeOrder.indexOf(b.toUpperCase());
-
-    if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-    if (indexA !== -1) return -1;
-    if (indexB !== -1) return 1;
-
-    const numA = parseInt(a, 10);
-    const numB = parseInt(b, 10);
-
-    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-
-    return a.localeCompare(b);
+    return first.localeCompare(second);
   });
+
+const getFinalPrice = (variant: ProductVariant) => {
+  const discountedPrice = Number(variant.priceWithDiscount || 0);
+
+  if (discountedPrice > 0) {
+    return discountedPrice;
+  }
+
+  const price = Number(variant.price || 0);
+  const discountPercentage = Number(variant.discountPercentage || 0);
+
+  if (price > 0 && discountPercentage > 0) {
+    return Math.max(
+      Math.round(price - price * (discountPercentage / 100)),
+      0
+    );
+  }
+
+  return price;
+};
+
+const hasDiscount = (variant?: ProductVariant) =>
+  Boolean(
+    variant &&
+      Number(variant.discountPercentage || 0) > 0 &&
+      getFinalPrice(variant) < Number(variant.price || 0)
+  );
+
+const formatPrice = (price: number) => {
+  if (!price || price <= 0) return 'Consultar';
+
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0
+  }).format(price);
+};
+
+const getVariantImages = (
+  variants: ProductVariant[],
+  selectedVariant?: ProductVariant
+) => {
+  if (selectedVariant?.images?.length) {
+    return selectedVariant.images;
+  }
+
+  const variantWithImages = variants.find(
+    (variant) => variant.images?.length > 0
+  );
+
+  return variantWithImages?.images || [];
 };
 
 const ProductContent = () => {
@@ -182,698 +246,720 @@ const ProductContent = () => {
   const productId = searchParams.get('id');
   const { addToCart } = useCart();
 
-  const [producto, setProducto] = useState<Producto | null>(null);
-  const [cargando, setCargando] = useState<boolean>(true);
-  const [error, setError] = useState<string>('');
-  const [tallaSeleccionada, setTallaSeleccionada] = useState<string>('');
-  const [colorSeleccionado, setColorSeleccionado] = useState<string>('');
-  const [cantidad, setCantidad] = useState<number>(1);
-  const [stockDisponible, setStockDisponible] = useState<number | null>(null);
-  const [imagenActual, setImagenActual] = useState<number>(0);
-  const [imagenesActuales, setImagenesActuales] = useState<Imagen[]>([]);
-  const [precioSeleccionado, setPrecioSeleccionado] = useState<number | null>(null);
-  const [productNotFound, setProductNotFound] = useState<boolean>(false);
-  const [isAnimating, setIsAnimating] = useState<boolean>(false);
-  const [agregando, setAgregando] = useState<boolean>(false);
-  const hasTrackedViewContent = useRef(false);
+  const trackedProductRef = useRef<string | null>(null);
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [productState, setProductState] = useState<ProductState>({
+    type: 'ready',
+    message: ''
+  });
+  const [loading, setLoading] = useState(true);
+  const [selectedColor, setSelectedColor] = useState('');
+  const [selectedSize, setSelectedSize] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [addingToCart, setAddingToCart] = useState(false);
+
   useEffect(() => {
-    hasTrackedViewContent.current = false;
+    trackedProductRef.current = null;
   }, [productId]);
-
-  const imageContainerRef = useRef<HTMLDivElement>(null);
-
-  const siguienteImagen = () => {
-    if (imagenesActuales.length > 1 && !isAnimating) {
-      setIsAnimating(true);
-      setImagenActual((prev) => (prev + 1) % imagenesActuales.length);
-      setTimeout(() => setIsAnimating(false), 300);
-    }
-  };
-
-  const anteriorImagen = () => {
-    if (imagenesActuales.length > 1 && !isAnimating) {
-      setIsAnimating(true);
-      setImagenActual((prev) => (prev - 1 + imagenesActuales.length) % imagenesActuales.length);
-      setTimeout(() => setIsAnimating(false), 300);
-    }
-  };
-
-  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (imagenesActuales.length <= 1 || isAnimating) return;
-
-    const rect = imageContainerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const clickX = e.clientX - rect.left;
-    const containerWidth = rect.width;
-
-    if (clickX < containerWidth / 2) {
-      anteriorImagen();
-    } else {
-      siguienteImagen();
-    }
-  };
-
-  const goToImage = (index: number) => {
-    if (!isAnimating && index >= 0 && index < imagenesActuales.length) {
-      setIsAnimating(true);
-      setImagenActual(index);
-      setTimeout(() => setIsAnimating(false), 300);
-    }
-  };
-
-  const obtenerVarianteSeleccionada = (): Variante | undefined => {
-    if (!producto || !colorSeleccionado || !tallaSeleccionada) return undefined;
-
-    return producto.variants.find(
-      (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
-    );
-  };
-
-  const getMaxDiscountForProduct = (): number => {
-    if (!producto) return 0;
-    const discounts = producto.variants.map((v) => v.discountPercentage || 0);
-    return discounts.length > 0 ? Math.max(...discounts) : 0;
-  };
-
-  const colorHasDiscount = (color: string): boolean => {
-    if (!producto) return false;
-    return producto.variants.some((v) => v.color === color && hasDiscount(v));
-  };
-
-  const variantesDisponibles = useMemo(() => {
-    if (!producto) return [];
-    return producto.variants.filter((variant) => variant.enabled !== false && variant.stock > 0);
-  }, [producto]);
 
   useEffect(() => {
     if (!productId) {
-      setError('Producto no encontrado');
-      setProductNotFound(true);
-      setCargando(false);
+      setProduct(null);
+      setProductState({
+        type: 'not-found',
+        message: 'El producto solicitado no existe o el enlace está incompleto.'
+      });
+      setLoading(false);
       return;
     }
 
-    const obtenerProducto = async () => {
+    const controller = new AbortController();
+
+    const fetchProduct = async () => {
+      setLoading(true);
+      setProduct(null);
+      setProductState({ type: 'ready', message: '' });
+      setSelectedColor('');
+      setSelectedSize('');
+      setQuantity(1);
+      setCurrentImageIndex(0);
+
       try {
-        let response = await fetch(`${MENU_PRODUCTS}/active/${productId}`);
+        let response = await fetch(`${MENU_PRODUCTS}/active/${productId}`, {
+          signal: controller.signal
+        });
+
+        if (!response.ok && response.status === 404) {
+          response = await fetch(PRODUCT_DETAIL(productId), {
+            signal: controller.signal
+          });
+        }
 
         if (!response.ok) {
           if (response.status === 404) {
-            response = await fetch(PRODUCT_DETAIL(productId));
+            throw new Error('PRODUCT_NOT_FOUND');
           }
 
-          if (!response.ok) {
-            throw new Error(`Error ${response.status}: ${response.statusText}`);
-          }
+          throw new Error(`No fue posible cargar el producto (${response.status})`);
         }
 
-        const data: Producto = await response.json();
+        const data = (await response.json()) as Product;
 
         if (data.enabled === false) {
-          setError('Este producto no está disponible actualmente');
-          setProductNotFound(true);
-          setCargando(false);
+          setProductState({
+            type: 'unavailable',
+            message: 'Este producto no está disponible actualmente.'
+          });
           return;
         }
 
-        const availableVariants = data.variants.filter((variant) =>
-          variant.enabled !== false && variant.stock > 0
+        const availableVariants = (data.variants || []).filter(
+          (variant) => variant.enabled !== false && variant.stock > 0
         );
 
         if (availableVariants.length === 0) {
-          setError('Este producto no tiene variantes disponibles');
-          setProductNotFound(true);
-          setCargando(false);
+          setProductState({
+            type: 'unavailable',
+            message: 'Este producto no tiene colores o tallas disponibles.'
+          });
           return;
         }
 
-        setProducto({
+        const normalizedProduct = {
           ...data,
           variants: availableVariants
-        });
+        };
 
-        const primeraVariante = availableVariants[0];
+        const initialVariant = availableVariants[0];
 
-        if (primeraVariante?.images?.length) {
-          setImagenesActuales(primeraVariante.images);
-          setImagenActual(0);
-        }
+        setProduct(normalizedProduct);
+        setSelectedColor(initialVariant.color);
+        setSelectedSize(initialVariant.size);
+      } catch (error) {
+        if (controller.signal.aborted) return;
 
-        if (primeraVariante.color) {
-          setColorSeleccionado(primeraVariante.color);
-        }
+        const message =
+          error instanceof Error ? error.message : 'Error cargando el producto';
 
-        if (primeraVariante.size) {
-          setTallaSeleccionada(primeraVariante.size);
-          setStockDisponible(primeraVariante.stock);
-        }
-
-        const precioInicial = primeraVariante.price ? getDiscountedPrice(primeraVariante) : 0;
-        setPrecioSeleccionado(precioInicial);
-      } catch (err: unknown) {
-        console.error('Error obteniendo producto:', err);
-
-        const errorMessage = err instanceof Error ? err.message : 'Error al cargar el producto';
-        if (errorMessage.includes('404') || errorMessage.toLowerCase().includes('not found')) {
-          setError('Producto no encontrado');
-          setProductNotFound(true);
+        if (message === 'PRODUCT_NOT_FOUND') {
+          setProductState({
+            type: 'not-found',
+            message: 'El producto que buscas no está disponible o no existe.'
+          });
         } else {
-          setError(errorMessage);
+          console.error('Error cargando producto:', error);
+          setProductState({
+            type: 'error',
+            message: 'No fue posible cargar el producto. Intenta nuevamente.'
+          });
+          showToast('Error al cargar el producto', 'error', 3200);
         }
-        showToast('Error al cargar el producto', 'error', 3200);
       } finally {
-        setCargando(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     };
 
-    obtenerProducto();
+    void fetchProduct();
+
+    return () => {
+      controller.abort();
+    };
   }, [productId]);
 
+  const availableVariants = useMemo(
+    () => product?.variants || [],
+    [product]
+  );
+
+  const colors = useMemo(
+    () => [...new Set(availableVariants.map((variant) => variant.color))],
+    [availableVariants]
+  );
+
+  const variantsForSelectedColor = useMemo(
+    () =>
+      availableVariants.filter(
+        (variant) => variant.color === selectedColor
+      ),
+    [availableVariants, selectedColor]
+  );
+
+  const sizes = useMemo(
+    () =>
+      sortSizes([
+        ...new Set(
+          variantsForSelectedColor.map((variant) => variant.size)
+        )
+      ]),
+    [variantsForSelectedColor]
+  );
+
+  const selectedVariant = useMemo(
+    () =>
+      availableVariants.find(
+        (variant) =>
+          variant.color === selectedColor &&
+          variant.size === selectedSize
+      ),
+    [availableVariants, selectedColor, selectedSize]
+  );
+
+  const images = useMemo(
+    () => getVariantImages(variantsForSelectedColor, selectedVariant),
+    [selectedVariant, variantsForSelectedColor]
+  );
+
+  const currentImage = images[currentImageIndex] || images[0];
+
   useEffect(() => {
-    if (tallaSeleccionada && colorSeleccionado && producto) {
-      const variante = producto.variants.find(
-        (v) => v.color === colorSeleccionado && v.size === tallaSeleccionada
+    setCurrentImageIndex(0);
+  }, [selectedColor, selectedSize]);
+
+  useEffect(() => {
+    if (!product || !selectedVariant || trackedProductRef.current === productId) {
+      return;
+    }
+
+    trackViewContent({
+      variantId: selectedVariant.id,
+      productName: product.name,
+      price: getFinalPrice(selectedVariant),
+      currency: 'COP',
+      color: selectedVariant.color,
+      size: selectedVariant.size
+    });
+
+    trackedProductRef.current = productId;
+  }, [product, productId, selectedVariant]);
+
+  const selectColor = useCallback(
+    (color: string) => {
+      const firstVariant = availableVariants.find(
+        (variant) => variant.color === color
       );
 
-      if (variante) {
-        setStockDisponible(variante.stock);
-        setPrecioSeleccionado(getDiscountedPrice(variante));
+      setSelectedColor(color);
+      setSelectedSize(firstVariant?.size || '');
+      setQuantity(1);
+      setCurrentImageIndex(0);
+    },
+    [availableVariants]
+  );
 
-        if (variante.images?.length > 0) {
-          setImagenesActuales(variante.images);
-          setImagenActual(0);
-        }
-      } else {
-        setStockDisponible(null);
-      }
-    } else if (producto && colorSeleccionado) {
-      const primeraVarianteColor = producto.variants.find((v) => v.color === colorSeleccionado);
+  const selectSize = useCallback((size: string) => {
+    setSelectedSize(size);
+    setQuantity(1);
+    setCurrentImageIndex(0);
+  }, []);
 
-      if (primeraVarianteColor) {
-        setPrecioSeleccionado(getDiscountedPrice(primeraVarianteColor));
-        if (primeraVarianteColor.images?.length > 0) {
-          setImagenesActuales(primeraVarianteColor.images);
-          setImagenActual(0);
-        }
-      }
-    } else if (producto) {
-      const precios = producto.variants.map((v) => getDiscountedPrice(v));
-      const precioMinimo = precios.length > 0 ? Math.min(...precios) : 0;
-      setPrecioSeleccionado(precioMinimo);
-      setStockDisponible(null);
-    }
-  }, [colorSeleccionado, tallaSeleccionada, producto]);
+  const previousImage = useCallback(() => {
+    if (images.length <= 1) return;
 
-  useEffect(() => {
-    if (!producto || hasTrackedViewContent.current) return;
-  
-    const varianteInicial = obtenerVarianteSeleccionada() || producto.variants[0];
-    if (!varianteInicial) return;
-  
-    const precioFinal = getDiscountedPrice(varianteInicial);
-  
-    trackViewContent({
-      variantId: varianteInicial.id,
-      productName: producto.name,
-      price: precioFinal,
-      currency: "COP",
-      color: varianteInicial.color,
-      size: varianteInicial.size,
-    });
-  
-    hasTrackedViewContent.current = true;
-  }, [producto, colorSeleccionado, tallaSeleccionada]);
-
-  const getUniqueColors = () => {
-    if (!producto) return [];
-    return [...new Set(producto.variants.map((v) => v.color))].slice(0, 6);
-  };
-
-  const manejarCambioColor = (color: string) => {
-    setColorSeleccionado(color);
-    setCantidad(1);
-
-    if (!producto) return;
-
-    const variantesDelColor = producto.variants.filter(
-      (v) => v.color === color && v.enabled !== false && v.stock > 0
+    setCurrentImageIndex((current) =>
+      current === 0 ? images.length - 1 : current - 1
     );
+  }, [images.length]);
 
-    const primeraVarianteDisponible = variantesDelColor[0];
+  const nextImage = useCallback(() => {
+    if (images.length <= 1) return;
 
-    if (primeraVarianteDisponible) {
-      setTallaSeleccionada(primeraVarianteDisponible.size);
-      setStockDisponible(primeraVarianteDisponible.stock);
-      setPrecioSeleccionado(getDiscountedPrice(primeraVarianteDisponible));
-
-      if (primeraVarianteDisponible.images?.length > 0) {
-        setImagenesActuales(primeraVarianteDisponible.images);
-        setImagenActual(0);
-      }
-    } else {
-      setTallaSeleccionada('');
-      setStockDisponible(null);
-      setPrecioSeleccionado(0);
-      setImagenesActuales([]);
-      setImagenActual(0);
-    }
-  };
-
-  const manejarCambioTalla = (talla: string) => {
-    setTallaSeleccionada(talla);
-    setCantidad(1);
-  };
-
-  const manejarCambioCantidad = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = Number(e.target.value);
-    if (value >= 1 && value <= (stockDisponible || 10)) {
-      setCantidad(value);
-    }
-  };
-
-  const incrementarCantidad = () => {
-    if (cantidad < (stockDisponible || 10)) {
-      setCantidad((prev) => prev + 1);
-    }
-  };
-
-  const decrementarCantidad = () => {
-    if (cantidad > 1) {
-      setCantidad((prev) => prev - 1);
-    }
-  };
-
-  const agregarAlCarrito = async () => {
-    if (!colorSeleccionado) {
-      showToast('Selecciona un color', 'info', 3000);
-      return;
-    }
-
-    if (!tallaSeleccionada) {
-      showToast('Selecciona una talla', 'info', 3000);
-      return;
-    }
-
-    if (!stockDisponible || cantidad > stockDisponible) {
-      showToast('Stock insuficiente', 'error', 3200);
-      return;
-    }
-
-    const variante = producto?.variants.find(
-      (v) => v.size === tallaSeleccionada && v.color === colorSeleccionado
+    setCurrentImageIndex((current) =>
+      current === images.length - 1 ? 0 : current + 1
     );
+  }, [images.length]);
 
-    if (!variante || !producto) {
-      showToast('La variante seleccionada no está disponible', 'error', 3200);
+  const updateQuantity = useCallback(
+    (newQuantity: number) => {
+      const maxQuantity = selectedVariant?.stock || 1;
+      const safeQuantity = Math.min(Math.max(newQuantity, 1), maxQuantity);
+
+      setQuantity(safeQuantity);
+    },
+    [selectedVariant]
+  );
+
+  const addProductToCart = useCallback(async () => {
+    if (!product || !selectedVariant) {
+      showToast('Selecciona un color y una talla', 'info', 2800);
+      return;
+    }
+
+    if (selectedVariant.stock <= 0 || quantity > selectedVariant.stock) {
+      showToast('Stock insuficiente', 'error', 3000);
       return;
     }
 
     try {
-      setAgregando(true);
-      await addToCart(variante.id, cantidad, producto.name);
+      setAddingToCart(true);
 
-trackAddToCart({
-  variantId: variante.id,
-  productName: producto.name,
-  price: getDiscountedPrice(variante),
-  quantity: cantidad,
-  currency: "COP",
-  color: variante.color,
-  size: variante.size,
-});
+      await addToCart(selectedVariant.id, quantity, product.name);
 
-      showToast('¡Producto agregado al carrito correctamente!', 'success', 3200);
-    } catch (err: unknown) {
-      console.error('Error:', err);
+      trackAddToCart({
+        variantId: selectedVariant.id,
+        productName: product.name,
+        price: getFinalPrice(selectedVariant),
+        quantity,
+        currency: 'COP',
+        color: selectedVariant.color,
+        size: selectedVariant.size
+      });
 
-      const errorData = err as ErrorResponse;
+      showToast('Producto agregado al carrito', 'success', 3000);
+    } catch (error) {
+      console.error('Error agregando producto:', error);
 
-      if (errorData.response?.status === 401 || errorData.response?.status === 403) {
-        showToast('Inicia sesión para continuar', 'info', 3000);
+      const errorData = error as ErrorResponse;
+
+      if (
+        errorData.response?.status === 401 ||
+        errorData.response?.status === 403
+      ) {
+        showToast('Inicia sesión para continuar', 'info', 2800);
         router.push('/login');
-      } else {
-        const errorMessage = errorData.message || 'Error al agregar al carrito';
-        showToast(errorMessage, 'error', 3200);
+        return;
       }
-    } finally {
-      setAgregando(false);
-    }
-  };
 
-  if (cargando) {
+      showToast(
+        errorData.message || 'No fue posible agregar el producto',
+        'error',
+        3200
+      );
+    } finally {
+      setAddingToCart(false);
+    }
+  }, [addToCart, product, quantity, router, selectedVariant]);
+
+  if (loading) {
     return (
       <div className={styles.loadingContainer}>
-        <div className={styles.loadingSpinner}></div>
-        <p>Cargando producto...</p>
+        <span className={styles.loadingSpinner} aria-hidden="true" />
+        <p>Cargando producto</p>
       </div>
     );
   }
 
-  if (error && productNotFound) {
+  if (!product || productState.type !== 'ready') {
+    const stateCode =
+      productState.type === 'not-found'
+        ? '404'
+        : productState.type === 'unavailable'
+          ? 'OUT'
+          : 'ERR';
+
+    const stateTitle =
+      productState.type === 'not-found'
+        ? 'Producto no encontrado'
+        : productState.type === 'unavailable'
+          ? 'Producto no disponible'
+          : 'No pudimos cargar el producto';
+
     return (
-      <div className={styles.errorContainer}>
-        <div className={styles.errorIcon}>⚠️</div>
-        <h2 className={styles.errorTitle}>Producto no disponible</h2>
-        <p className={styles.errorText}>{error}</p>
-        <button onClick={() => router.push('/menu')} className={styles.backButton}>
-          Volver al menú
+      <main className={styles.stateContainer}>
+        <span className={styles.stateCode}>{stateCode}</span>
+        <h1 className={styles.stateTitle}>{stateTitle}</h1>
+        <p className={styles.stateText}>{productState.message}</p>
+
+        <button
+          type="button"
+          className={styles.stateButton}
+          onClick={() => router.push('/menu')}
+        >
+          Volver al catálogo
+          <span aria-hidden="true">→</span>
         </button>
-      </div>
+      </main>
     );
   }
 
-  if (!producto) {
-    return (
-      <div className={styles.emptyContainer}>
-        <div className={styles.emptyIcon}>❓</div>
-        <h2 className={styles.emptyTitle}>Producto no encontrado</h2>
-        <p>El producto que buscas no está disponible o no existe.</p>
-        <button onClick={() => router.push('/menu')} className={styles.backButton}>
-          Volver al menú
-        </button>
-      </div>
-    );
-  }
+  const finalPrice = selectedVariant
+    ? getFinalPrice(selectedVariant)
+    : 0;
 
-  const coloresDisponibles = getUniqueColors();
+  const originalPrice = Number(selectedVariant?.price || 0);
+  const discountPercentage = Number(
+    selectedVariant?.discountPercentage || 0
+  );
+  const selectedVariantHasDiscount = hasDiscount(selectedVariant);
+  const lowStock =
+    selectedVariant && selectedVariant.stock > 0 && selectedVariant.stock <= 3;
 
-  const tallasDisponibles = colorSeleccionado
-    ? sortSizes(
-        [...new Set(
-          producto.variants
-            .filter((v) => v.color === colorSeleccionado)
-            .map((v) => v.size)
-        )]
-      )
-    : [];
-
-  const tallasDisponiblesDelColor = colorSeleccionado
-    ? producto.variants.filter(
-        (v) => v.color === colorSeleccionado && v.enabled !== false && v.stock > 0
-      )
-    : [];
-
-  const botonDeshabilitado =
-    agregando ||
-    !colorSeleccionado ||
-    !tallaSeleccionada ||
-    !stockDisponible ||
-    stockDisponible === 0;
-
-  const textoBoton =
-    agregando
-      ? 'AGREGANDO...'
-      : !colorSeleccionado
-        ? 'SELECCIONA COLOR'
-        : !tallaSeleccionada
-          ? 'SELECCIONA TALLA'
-          : !stockDisponible || stockDisponible === 0
-            ? 'AGOTADO'
-            : 'AGREGAR AL CARRITO';
+  const addButtonText = addingToCart
+    ? 'Agregando…'
+    : !selectedVariant
+      ? 'Selecciona una variante'
+      : 'Agregar al carrito';
 
   return (
-    <>
-      <div className={styles.productPage}>
-        <button onClick={() => router.push('/menu')} className={styles.backBtn}>
-          ← Volver al Menú
+    <main className={styles.productPage}>
+      <header className={styles.pageHeader}>
+        <button
+          type="button"
+          className={styles.backButton}
+          onClick={() => router.push('/menu')}
+        >
+          <span aria-hidden="true">←</span>
+          Volver al catálogo
         </button>
 
-        <div className={styles.productContainer}>
-          <div className={styles.imageSection}>
-            {imagenesActuales.length > 0 ? (
-              <div
-                ref={imageContainerRef}
-                className={styles.imageContainer}
-                onClick={handleImageClick}
-              >
-                <div className={styles.imageWrapper}>
-                  <Image
-                    src={imagenesActuales[imagenActual].imageUrl}
-                    alt={`${producto.name} - Imagen ${imagenActual + 1}`}
-                    width={500}
-                    height={667}
-                    className={styles.productImage}
-                    priority
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = '/images/placeholder.png';
-                    }}
-                  />
-                </div>
+        <nav className={styles.breadcrumb} aria-label="Ruta de navegación">
+          <span>VALSE</span>
+          <span aria-hidden="true">/</span>
+          <span>Catálogo</span>
+          <span aria-hidden="true">/</span>
+          <span className={styles.breadcrumbCurrent}>{product.name}</span>
+        </nav>
+      </header>
 
-                {imagenesActuales.length > 1 && (
-                  <>
-                    <div
-                      className={`${styles.arrowNav} ${styles.arrowLeft}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        anteriorImagen();
-                      }}
-                    >
-                      <div className={styles.arrow}>
-                        <span className={styles.arrowIcon}>‹</span>
-                      </div>
-                    </div>
-                    <div
-                      className={`${styles.arrowNav} ${styles.arrowRight}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        siguienteImagen();
-                      }}
-                    >
-                      <div className={styles.arrow}>
-                        <span className={styles.arrowIcon}>›</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {imagenesActuales.length > 1 && (
-                  <div className={styles.imageIndicators}>
-                    {imagenesActuales.map((_, index) => (
-                      <div
-                        key={index}
-                        className={`${styles.indicator} ${index === imagenActual ? styles.active : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          goToImage(index);
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className={styles.imagePlaceholder}>
-                <div className={styles.placeholderIcon}>🛍️</div>
-                <p>Imagen no disponible</p>
-              </div>
-            )}
-          </div>
-
-          <div className={styles.infoSection}>
-            <div className={styles.productHeader}>
-              <h1 className={styles.productTitle}>{producto.name}</h1>
-              <div className={styles.priceSection}>
-                {(() => {
-                  const variante = obtenerVarianteSeleccionada();
-                  const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
-                  const discountPercentage = variante ? getDiscountPercentage(variante) : 0;
-                  const originalPrice = variante ? getOriginalPrice(variante) : (precioSeleccionado || 0);
-                  const finalPrice = precioSeleccionado || 0;
-
-                  if (hasCurrentDiscount && discountPercentage > 0 && originalPrice > 0) {
-                    return (
-                      <div className={styles.discountedPriceContainer}>
-                        <div className={styles.originalPriceWrapper}>
-                          <span className={styles.originalPrice}>
-                            {formatPrice(originalPrice)}
-                          </span>
-                        </div>
-                        <div className={styles.finalPriceWrapper}>
-                          <span className={styles.finalPrice}>
-                            {formatPrice(finalPrice)}
-                          </span>
-                          <span className={styles.discountBadge}>
-                            -{discountPercentage}%
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <span className={styles.productPrice}>
-                      {formatPrice(finalPrice)}
-                    </span>
-                  );
-                })()}
-              </div>
-            </div>
-
-            <p className={styles.productDescription}>{producto.description}</p>
-
-            {(() => {
-              const variante = obtenerVarianteSeleccionada();
-              const hasCurrentDiscount = variante ? hasDiscount(variante) : false;
-              const discountAmount = variante ? calculateDiscountAmount(variante.price || 0, variante.discountPercentage) : 0;
-
-              if (hasCurrentDiscount && discountAmount > 0) {
-                return null;
-              }
-              return null;
-            })()}
-
-            <div className={styles.colorSection}>
-              <label className={styles.sectionLabel}>Color</label>
-              <div className={styles.colorOptions}>
-                {coloresDisponibles.map((color) => (
+      <section className={styles.productLayout}>
+        <div className={styles.gallerySection}>
+          <div className={styles.galleryGrid}>
+            {images.length > 1 && (
+              <div className={styles.thumbnailRail} aria-label="Galería de imágenes">
+                {images.map((image, index) => (
                   <button
-                    key={color}
-                    className={`${styles.colorOption} ${colorSeleccionado === color ? styles.selected : ''} ${
-                      colorHasDiscount(color) ? styles.withDiscount : ''
+                    type="button"
+                    key={`${image.id || image.fileName}-${index}`}
+                    className={`${styles.thumbnailButton} ${
+                      index === currentImageIndex
+                        ? styles.thumbnailActive
+                        : ''
                     }`}
-                    style={{ backgroundColor: getColorHex(color) }}
-                    onClick={() => manejarCambioColor(color)}
-                    title={color}
+                    onClick={() => setCurrentImageIndex(index)}
+                    aria-label={`Ver imagen ${index + 1}`}
+                    aria-current={
+                      index === currentImageIndex ? 'true' : undefined
+                    }
                   >
-                    {colorSeleccionado === color && <span className={styles.checkmark}>✓</span>}
+                    <Image
+                      src={image.thumbnailUrl || image.imageUrl}
+                      alt=""
+                      width={84}
+                      height={108}
+                      className={styles.thumbnailImage}
+                    />
                   </button>
                 ))}
               </div>
+            )}
 
-              {coloresDisponibles.length === 0 && (
-                <p className={styles.noOptions}>No hay colores disponibles</p>
+            <div className={styles.mainMedia}>
+              {currentImage ? (
+                <Image
+                  src={
+                    currentImage.largeUrl ||
+                    currentImage.mediumUrl ||
+                    currentImage.imageUrl
+                  }
+                  alt={`${product.name}, color ${selectedColor}`}
+                  width={920}
+                  height={1150}
+                  className={styles.mainImage}
+                  priority
+                  sizes="(max-width: 900px) 100vw, 58vw"
+                  onError={(event) => {
+                    event.currentTarget.src = '/images/placeholder.png';
+                  }}
+                />
+              ) : (
+                <div className={styles.galleryPlaceholder}>
+                  <span className={styles.placeholderIcon} aria-hidden="true">
+                    V
+                  </span>
+                  <p>Imagen no disponible</p>
+                </div>
+              )}
+
+              {images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className={`${styles.galleryArrow} ${styles.galleryArrowPrev}`}
+                    onClick={previousImage}
+                    aria-label="Imagen anterior"
+                  >
+                    ←
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`${styles.galleryArrow} ${styles.galleryArrowNext}`}
+                    onClick={nextImage}
+                    aria-label="Imagen siguiente"
+                  >
+                    →
+                  </button>
+
+                  <span className={styles.galleryCounter}>
+                    {String(currentImageIndex + 1).padStart(2, '0')} /{' '}
+                    {String(images.length).padStart(2, '0')}
+                  </span>
+                </>
               )}
             </div>
+          </div>
+        </div>
 
-            {colorSeleccionado && tallasDisponibles.length > 0 && (
-              <div className={styles.sizeSection}>
-                <label className={styles.sectionLabel}>Talla</label>
-                <div className={styles.sizeOptions}>
-                  {tallasDisponibles.map((talla) => {
-                    const variante = producto.variants.find(
-                      (v) => v.color === colorSeleccionado && v.size === talla
-                    );
-                    const stock = variante?.stock || 0;
-                    const disabled = stock === 0;
-                    const hasSizeDiscount = variante ? hasDiscount(variante) : false;
+        <aside className={styles.productInfo}>
+          <div className={styles.productMeta}>
+            <span className={styles.metaTag}>{normalizeLabel(product.type)}</span>
+            <span className={styles.metaTag}>{normalizeLabel(product.gender)}</span>
+          </div>
 
-                    return (
-                      <button
-                        key={talla}
-                        className={`${styles.sizeOption} ${tallaSeleccionada === talla ? styles.selected : ''} ${disabled ? styles.disabled : ''} ${
-                          hasSizeDiscount ? styles.sizeWithDiscount : ''
-                        }`}
-                        onClick={() => !disabled && manejarCambioTalla(talla)}
-                        disabled={disabled}
-                        title={disabled ? 'Agotado' : 'Disponible'}
-                      >
-                        {talla}
-                        {disabled && <span className={styles.sizeBadge}>X</span>}
-                      </button>
-                    );
-                  })}
+          <h1 className={styles.productTitle}>{product.name}</h1>
+
+          <div className={styles.priceArea} aria-live="polite">
+            {selectedVariantHasDiscount ? (
+              <div className={styles.discountedPrice}>
+                <span className={styles.originalPrice}>
+                  {formatPrice(originalPrice)}
+                </span>
+
+                <div>
+                  <span className={styles.currentPrice}>
+                    {formatPrice(finalPrice)}
+                  </span>
+                  <span className={styles.discountBadge}>
+                    -{discountPercentage}%
+                  </span>
                 </div>
               </div>
+            ) : (
+              <span className={styles.currentPrice}>
+                {formatPrice(finalPrice)}
+              </span>
             )}
+          </div>
 
-            {colorSeleccionado && tallasDisponiblesDelColor.length === 0 && (
-              <div className={styles.stockWarning}>
-                <span className={styles.warningIcon}>⚠️</span>
-                <span>Este color no tiene tallas disponibles. Prueba otro color.</span>
-              </div>
-            )}
+          <p className={styles.productDescription}>{product.description}</p>
 
-            <div className={styles.actionsSection}>
-              <div className={styles.quantityControl}>
-                <label className={styles.quantityLabel}>Cantidad</label>
-                <div className={styles.quantityInputGroup}>
+          <div className={styles.divider} />
+
+          <section className={styles.optionSection}>
+            <div className={styles.optionHeader}>
+              <span className={styles.optionLabel}>Color</span>
+              <span className={styles.optionValue}>{selectedColor}</span>
+            </div>
+
+            <div className={styles.colorOptions}>
+              {colors.map((color) => {
+                const isSelected = color === selectedColor;
+                const colorHex = getColorHex(color);
+
+                return (
                   <button
-                    onClick={decrementarCantidad}
-                    disabled={cantidad <= 1 || !stockDisponible || agregando}
-                    className={styles.qtyBtn}
+                    type="button"
+                    key={color}
+                    className={`${styles.colorButton} ${
+                      isSelected ? styles.colorSelected : ''
+                    }`}
+                    onClick={() => selectColor(color)}
+                    aria-label={`Seleccionar color ${color}`}
+                    aria-pressed={isSelected}
+                  >
+                    <span
+                      className={styles.colorSwatch}
+                      style={{
+                        backgroundColor: colorHex,
+                        border:
+                          colorHex === '#ffffff'
+                            ? '1px solid rgba(10, 10, 10, 0.18)'
+                            : undefined
+                      }}
+                    />
+
+                    {isSelected && (
+                      <span className={styles.colorCheck} aria-hidden="true">
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className={styles.optionSection}>
+            <div className={styles.optionHeader}>
+              <span className={styles.optionLabel}>Talla</span>
+              <span className={styles.optionValue}>{selectedSize}</span>
+            </div>
+
+            <div className={styles.sizeOptions}>
+              {sizes.map((size) => {
+                const variant = variantsForSelectedColor.find(
+                  (item) => item.size === size
+                );
+                const unavailable = !variant || variant.stock <= 0;
+                const isSelected = size === selectedSize;
+
+                return (
+                  <button
+                    type="button"
+                    key={size}
+                    className={`${styles.sizeButton} ${
+                      isSelected ? styles.sizeSelected : ''
+                    } ${unavailable ? styles.sizeUnavailable : ''}`}
+                    onClick={() => !unavailable && selectSize(size)}
+                    disabled={unavailable}
+                    aria-pressed={isSelected}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className={styles.selectionHelp}>
+              Selecciona la talla habitual. Consulta la guía de medidas cuando esté disponible.
+            </p>
+          </section>
+
+          <section className={styles.purchasePanel}>
+            <div className={styles.purchaseTop}>
+              <div className={styles.quantityBlock}>
+                <span className={styles.quantityLabel}>Cantidad</span>
+
+                <div className={styles.quantityControl}>
+                  <button
+                    type="button"
+                    className={styles.quantityButton}
+                    onClick={() => updateQuantity(quantity - 1)}
+                    disabled={quantity <= 1 || addingToCart}
+                    aria-label="Reducir cantidad"
                   >
                     −
                   </button>
+
                   <input
                     type="number"
-                    value={cantidad}
-                    onChange={manejarCambioCantidad}
+                    className={styles.quantityInput}
+                    value={quantity}
                     min={1}
-                    max={stockDisponible || 10}
-                    className={styles.qtyInput}
-                    disabled={!stockDisponible || agregando}
+                    max={selectedVariant?.stock || 1}
+                    onChange={(event) =>
+                      updateQuantity(Number(event.target.value) || 1)
+                    }
+                    disabled={!selectedVariant || addingToCart}
+                    aria-label="Cantidad"
                   />
+
                   <button
-                    onClick={incrementarCantidad}
-                    disabled={cantidad >= (stockDisponible || 0) || !stockDisponible || agregando}
-                    className={styles.qtyBtn}
+                    type="button"
+                    className={styles.quantityButton}
+                    onClick={() => updateQuantity(quantity + 1)}
+                    disabled={
+                      !selectedVariant ||
+                      quantity >= selectedVariant.stock ||
+                      addingToCart
+                    }
+                    aria-label="Aumentar cantidad"
                   >
                     +
                   </button>
                 </div>
               </div>
 
-              <div className={styles.stockInfo}>
-                {colorSeleccionado && tallaSeleccionada && stockDisponible !== null && (
-                  <div className={styles.stockStatus}>
-                    {stockDisponible > 0 ? (
-                      <>
-                        <span className={styles.stockLabel}>Stock disponible</span>
-                        {stockDisponible <= 3 && (
-                          <span className={styles.lowStock}> - ⚠️ Últimas unidades</span>
-                        )}
-                      </>
-                    ) : (
-                      <span className={styles.outOfStock}>❌ Agotado</span>
-                    )}
-                  </div>
-                )}
+              <div className={styles.stockBlock}>
+                <span className={styles.stockLabel}>Disponibilidad</span>
+                <span
+                  className={`${styles.stockValue} ${
+                    lowStock ? styles.lowStock : ''
+                  }`}
+                >
+                  {lowStock
+                    ? 'Últimas unidades'
+                    : selectedVariant
+                      ? 'Disponible'
+                      : 'Selecciona una talla'}
+                </span>
               </div>
             </div>
 
             <button
-              className={`${styles.addToCartBtn} ${botonDeshabilitado ? styles.disabled : ''}`}
-              onClick={agregarAlCarrito}
-              disabled={botonDeshabilitado}
+              type="button"
+              className={`${styles.addButton} ${
+                !selectedVariant ? styles.addButtonDisabled : ''
+              } ${addingToCart ? styles.addButtonLoading : ''}`}
+              onClick={() => void addProductToCart()}
+              disabled={!selectedVariant || addingToCart}
             >
-              {textoBoton}
+              <span className={styles.buttonText}>
+                {addingToCart && (
+                  <span className={styles.buttonSpinner} aria-hidden="true" />
+                )}
+                {addButtonText}
+              </span>
 
-              {precioSeleccionado && cantidad > 0 && stockDisponible && stockDisponible > 0 && !agregando && (
-                <span className={styles.totalPrice}>
-                  ${((precioSeleccionado) * cantidad).toLocaleString('es-CO')}
+              {selectedVariant && !addingToCart && (
+                <span className={styles.buttonPrice}>
+                  {formatPrice(finalPrice * quantity)}
                 </span>
               )}
             </button>
+          </section>
 
-            {producto.enabled === false && (
-              <div className={styles.disabledWarning}>
-                <span className={styles.warningIcon}>⚠️</span>
-                <span>Este producto está temporalmente deshabilitado</span>
+          <section className={styles.benefits} aria-label="Información de compra">
+            <article className={styles.benefitItem}>
+              <span className={styles.benefitIcon} aria-hidden="true">
+                01
+              </span>
+              <div className={styles.benefitText}>
+                <h2 className={styles.benefitTitle}>Pago protegido</h2>
+                <p className={styles.benefitDescription}>
+                  Procesamiento mediante los medios habilitados en el checkout.
+                </p>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </>
+            </article>
+
+            <article className={styles.benefitItem}>
+              <span className={styles.benefitIcon} aria-hidden="true">
+                02
+              </span>
+              <div className={styles.benefitText}>
+                <h2 className={styles.benefitTitle}>Envío rastreable</h2>
+                <p className={styles.benefitDescription}>
+                  Seguimiento sujeto al operador logístico y al destino.
+                </p>
+              </div>
+            </article>
+
+            <article className={styles.benefitItem}>
+              <span className={styles.benefitIcon} aria-hidden="true">
+                03
+              </span>
+              <div className={styles.benefitText}>
+                <h2 className={styles.benefitTitle}>Cambios y garantía</h2>
+                <p className={styles.benefitDescription}>
+                  Solicitudes revisadas según las condiciones de la tienda.
+                </p>
+              </div>
+            </article>
+          </section>
+
+          <p className={styles.note}>
+            El color puede variar ligeramente según la pantalla y la iluminación de la fotografía.
+          </p>
+        </aside>
+      </section>
+    </main>
   );
 };
 
-const Product = () => {
-  return (
-    <Suspense
-      fallback={
-        <div className={styles.loadingContainer}>
-          <div className={styles.loadingSpinner}></div>
-          <p>Cargando producto...</p>
-        </div>
-      }
-    >
-      <ProductContent />
-    </Suspense>
-  );
-};
+const Product = () => (
+  <Suspense
+    fallback={
+      <div className={styles.loadingContainer}>
+        <span className={styles.loadingSpinner} aria-hidden="true" />
+        <p>Cargando producto</p>
+      </div>
+    }
+  >
+    <ProductContent />
+  </Suspense>
+);
 
 export default Product;

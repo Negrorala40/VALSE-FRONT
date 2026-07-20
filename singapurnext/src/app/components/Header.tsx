@@ -56,7 +56,7 @@ const Header: React.FC = () => {
   };
 
   const LogoCohete = {
-    src: '/images/logos/logCohete.svg',
+    src: '/images/logos/logLog.svg',
     alt: 'A Marte Logo Cohete',
   };
 
@@ -148,7 +148,7 @@ const Header: React.FC = () => {
         <div className={styles.headerDecoration}></div>
 
         <div className={styles.headerContainer}>
-          <Link href="/" className={styles.headerLogo} aria-label="Inicio - A Marte">
+          <Link href="/" className={styles.headerLogo} aria-label="Inicio - Valse">
             <div className={styles.headerLogoWrapper}>
               <Image
                 src={logoConfig.src}
@@ -160,7 +160,7 @@ const Header: React.FC = () => {
                 onLoad={() => setLogoLoaded(true)}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '';
+                  target.src = '/images/logos/logver.png';
                 }}
                 className={`${styles.headerLogoImg} ${logoLoaded ? styles.headerLogoImgLoaded : ''}`}
               />
@@ -278,7 +278,7 @@ const Header: React.FC = () => {
                 style={{ filter: 'brightness(0) invert(1)' }}
               />
             </div>
-            <span>A Marte</span>
+            <span>Valse</span>
           </div>
           <button
             className={styles.sideMenuClose}

@@ -198,7 +198,7 @@ const Home = () => {
               {/* Imagen para Desktop */}
               <div className={styles.heroBackgroundImageWrapperDesktop}>
                 <Image
-                  src="https://res.cloudinary.com/dsdyg4l3s/image/upload/v1771084044/BANNER_cdbtes.png"
+                  src=""
                   alt="Fondo de pijama infantil espacial - Desktop"
                   fill
                   className={styles.heroBackgroundImage}
@@ -215,7 +215,7 @@ const Home = () => {
               {/* Imagen para Móvil */}
               <div className={styles.heroBackgroundImageWrapperMobile}>
                 <Image
-                  src="https://res.cloudinary.com/dsdyg4l3s/image/upload/v1771085702/Banner2_qthzfn.png"
+                  src=""
                   alt="Fondo de pijama infantil espacial - Mobile"
                   fill
                   className={styles.heroBackgroundImage}
