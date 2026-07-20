@@ -1,48 +1,52 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import Image from 'next/image';
-import './Checkout.css';
+import { useRouter } from 'next/navigation';
+import Cookies from 'js-cookie';
 import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
-import { 
-  CART, 
-  PERFIL_ME, 
-  ADDRESS, 
+import {
+  AlertCircle,
+  Check,
+  ChevronLeft,
+  Clock,
+  CreditCard,
+  Gift,
+  Loader2,
+  Lock,
+  Mail,
+  MapPin,
+  Minus,
+  Package,
+  Percent,
+  Phone,
+  Plus,
+  Shield,
+  ShoppingBag,
+  Trash2,
+  User,
+  X
+} from 'lucide-react';
+
+import {
+  ADDRESS,
+  CART,
   CHECKOUT_ANONYMOUS,
   CHECKOUT_AUTHENTICATED,
+  FIRST_PURCHASE_ELIGIBILITY,
   MERCADOPAGO_CREATE_PREFERENCE,
   MERCADOPAGO_STATUS,
   ORDER_CHECK_EXPIRATION,
-  PUBLIC_DISCOUNT_CONFIG,
-  FIRST_PURCHASE_ELIGIBILITY
+  PERFIL_ME,
+  PUBLIC_DISCOUNT_CONFIG
 } from '../utils/Api';
-import { 
-  ShoppingBag, 
-  MapPin, 
-  CreditCard, 
-  Check, 
-  Plus, 
-  Minus, 
-  Trash2, 
-  ChevronLeft, 
-  ChevronRight, 
-  Package, 
-  Star, 
-  Sparkles,
-  X,
-  Loader2,
-  Wallet as WalletIcon,
-  User,
-  Mail,
-  Phone,
-  AlertCircle,
-  Lock,
-  Shield,
-  Clock,
-  RefreshCw,
-  Gift,
-  Percent
-} from 'lucide-react';
+import './Checkout.css';
 
 interface CartItem {
   id: string;
@@ -71,6 +75,14 @@ interface Address {
   postalCode?: string;
 }
 
+interface AddressForm {
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode?: string;
+}
+
 interface UserData {
   id: number;
   firstName: string;
@@ -78,6 +90,13 @@ interface UserData {
   email: string;
   phone: string;
   addresses: Address[];
+}
+
+interface AnonymousUserInfo {
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
 }
 
 interface OrderResponse {
@@ -100,13 +119,6 @@ interface OrderResponse {
   firstPurchaseDiscountApplied?: boolean;
   firstPurchaseDiscountPercentage?: number;
   firstPurchaseDiscountAmount?: number;
-}
-
-interface AnonymousUserInfo {
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
 }
 
 interface MercadoPagoResponse {
@@ -139,9 +151,7 @@ interface PaymentStatusResponse {
   stockReservedAt?: string;
   stockReservationExpired?: boolean;
   stockReservationMinutesLeft?: number;
-  paymentInfo?: any;
   cancellationReason?: string;
-  // 🔴 CAMPOS DE DESCUENTO PRIMERA COMPRA
   firstPurchaseDiscountApplied?: boolean;
   firstPurchaseDiscountPercentage?: number;
   firstPurchaseDiscountAmount?: number;
@@ -149,24 +159,28 @@ interface PaymentStatusResponse {
   totalDiscount?: number;
 }
 
+interface CartTotalsResponseItem {
+  id: number;
+  productVariantId: number;
+  imageUrl?: string;
+  imageUrls?: string[];
+  productName: string;
+  price: number;
+  originalPrice: number;
+  priceWithDiscount: number;
+  hasDiscount: boolean;
+  discountPercentage: number;
+  discountAmount: number;
+  size: string;
+  color: string;
+  quantity: number;
+  stock?: number;
+  maxStock?: number;
+  savings?: number;
+}
+
 interface CartTotalsResponse {
-  items: Array<{
-    id: number;
-    productVariantId: number;
-    imageUrls: string[];
-    productName: string;
-    price: number;
-    originalPrice: number;
-    priceWithDiscount: number;
-    hasDiscount: boolean;
-    discountPercentage: number;
-    discountAmount: number;
-    size: string;
-    color: string;
-    quantity: number;
-    stock?: number;
-    maxStock?: number;
-  }>;
+  items: CartTotalsResponseItem[];
   subtotal: number;
   shippingCost: number;
   total: number;
@@ -192,10 +206,40 @@ interface CheckoutPricing {
   shippingCost: number;
   total: number;
   firstPurchaseStatus: FirstPurchaseStatus;
-  firstPurchasePercentage?: number;
+  firstPurchasePercentage: number;
 }
 
-function buildCheckoutPricing(params: {
+const CART_SESSION_KEY = 'cartSessionId';
+const CART_SESSION_HEADER = 'X-Cart-Session-Id';
+const PAYMENT_POLL_INTERVAL = 30000;
+const PAYMENT_POLL_DURATION = 900000;
+
+const EMPTY_ADDRESS: AddressForm = {
+  address: '',
+  city: '',
+  state: '',
+  country: 'Colombia',
+  postalCode: ''
+};
+
+const EMPTY_GUEST: AnonymousUserInfo = {
+  email: '',
+  firstName: '',
+  lastName: '',
+  phone: ''
+};
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const buildCheckoutPricing = ({
+  originalSubtotal,
+  subtotal,
+  shippingCost,
+  paymentStatus,
+  orderResponse,
+  discountConfig,
+  firstPurchaseEligibility
+}: {
   originalSubtotal: number;
   subtotal: number;
   shippingCost: number;
@@ -203,790 +247,808 @@ function buildCheckoutPricing(params: {
   orderResponse?: OrderResponse | null;
   discountConfig?: FirstPurchaseDiscountConfig | null;
   firstPurchaseEligibility: boolean | null;
-}) : CheckoutPricing {
-  const productsDiscount = Math.max(0, params.originalSubtotal - params.subtotal);
+}): CheckoutPricing => {
+  const productsDiscount = Math.max(0, originalSubtotal - subtotal);
 
-  const appliedFromPayment =
-    params.paymentStatus?.firstPurchaseDiscountApplied
-      ? {
-          amount: params.paymentStatus.firstPurchaseDiscountAmount || 0,
-          percentage: params.paymentStatus.firstPurchaseDiscountPercentage || 0
-        }
-      : null;
+  const paymentDiscount = paymentStatus?.firstPurchaseDiscountApplied
+    ? {
+        amount: Number(paymentStatus.firstPurchaseDiscountAmount || 0),
+        percentage: Number(
+          paymentStatus.firstPurchaseDiscountPercentage || 0
+        )
+      }
+    : null;
 
-  const appliedFromOrder =
-    params.orderResponse?.firstPurchaseDiscountApplied
-      ? {
-          amount: params.orderResponse.firstPurchaseDiscountAmount || 0,
-          percentage: params.orderResponse.firstPurchaseDiscountPercentage || 0
-        }
-      : null;
+  const orderDiscount = orderResponse?.firstPurchaseDiscountApplied
+    ? {
+        amount: Number(orderResponse.firstPurchaseDiscountAmount || 0),
+        percentage: Number(
+          orderResponse.firstPurchaseDiscountPercentage || 0
+        )
+      }
+    : null;
 
-  const appliedDiscount = appliedFromPayment || appliedFromOrder;
+  const appliedDiscount = paymentDiscount || orderDiscount;
 
-  const estimatedFirstPurchase =
+  const estimatedDiscount =
     !appliedDiscount &&
-    params.firstPurchaseEligibility === true &&
-    !!params.discountConfig?.enabled
-      ? Math.round(params.subtotal * ((params.discountConfig?.discountPercentage || 0) / 100))
+    firstPurchaseEligibility === true &&
+    discountConfig?.enabled
+      ? Math.round(
+          subtotal *
+            (Number(discountConfig.discountPercentage || 0) / 100)
+        )
       : 0;
 
-  const firstPurchaseDiscount = appliedDiscount?.amount || estimatedFirstPurchase;
+  const firstPurchaseDiscount =
+    appliedDiscount?.amount || estimatedDiscount;
 
-  const firstPurchaseStatus: FirstPurchaseStatus =
-    appliedDiscount
-      ? 'applied'
-      : params.firstPurchaseEligibility === true && estimatedFirstPurchase > 0
-        ? 'estimated'
-        : 'hidden';
-
-  const total = Math.max(0, params.subtotal - firstPurchaseDiscount + params.shippingCost);
+  const firstPurchaseStatus: FirstPurchaseStatus = appliedDiscount
+    ? 'applied'
+    : estimatedDiscount > 0
+      ? 'estimated'
+      : 'hidden';
 
   return {
-    originalSubtotal: params.originalSubtotal,
-    productsSubtotal: params.subtotal,
+    originalSubtotal,
+    productsSubtotal: subtotal,
     productsDiscount,
     firstPurchaseDiscount,
-    shippingCost: params.shippingCost,
-    total,
+    shippingCost,
+    total: Math.max(
+      0,
+      subtotal - firstPurchaseDiscount + shippingCost
+    ),
     firstPurchaseStatus,
     firstPurchasePercentage:
       appliedDiscount?.percentage ||
-      params.discountConfig?.discountPercentage ||
-      0
+      Number(discountConfig?.discountPercentage || 0)
   };
-}
+};
 
 const CheckoutPage = () => {
+  const router = useRouter();
+
+  const paymentSectionRef = useRef<HTMLElement | null>(null);
+  const summarySectionRef = useRef<HTMLElement | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+  const paymentIntervalRef = useRef<number | null>(null);
+  const paymentStopTimerRef = useRef<number | null>(null);
+  const cartHashRef = useRef('');
+  const orderCreatedRef = useRef(false);
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [orderId, setOrderId] = useState<string>('');
-  const [subtotal, setSubtotal] = useState<number>(0);
-  const [shippingCost, setShippingCost] = useState<number>(0);
-  const [total, setTotal] = useState<number>(0);
-  const [totalItems, setTotalItems] = useState<number>(0);
-  const [discountSavings, setDiscountSavings] = useState<number>(0);
-  const [originalSubtotal, setOriginalSubtotal] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [needsCartAdjustment, setNeedsCartAdjustment] = useState<boolean>(false);
-  const [adjustedItems, setAdjustedItems] = useState<Array<{id: string, name: string, oldQty: number, newQty: number}>>([]);
+  const [subtotal, setSubtotal] = useState(0);
+  const [shippingCost, setShippingCost] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  const [originalSubtotal, setOriginalSubtotal] = useState(0);
 
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [cartUpdating, setCartUpdating] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [mercadoPagoLoading, setMercadoPagoLoading] = useState(false);
+
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userData, setUserData] = useState<UserData | null>(null);
-  const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [sessionId, setSessionId] = useState<string>('');
+  const [selectedAddress, setSelectedAddress] =
+    useState<Address | null>(null);
 
-  const [step, setStep] = useState<number>(1);
+  const [guestInfo, setGuestInfo] =
+    useState<AnonymousUserInfo>(EMPTY_GUEST);
+  const [guestAddress, setGuestAddress] =
+    useState<AddressForm>(EMPTY_ADDRESS);
 
   const [addingAddress, setAddingAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState<Omit<Address, 'id'>>({
-    address: '',
-    city: '',
-    state: '',
-    country: 'Colombia',
-  });
+  const [newAddress, setNewAddress] =
+    useState<AddressForm>(EMPTY_ADDRESS);
 
-  const [anonymousUserInfo, setAnonymousUserInfo] = useState<AnonymousUserInfo>({
-    email: '',
-    firstName: '',
-    lastName: '',
-    phone: ''
-  });
+  const [discountConfig, setDiscountConfig] =
+    useState<FirstPurchaseDiscountConfig>({
+      enabled: false,
+      discountPercentage: 0,
+      applyToAnonymous: false
+    });
+  const [firstPurchaseEligibility, setFirstPurchaseEligibility] =
+    useState<boolean | null>(null);
+  const [checkingFirstPurchase, setCheckingFirstPurchase] =
+    useState(false);
 
+  const [orderId, setOrderId] = useState('');
+  const [createdOrder, setCreatedOrder] =
+    useState<OrderResponse | null>(null);
   const [orderCreated, setOrderCreated] = useState(false);
-  const [createdOrder, setCreatedOrder] = useState<OrderResponse | null>(null);
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [mercadoPagoLoading, setMercadoPagoLoading] = useState(false);
-  const [mercadoPagoData, setMercadoPagoData] = useState<MercadoPagoResponse | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
-  const [publicKey, setPublicKey] = useState<string>('');
-  const [isMercadoPagoInitialized, setIsMercadoPagoInitialized] = useState<boolean>(false);
-  
-  // 🔴 CONFIGURACIÓN DESCUENTO PRIMERA COMPRA
-  const [discountConfig, setDiscountConfig] = useState<FirstPurchaseDiscountConfig>({
-    enabled: false,
-    discountPercentage: 0,
-    applyToAnonymous: false
-  });
-  const [loadingDiscountConfig, setLoadingDiscountConfig] = useState<boolean>(false);
-  const [firstPurchaseEligibility, setFirstPurchaseEligibility] = useState<boolean | null>(null);
-  const [checkingFirstPurchase, setCheckingFirstPurchase] = useState<boolean>(false);
-  
-  const fetchControllerRef = useRef<AbortController | null>(null);
-  const hasFetchedRef = useRef(false);
-  const paymentStatusIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const orderFromStorageRef = useRef<string | null>(null);
-  const cartHashRef = useRef<string>('');
-  const isAutoCreatingOrderRef = useRef<boolean>(false);
-  const lastCartUpdateRef = useRef<number>(Date.now());
 
-  // 🔴 FUNCIÓN PARA OBTENER CONFIGURACIÓN DEL DESCUENTO
-  // En el componente Checkout, cambia esta línea:
-  
+  const [mercadoPagoData, setMercadoPagoData] =
+    useState<MercadoPagoResponse | null>(null);
+  const [paymentStatus, setPaymentStatus] =
+    useState<PaymentStatusResponse | null>(null);
+  const [publicKey, setPublicKey] = useState('');
+  const [mercadoPagoInitialized, setMercadoPagoInitialized] =
+    useState(false);
 
-  // 🔴 FUNCIÓN PARA CALCULAR HASH DEL CARRITO
-  const calculateCartHash = useCallback((items: CartItem[]): string => {
-    if (!items || items.length === 0) return 'empty';
-    
-    const cartData = items
-      .map(item => `${item.productVariantId}:${item.quantity}`)
+
+  const formatPrice = useCallback(
+    (price: number) =>
+      new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(price || 0),
+    []
+  );
+
+  const calculateCartHash = useCallback((items: CartItem[]) => {
+    if (items.length === 0) return 'empty';
+
+    const content = items
+      .map(
+        (item) =>
+          `${item.productVariantId || item.id}:${item.quantity}`
+      )
       .sort()
       .join('|');
-    
+
     let hash = 0;
-    for (let i = 0; i < cartData.length; i++) {
-      const char = cartData.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+
+    for (let index = 0; index < content.length; index += 1) {
+      hash =
+        (hash << 5) - hash + content.charCodeAt(index);
+      hash |= 0;
     }
-    
+
     return Math.abs(hash).toString(36);
   }, []);
 
-  // 🔴 INICIALIZAR MERCADO PAGO CUANDO TENGAMOS LA PUBLIC KEY
-  const initializeMercadoPago = useCallback((publicKeyFromBackend: string) => {
-    if (!publicKeyFromBackend) {
-      console.error('❌ No hay public key para inicializar MercadoPago');
-      return false;
-    }
-    
-    try {
-      console.log('🔧 Inicializando MercadoPago con public key:', publicKeyFromBackend.substring(0, 20) + '...');
-      
-      initMercadoPago(publicKeyFromBackend, {
-        locale: 'es-CO'
-      });
-      
-      setPublicKey(publicKeyFromBackend);
-      setIsMercadoPagoInitialized(true);
-      console.log('✅ MercadoPago inicializado correctamente');
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Error inicializando MercadoPago:', error);
-      return false;
-    }
-  }, []);
-
-  // 🔴 FUNCIÓN PARA OBTENER SESSION ID
   const getSessionId = useCallback(() => {
-    let sessionId = localStorage.getItem('cartSessionId');
-  
-    if (!sessionId) {
-      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('cartSessionId', sessionId);
-      console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
+    /*
+     * El carrito puede haber guardado la sesión en localStorage,
+     * sessionStorage o en la cookie cart_session_id.
+     *
+     * Antes solo se consultaba cartSessionId en localStorage.
+     * Cuando no estaba allí, el checkout generaba una sesión nueva
+     * y el backend devolvía un carrito vacío.
+     */
+    const storedSessionId =
+      localStorage.getItem(CART_SESSION_KEY) ||
+      localStorage.getItem('cart_session_id') ||
+      sessionStorage.getItem(CART_SESSION_KEY) ||
+      sessionStorage.getItem('cart_session_id') ||
+      Cookies.get('cart_session_id');
+
+    if (storedSessionId) {
+      localStorage.setItem(CART_SESSION_KEY, storedSessionId);
+      sessionStorage.setItem(CART_SESSION_KEY, storedSessionId);
+
+      Cookies.set('cart_session_id', storedSessionId, {
+        expires: 7,
+        path: '/',
+        sameSite: 'lax',
+        secure: window.location.protocol === 'https:'
+      });
+
+      return storedSessionId;
     }
-    
-    sessionStorage.setItem('cartSessionId', sessionId);
-    setSessionId(sessionId);
-    return sessionId;
+
+    const generatedSessionId =
+      typeof crypto !== 'undefined' &&
+      typeof crypto.randomUUID === 'function'
+        ? `session_${crypto.randomUUID()}`
+        : `session_${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2, 11)}`;
+
+    localStorage.setItem(CART_SESSION_KEY, generatedSessionId);
+    sessionStorage.setItem(CART_SESSION_KEY, generatedSessionId);
+
+    Cookies.set('cart_session_id', generatedSessionId, {
+      expires: 7,
+      path: '/',
+      sameSite: 'lax',
+      secure: window.location.protocol === 'https:'
+    });
+
+    return generatedSessionId;
   }, []);
 
-  // 🔴 AGREGAR SESSION ID A TODAS LAS REQUESTS
-  const getRequestHeaders = useCallback((token?: string | null) => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-  
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+  const getRequestHeaders = useCallback(
+    (token?: string | null) => {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        [CART_SESSION_HEADER]: getSessionId()
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      return headers;
+    },
+    [getSessionId]
+  );
+
+  const clearPaymentTimers = useCallback(() => {
+    if (paymentIntervalRef.current !== null) {
+      window.clearInterval(paymentIntervalRef.current);
+      paymentIntervalRef.current = null;
     }
-  
-    const currentSessionId = getSessionId();
-    headers['X-Cart-Session-Id'] = currentSessionId;
-    
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      console.log('📤 Headers enviados:', {
-        'X-Cart-Session-Id': currentSessionId.substring(0, 8) + '...',
-        'Authorization': token ? 'Presente' : 'No'
-      });
+
+    if (paymentStopTimerRef.current !== null) {
+      window.clearTimeout(paymentStopTimerRef.current);
+      paymentStopTimerRef.current = null;
     }
-  
-    return headers;
-  }, [getSessionId]);
-  const fetchDiscountConfig = useCallback(async () => {
+  }, []);
+
+  const clearPendingOrder = useCallback(
+    (message?: string) => {
+      clearPaymentTimers();
+
+      localStorage.removeItem('pendingOrderId');
+      localStorage.removeItem('pendingOrderData');
+      localStorage.removeItem('pendingPreferenceId');
+      localStorage.removeItem('mercadoPagoOrderId');
+      localStorage.removeItem('lastOrderCartHash');
+
+      setOrderId('');
+      setCreatedOrder(null);
+      setOrderCreated(false);
+      setMercadoPagoData(null);
+      setPaymentStatus(null);
+
+      if (message) {
+        setError(message);
+      }
+    },
+    [clearPaymentTimers]
+  );
+
+  const initializeMercadoPago = useCallback((key: string) => {
+    if (!key) return false;
+
     try {
-      setLoadingDiscountConfig(true);
+      initMercadoPago(key, { locale: 'es-CO' });
+      setPublicKey(key);
+      setMercadoPagoInitialized(true);
+      return true;
+    } catch (initializationError) {
+      console.error(
+        'Error inicializando Mercado Pago:',
+        initializationError
+      );
+      setMercadoPagoInitialized(false);
+      return false;
+    }
+  }, []);
+
+  const updateTotals = useCallback(
+    (data: CartTotalsResponse) => {
+      setSubtotal(Number(data.subtotal || 0));
+      setShippingCost(Number(data.shippingCost || 0));
+      setTotalItems(Number(data.totalItems || 0));
+      setOriginalSubtotal(
+        Number(data.originalSubtotal ?? data.subtotal ?? 0)
+      );
+    },
+    []
+  );
+
+  const fetchDiscountConfiguration = useCallback(async () => {
+    try {
       const token = localStorage.getItem('token');
-      const headers = getRequestHeaders(token);  // ← AHORA FUNCIONA
-      
+
       const response = await fetch(PUBLIC_DISCOUNT_CONFIG, {
-        headers,
+        headers: getRequestHeaders(token),
         credentials: 'include'
       });
-      
-      if (response.ok) {
-        const config = await response.json();
-        setDiscountConfig(config);
-        console.log('🎁 Configuración descuento primera compra:', config);
-      }
-    } catch (error) {
-      console.error('Error obteniendo configuración descuento:', error);
-    } finally {
-      setLoadingDiscountConfig(false);
+
+      if (!response.ok) return;
+
+      const data =
+        (await response.json()) as FirstPurchaseDiscountConfig;
+
+      setDiscountConfig({
+        enabled: Boolean(data.enabled),
+        discountPercentage: Number(
+          data.discountPercentage || 0
+        ),
+        applyToAnonymous: Boolean(data.applyToAnonymous)
+      });
+    } catch (configurationError) {
+      console.error(
+        'Error cargando configuración de descuento:',
+        configurationError
+      );
     }
   }, [getRequestHeaders]);
 
-  const checkFirstPurchaseEligibility = useCallback(async (email: string, anonymousCheckout: boolean) => {
+  const invalidateOrderWhenCartChanges = useCallback(
+    (newCartHash: string) => {
+      const orderHash =
+        localStorage.getItem('lastOrderCartHash') ||
+        cartHashRef.current;
+
+      if (
+        orderCreatedRef.current &&
+        orderHash &&
+        orderHash !== newCartHash
+      ) {
+        clearPendingOrder(
+          'El carrito cambió. Revisa el total y vuelve a preparar el pago.'
+        );
+      }
+
+      cartHashRef.current = newCartHash;
+    },
+    [clearPendingOrder]
+  );
+
+  const fetchCart = useCallback(
+    async (
+      token: string | null,
+      signal?: AbortSignal
+    ) => {
+      const response = await fetch(`${CART}/with-totals`, {
+        headers: getRequestHeaders(token),
+        credentials: 'include',
+        signal
+      });
+
+      if (
+        response.status === 204 ||
+        response.status === 404
+      ) {
+        setCartItems([]);
+        updateTotals({
+          items: [],
+          subtotal: 0,
+          shippingCost: 0,
+          total: 0,
+          totalItems: 0,
+          itemCount: 0,
+          discountSavings: 0,
+          originalSubtotal: 0
+        });
+        invalidateOrderWhenCartChanges('empty');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `No fue posible cargar el carrito (${response.status})`
+        );
+      }
+
+      const data =
+        (await response.json()) as CartTotalsResponse;
+
+      const items = Array.isArray(data.items)
+        ? data.items.map((item) => {
+            const originalPrice = Number(
+              item.originalPrice || item.price || 0
+            );
+            const discountedPrice = Number(
+              item.priceWithDiscount || 0
+            );
+            const hasItemDiscount =
+              Boolean(item.hasDiscount) &&
+              Number(item.discountPercentage || 0) > 0 &&
+              discountedPrice > 0;
+
+            return {
+              id: String(item.id),
+              productVariantId: String(
+                item.productVariantId || item.id
+              ),
+              image:
+                item.imageUrl?.trim() ||
+                item.imageUrls?.[0]?.trim() ||
+                '/images/placeholder.png',
+              name: item.productName?.trim() || 'Producto',
+              price: hasItemDiscount
+                ? discountedPrice
+                : Number(item.price || originalPrice),
+              originalPrice,
+              size: item.size || 'N/A',
+              color: item.color || 'N/A',
+              quantity: Number(item.quantity || 1),
+              stock: item.stock,
+              maxStock: item.maxStock ?? item.stock,
+              hasDiscount: hasItemDiscount,
+              discountPercentage: Number(
+                item.discountPercentage || 0
+              ),
+              discountAmount: Number(
+                item.discountAmount || 0
+              ),
+              savings: Number(item.savings || 0)
+            } satisfies CartItem;
+          })
+        : [];
+
+      const newHash = calculateCartHash(items);
+
+      setCartItems(items);
+      updateTotals(data);
+      invalidateOrderWhenCartChanges(newHash);
+    },
+    [
+      calculateCartHash,
+      getRequestHeaders,
+      invalidateOrderWhenCartChanges,
+      updateTotals
+    ]
+  );
+
+  const fetchUser = useCallback(
+    async (token: string, signal?: AbortSignal) => {
+      const response = await fetch(PERFIL_ME, {
+        headers: getRequestHeaders(token),
+        credentials: 'include',
+        signal
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `No fue posible cargar el perfil (${response.status})`
+        );
+      }
+
+      const user = (await response.json()) as UserData;
+
+      setUserData({
+        ...user,
+        addresses: user.addresses || []
+      });
+
+      setGuestInfo({
+        email: user.email || '',
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        phone: user.phone || ''
+      });
+
+      if (user.addresses?.length) {
+        setSelectedAddress(user.addresses[0]);
+      }
+    },
+    [getRequestHeaders]
+  );
+
+  const loadCheckout = useCallback(async () => {
+    setInitialLoading(true);
+    setError('');
+
+    fetchControllerRef.current?.abort();
+    fetchControllerRef.current = new AbortController();
+
+    const token = localStorage.getItem('token');
+    const authenticated = Boolean(token);
+
+    setIsAuthenticated(authenticated);
+
     try {
-      if (!email.trim()) {
+      await Promise.all([
+        fetchCart(token, fetchControllerRef.current.signal),
+        fetchDiscountConfiguration(),
+        authenticated && token
+          ? fetchUser(
+              token,
+              fetchControllerRef.current.signal
+            )
+          : Promise.resolve()
+      ]);
+    } catch (loadError) {
+      if (
+        loadError instanceof Error &&
+        loadError.name === 'AbortError'
+      ) {
+        return;
+      }
+
+      console.error('Error cargando checkout:', loadError);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'No fue posible cargar el checkout'
+      );
+    } finally {
+      setInitialLoading(false);
+    }
+  }, [fetchCart, fetchDiscountConfiguration, fetchUser]);
+
+  useEffect(() => {
+    orderCreatedRef.current = orderCreated;
+  }, [orderCreated]);
+
+  useEffect(() => {
+    /*
+     * No se usa una bandera initializedRef.
+     *
+     * En desarrollo, React Strict Mode ejecuta el efecto,
+     * hace cleanup y vuelve a ejecutarlo. La bandera anterior
+     * impedía la segunda carga después de abortar la primera,
+     * dejando cartItems vacío.
+     */
+    void loadCheckout();
+
+    const pendingOrderId =
+      localStorage.getItem('pendingOrderId');
+
+    if (pendingOrderId) {
+      setOrderId(pendingOrderId);
+      setOrderCreated(true);
+      cartHashRef.current =
+        localStorage.getItem('lastOrderCartHash') || '';
+    }
+
+    return () => {
+      fetchControllerRef.current?.abort();
+      clearPaymentTimers();
+    };
+  }, [clearPaymentTimers, loadCheckout]);
+
+  const checkFirstPurchaseEligibility = useCallback(
+    async (email: string, anonymousCheckout: boolean) => {
+      if (!EMAIL_REGEX.test(email.trim())) {
         setFirstPurchaseEligibility(null);
         return;
       }
 
       setCheckingFirstPurchase(true);
 
-      const token = localStorage.getItem('token');
-      const headers = getRequestHeaders(token);
+      try {
+        const token = localStorage.getItem('token');
 
-      const response = await fetch(
-        `${FIRST_PURCHASE_ELIGIBILITY}?email=${encodeURIComponent(email)}&anonymousCheckout=${anonymousCheckout}`,
-        {
-          method: 'GET',
-          headers,
-          credentials: 'include'
-        }
-      );
-
-      if (!response.ok) {
-        setFirstPurchaseEligibility(null);
-        return;
-      }
-
-      const data = await response.json();
-      setFirstPurchaseEligibility(Boolean(data.eligible));
-    } catch (error) {
-      console.error('Error validando primera compra:', error);
-      setFirstPurchaseEligibility(null);
-    } finally {
-      setCheckingFirstPurchase(false);
-    }
-  }, [getRequestHeaders]);
-
-  const formatPrice = useCallback((price: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
-  }, []);
-
-  // 🔴 ACTUALIZADO: Calcular totales desde la respuesta del backend con descuentos
-  const updateTotalsFromResponse = useCallback((data: CartTotalsResponse) => {
-    setSubtotal(data.subtotal || 0);
-    setShippingCost(data.shippingCost || 0);
-    setTotal(data.total || 0);
-    setTotalItems(data.totalItems || 0);
-    setDiscountSavings(data.discountSavings || 0);
-    setOriginalSubtotal(data.originalSubtotal || data.subtotal || 0);
-  }, []);
-
-  const checkoutPricing = useMemo(() => {
-    return buildCheckoutPricing({
-      originalSubtotal,
-      subtotal,
-      shippingCost,
-      paymentStatus,
-      orderResponse: createdOrder,
-      discountConfig,
-      firstPurchaseEligibility
-    });
-  }, [
-    originalSubtotal,
-    subtotal,
-    shippingCost,
-    paymentStatus,
-    createdOrder,
-    discountConfig,
-    firstPurchaseEligibility
-  ]);
-
-  // 🔴 FUNCIÓN PARA RENDERIZAR PRECIO DE ITEM CON DESCUENTO
-  const renderItemPrice = useCallback((item: CartItem) => {
-    const itemTotal = item.price * item.quantity;
-    const itemOriginalTotal = (item.originalPrice || item.price) * item.quantity;
-    
-    if (item.hasDiscount && item.discountPercentage && item.discountPercentage > 0) {
-      return (
-        <div className="checkout-item-price-container">
-          <div className="checkout-item-price-original">
-            ${formatPrice(itemOriginalTotal).replace('$', '')}
-          </div>
-          <div className="checkout-item-price-discounted">
-            ${formatPrice(itemTotal).replace('$', '')}
-            <span className="checkout-item-discount-badge">
-              -{item.discountPercentage}%
-            </span>
-          </div>
-        </div>
-      );
-    } else {
-      return (
-        <p className="checkout-cart-item-price">{formatPrice(itemTotal)}</p>
-      );
-    }
-  }, [formatPrice]);
-
-  // 🔴 VERIFICAR Y MANEJAR ORDENES EXPIRADAS AUTOMÁTICAMENTE
-  const checkAndHandleExpiredOrder = useCallback(async (): Promise<boolean> => {
-    if (!orderId) return false;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const headers = getRequestHeaders(token);
-      
-      const response = await fetch(`${ORDER_CHECK_EXPIRATION.replace('{orderId}', orderId)}`, {
-        method: 'POST',
-        headers,
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.expired) {
-          console.log('🔴 Orden expirada detectada, creando nueva automáticamente...');
-          
-          // Limpiar datos de orden expirada SILENCIOSAMENTE
-          localStorage.removeItem('pendingOrderId');
-          localStorage.removeItem('pendingOrderData');
-          localStorage.removeItem('pendingPreferenceId');
-          localStorage.removeItem('lastOrderCartHash');
-          
-          setOrderCreated(false);
-          setCreatedOrder(null);
-          setOrderId('');
-          setMercadoPagoData(null);
-          setPaymentStatus(null);
-          
-          // Crear nueva orden automáticamente
-          await createOrderSilently();
-          return true;
-        }
-      }
-    } catch (error) {
-      console.error('Error verificando expiración:', error);
-    }
-    
-    return false;
-  }, [orderId, getRequestHeaders]);
-
-  // 🔴 NUEVA FUNCIÓN: VERIFICAR Y AJUSTAR CANTIDADES SI EXCEDEN STOCK MÁXIMO
-  const checkAndAdjustCartQuantities = useCallback(async (data: CartTotalsResponse, token: string | null) => {
-    const adjustments: Array<{id: string, name: string, oldQty: number, newQty: number}> = [];
-    
-    // Verificar cada item del carrito
-    for (const item of data.items) {
-      const existingItem = cartItems.find(ci => 
-        ci.productVariantId === item.productVariantId?.toString() || 
-        ci.id === item.id?.toString()
-      );
-      
-      if (item.maxStock !== undefined && existingItem && existingItem.quantity > item.maxStock) {
-        console.log(`⚠️ Ajustando cantidad de ${item.productName}: ${existingItem.quantity} → ${item.maxStock}`);
-        
-        // Agregar a la lista de ajustes
-        adjustments.push({
-          id: existingItem.id,
-          name: existingItem.name,
-          oldQty: existingItem.quantity,
-          newQty: item.maxStock
-        });
-        
-        // Actualizar cantidad en el backend
-        try {
-          const headers = getRequestHeaders(token);
-          await fetch(`${CART}/update/${existingItem.id}?quantity=${item.maxStock}`, {
-            method: 'PUT',
-            headers,
+        const response = await fetch(
+          `${FIRST_PURCHASE_ELIGIBILITY}?email=${encodeURIComponent(
+            email.trim()
+          )}&anonymousCheckout=${anonymousCheckout}`,
+          {
+            method: 'GET',
+            headers: getRequestHeaders(token),
             credentials: 'include'
-          });
-        } catch (err) {
-          console.error('Error ajustando cantidad:', err);
-        }
-      }
-    }
-    
-    // Si hay ajustes, mostrar notificación
-    if (adjustments.length > 0) {
-      setAdjustedItems(adjustments);
-      setNeedsCartAdjustment(true);
-      return true;
-    }
-    
-    return false;
-  }, [cartItems, getRequestHeaders]);
+          }
+        );
 
-  // 🔴 ACTUALIZADO: Obtener carrito con verificación de stock máximo y descuentos
-  const fetchCart = useCallback(async (token: string | null, signal?: AbortSignal) => {
-    try {
-      console.log('🛒 Actualizando información del carrito...');
-      
-      const headers = getRequestHeaders(token);
-      
-      const res = await fetch(`${CART}/with-totals`, {
-        headers,
-        signal,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) {
-        if (res.status === 404 || res.status === 204) {
-          console.log('🛒 Carrito vacío');
-          setCartItems([]);
-          updateTotalsFromResponse({
-            items: [],
-            subtotal: 0,
-            shippingCost: 0,
-            total: 0,
-            totalItems: 0,
-            itemCount: 0,
-            discountSavings: 0,
-            originalSubtotal: 0
-          });
-          
-          cartHashRef.current = '';
+        if (!response.ok) {
+          setFirstPurchaseEligibility(null);
           return;
         }
-        throw new Error(`Error ${res.status}: ${res.statusText}`);
-      }
-      
-      const data = await res.json() as CartTotalsResponse;
-      
-      if (!Array.isArray(data.items)) {
-        console.error('🛑 La respuesta no tiene items válidos:', data);
-        setCartItems([]);
-        updateTotalsFromResponse({
-          items: [],
-          subtotal: 0,
-          shippingCost: 0,
-          total: 0,
-          totalItems: 0,
-          itemCount: 0,
-          discountSavings: 0,
-          originalSubtotal: 0
-        });
-        cartHashRef.current = '';
-        return;
-      }
-      
-      // 🔴 VERIFICAR Y AJUSTAR CANTIDADES SI ES NECESARIO
-      const needsAdjustment = await checkAndAdjustCartQuantities(data, token);
-      
-      if (needsAdjustment) {
-        // Si se ajustaron cantidades, refrescar el carrito
-        console.log('🔄 Recargando carrito después de ajustes...');
-        setTimeout(() => fetchCart(token, signal), 500);
-        return;
-      }
-      
-      // Transformar items del carrito con información de descuentos
-      const items: CartItem[] = data.items.map(
-        (item: any) => ({
-          id: item.id?.toString() || `item-${Date.now()}-${Math.random()}`,
-          image: item.imageUrl?.trim() || '/images/placeholder.png',
-          name: item.productName?.trim() || 'Producto',
-          price: item.priceWithDiscount || item.price || 0,
-          originalPrice: item.originalPrice || item.price || 0,
-          size: item.size || '',
-          color: item.color || '',
-          quantity: item.quantity || 1,
-          stock: item.stock || 100,
-          maxStock: item.maxStock || item.stock,
-          productVariantId: item.productVariantId?.toString() || item.id?.toString(),
-          hasDiscount: item.hasDiscount || false,
-          discountPercentage: item.discountPercentage || 0,
-          discountAmount: item.discountAmount || 0,
-          savings: item.savings || 0
-        })
-      );
-      
-      // 🔴 CALCULAR NUEVO HASH Y VERIFICAR CAMBIOS
-      const newCartHash = calculateCartHash(items);
-      const hasCartChanged = cartHashRef.current && cartHashRef.current !== newCartHash;
-      
-      if (hasCartChanged) {
-        console.log('🔄 Carrito modificado - Actualizando orden automáticamente...');
-        console.log('Hash anterior:', cartHashRef.current);
-        console.log('Hash nuevo:', newCartHash);
-        
-        // 🔴 SI EL CARRITO CAMBIÓ Y TENEMOS UNA ORDEN, CREAR NUEVA AUTOMÁTICAMENTE
-        if (orderCreated && !isAutoCreatingOrderRef.current) {
-          isAutoCreatingOrderRef.current = true;
-          
-          try {
-            // Crear nueva orden automáticamente
-            await createOrderSilently();
-          } finally {
-            isAutoCreatingOrderRef.current = false;
-          }
-        }
-      }
-      
-      // 🔴 ACTUALIZAR HASH ACTUAL
-      cartHashRef.current = newCartHash;
-      lastCartUpdateRef.current = Date.now();
-      
-      setCartItems(items);
-      updateTotalsFromResponse(data);
-      console.log(`✅ Carrito actualizado: ${items.length} items, Descuento total: ${formatPrice(data.discountSavings || 0)}`);
-      
-    } catch (error: unknown) {
-      const err = error as Error;
-      if (err.name !== 'AbortError') {
-        console.error('🛑 Error actualizando carrito:', err);
-        setCartItems([]);
-        updateTotalsFromResponse({
-          items: [],
-          subtotal: 0,
-          shippingCost: 0,
-          total: 0,
-          totalItems: 0,
-          itemCount: 0,
-          discountSavings: 0,
-          originalSubtotal: 0
-        });
-        cartHashRef.current = '';
-      }
-    }
-  }, [formatPrice, getRequestHeaders, updateTotalsFromResponse, calculateCartHash, orderCreated, checkAndAdjustCartQuantities]);
 
-  const fetchUser = useCallback(async (token: string, signal?: AbortSignal) => {
-    try {
-      console.log('👤 Cargando información del usuario...');
-      const headers = getRequestHeaders(token);
-      const res = await fetch(PERFIL_ME, {
-        headers,
-        signal,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
-      
-      const user = await res.json() as UserData;
-      console.log('✅ Usuario cargado:', user.email);
-      
-      setUserData(user);
-      if (user.addresses && user.addresses.length > 0) {
-        setSelectedAddress(user.addresses[0]);
-      }
+        const data = (await response.json()) as {
+          eligible?: boolean;
+        };
 
-      setAnonymousUserInfo({
-        email: user.email || '',
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
-        phone: user.phone || ''
-      });
-    } catch (error: unknown) {
-      const err = error as Error;
-      if (err.name !== 'AbortError') {
-        console.error('🛑 Error cargando usuario:', err);
+        setFirstPurchaseEligibility(Boolean(data.eligible));
+      } catch (eligibilityError) {
+        console.error(
+          'Error validando primera compra:',
+          eligibilityError
+        );
+        setFirstPurchaseEligibility(null);
+      } finally {
+        setCheckingFirstPurchase(false);
       }
-    }
-  }, [getRequestHeaders]);
+    },
+    [getRequestHeaders]
+  );
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const isAuth = !!token;
-    setIsAuthenticated(isAuth);
+    const email = isAuthenticated
+      ? userData?.email || ''
+      : guestInfo.email;
 
-    // Obtener sessionId
-    getSessionId();
-
-    // 🔴 CARGAR CONFIGURACIÓN DESCUENTO
-    fetchDiscountConfig();
-
-    // 🔴 CARGAR HASH DE ORDEN ANTERIOR SI EXISTE
-    const lastOrderHash = localStorage.getItem('lastOrderCartHash');
-    if (lastOrderHash) {
-      cartHashRef.current = lastOrderHash;
-    }
-
-    if (isAuth && !hasFetchedRef.current) {
-      loadAuthenticatedData(token!);
-    } else if (!isAuth && !hasFetchedRef.current) {
-      loadAnonymousCart();
-    }
-
-    return () => {
-      if (paymentStatusIntervalRef.current) {
-        clearInterval(paymentStatusIntervalRef.current);
-      }
-    };
-  }, [getSessionId, fetchDiscountConfig]);
-
-  useEffect(() => {
-    if (isAuthenticated) return;
-
-    const email = anonymousUserInfo.email.trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    if (!emailRegex.test(email)) {
+    if (!EMAIL_REGEX.test(email.trim())) {
       setFirstPurchaseEligibility(null);
       return;
     }
 
-    const timeout = setTimeout(() => {
-      checkFirstPurchaseEligibility(email, true);
+    const timer = window.setTimeout(() => {
+      void checkFirstPurchaseEligibility(
+        email,
+        !isAuthenticated
+      );
     }, 500);
 
-    return () => clearTimeout(timeout);
-  }, [anonymousUserInfo.email, isAuthenticated, checkFirstPurchaseEligibility]);
+    return () => window.clearTimeout(timer);
+  }, [
+    checkFirstPurchaseEligibility,
+    guestInfo.email,
+    isAuthenticated,
+    userData?.email
+  ]);
 
-  useEffect(() => {
-    if (!isAuthenticated || !userData?.email) return;
+  const checkoutPricing = useMemo(
+    () =>
+      buildCheckoutPricing({
+        originalSubtotal,
+        subtotal,
+        shippingCost,
+        paymentStatus,
+        orderResponse: createdOrder,
+        discountConfig,
+        firstPurchaseEligibility
+      }),
+    [
+      createdOrder,
+      discountConfig,
+      firstPurchaseEligibility,
+      originalSubtotal,
+      paymentStatus,
+      shippingCost,
+      subtotal
+    ]
+  );
 
-    checkFirstPurchaseEligibility(userData.email, false);
-  }, [isAuthenticated, userData?.email, checkFirstPurchaseEligibility]);
-
-  const loadAuthenticatedData = useCallback(async (token: string) => {
-    setLoading(true);
-    
-    if (fetchControllerRef.current) {
-      fetchControllerRef.current.abort();
+  const contactIsValid = useMemo(() => {
+    if (isAuthenticated) {
+      return Boolean(userData?.email);
     }
-    
-    fetchControllerRef.current = new AbortController();
-    const signal = fetchControllerRef.current.signal;
-    
-    try {
-      hasFetchedRef.current = true;
-      
-      await Promise.all([
-        fetchCart(token, signal),
-        fetchUser(token, signal)
-      ]);
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      if (error.name !== 'AbortError') {
-        console.error('Error cargando datos:', error);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchCart, fetchUser]);
 
-  const loadAnonymousCart = useCallback(async () => {
-    setLoading(true);
+    return Boolean(
+      guestInfo.firstName.trim() &&
+        guestInfo.lastName.trim() &&
+        EMAIL_REGEX.test(guestInfo.email.trim()) &&
+        guestInfo.phone.replace(/\D/g, '').length >= 8
+    );
+  }, [guestInfo, isAuthenticated, userData?.email]);
+
+  const shippingIsValid = useMemo(() => {
+    if (isAuthenticated) {
+      return Boolean(selectedAddress);
+    }
+
+    return Boolean(
+      guestAddress.address.trim() &&
+        guestAddress.city.trim() &&
+        guestAddress.state.trim() &&
+        guestAddress.country.trim()
+    );
+  }, [
+    guestAddress,
+    isAuthenticated,
+    selectedAddress
+  ]);
+
+  const checkoutIsReady =
+    cartItems.length > 0 &&
+    contactIsValid &&
+    shippingIsValid &&
+    checkoutPricing.total > 0;
+
+  const refreshCart = useCallback(async () => {
+    const token = localStorage.getItem('token');
+
+    setCartUpdating(true);
+    setError('');
+
     try {
-      await fetchCart(null);
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('Error cargando carrito:', error);
+      await fetchCart(token);
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : 'No fue posible actualizar el carrito'
+      );
     } finally {
-      setLoading(false);
+      setCartUpdating(false);
     }
   }, [fetchCart]);
 
-  // 🔴 ACTUALIZADO: Actualizar cantidad con verificación de stock máximo
-  const updateQuantity = async (itemId: string, newQuantity: number) => {
-    if (newQuantity < 1) return;
-    
-    const item = cartItems.find((i) => i.id === itemId);
-    if (!item) return;
-    
-    // 🔴 VERIFICAR CONTRA STOCK MÁXIMO (si está disponible)
-    const maxStock = item.maxStock || item.stock;
-    if (maxStock && newQuantity > maxStock) {
-      setError(`No hay suficiente stock disponible (máximo ${maxStock})`);
-      return;
-    }
+  const updateQuantity = useCallback(
+    async (itemId: string, quantity: number) => {
+      if (quantity < 1 || cartUpdating) return;
 
-    const token = localStorage.getItem('token');
-    
-    try {
-      setLoading(true);
-      
-      const headers = getRequestHeaders(token);
-      
-      const res = await fetch(`${CART}/update/${itemId}?quantity=${newQuantity}`, {
-        method: 'PUT',
-        headers,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error actualizando cantidad'}`);
+      const item = cartItems.find(
+        (currentItem) => currentItem.id === itemId
+      );
+
+      if (!item) return;
+
+      const maximumStock =
+        item.maxStock ?? item.stock;
+
+      if (
+        maximumStock !== undefined &&
+        quantity > maximumStock
+      ) {
+        setError(
+          `Stock máximo disponible para ${item.name}: ${maximumStock}`
+        );
+        return;
       }
-      
-      // Refrescar carrito para obtener los nuevos totales
-      await fetchCart(token);
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error actualizando cantidad:', error);
-      setError(`Error actualizando la cantidad: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // 🔴 ELIMINAR ITEM CON MANEJO AUTOMÁTICO
-  const removeItem = async (itemId: string) => {
-    if (!confirm('¿Estás seguro de eliminar este producto del carrito?')) return;
+      setCartUpdating(true);
+      setError('');
 
-    const token = localStorage.getItem('token');
-    
-    try {
-      setLoading(true);
-      
-      const headers = getRequestHeaders(token);
-      
-      const res = await fetch(`${CART}/remove/${itemId}`, {
-        method: 'DELETE',
-        headers,
-        credentials: 'include'
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando producto'}`);
-      }
-      
-      // Refrescar carrito para obtener los nuevos totales
-      await fetchCart(token);
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error eliminando producto:', error);
-      setError(`Error eliminando el producto: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Verificar si hay una orden pendiente
-  const checkPendingOrder = useCallback(() => {
-    const pendingOrder = localStorage.getItem('pendingOrderId');
-    const pendingOrderData = localStorage.getItem('pendingOrderData');
-    
-    if (pendingOrder && pendingOrderData) {
       try {
-        const orderData = JSON.parse(pendingOrderData);
-        setOrderId(pendingOrder);
-        setOrderCreated(true);
-        orderFromStorageRef.current = pendingOrder;
-        
-        if (step === 3) {
-          console.log('🔄 Recuperando orden pendiente:', pendingOrder);
-        }
-      } catch (err) {
-        console.error('Error parsing pending order data:', err);
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
-      }
-    }
-  }, [step]);
+        const token = localStorage.getItem('token');
 
-  const addAddress = async () => {
+        const response = await fetch(
+          `${CART}/update/${itemId}?quantity=${quantity}`,
+          {
+            method: 'PUT',
+            headers: getRequestHeaders(token),
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            'No fue posible actualizar la cantidad'
+          );
+        }
+
+        await fetchCart(token);
+      } catch (updateError) {
+        setError(
+          updateError instanceof Error
+            ? updateError.message
+            : 'No fue posible actualizar la cantidad'
+        );
+      } finally {
+        setCartUpdating(false);
+      }
+    },
+    [
+      cartItems,
+      cartUpdating,
+      fetchCart,
+      getRequestHeaders
+    ]
+  );
+
+  const removeItem = useCallback(
+    async (itemId: string) => {
+      if (cartUpdating) return;
+
+      setCartUpdating(true);
+      setError('');
+
+      try {
+        const token = localStorage.getItem('token');
+
+        const response = await fetch(
+          `${CART}/remove/${itemId}`,
+          {
+            method: 'DELETE',
+            headers: getRequestHeaders(token),
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            'No fue posible eliminar el producto'
+          );
+        }
+
+        await fetchCart(token);
+      } catch (removeError) {
+        setError(
+          removeError instanceof Error
+            ? removeError.message
+            : 'No fue posible eliminar el producto'
+        );
+      } finally {
+        setCartUpdating(false);
+      }
+    },
+    [cartUpdating, fetchCart, getRequestHeaders]
+  );
+
+  const saveAddress = useCallback(async () => {
     const token = localStorage.getItem('token');
+
     if (!token) {
-      setError('Necesitas iniciar sesión para guardar direcciones');
+      setError(
+        'Inicia sesión para guardar una dirección'
+      );
       return;
     }
 
@@ -996,1827 +1058,1618 @@ const CheckoutPage = () => {
       !newAddress.state.trim() ||
       !newAddress.country.trim()
     ) {
-      setError('Completa todos los campos de la dirección');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const headers = getRequestHeaders(token);
-      const res = await fetch(ADDRESS, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(newAddress),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error agregando dirección'}`);
-      }
-      
-      const createdAddress = await res.json() as Address;
-
-      setUserData(prevUserData => {
-        if (!prevUserData) return prevUserData;
-        
-        const existsById = prevUserData.addresses.some(addr => addr.id === createdAddress.id);
-        const existsByData = prevUserData.addresses.some(addr => 
-          addr.address === createdAddress.address &&
-          addr.city === createdAddress.city &&
-          addr.state === createdAddress.state &&
-          addr.country === createdAddress.country
-        );
-        
-        if (existsById || existsByData) {
-          console.log('La dirección ya existe, no se agregará duplicado');
-          return prevUserData;
-        }
-        
-        return {
-          ...prevUserData,
-          addresses: [createdAddress, ...prevUserData.addresses]
-        };
-      });
-      
-      setSelectedAddress(createdAddress);
-      setAddingAddress(false);
-      setNewAddress({ address: '', city: '', state: '', country: 'Colombia' });
-      setError('');
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error agregando dirección:', error);
-      setError(`No se pudo agregar la dirección: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteAddress = async (addressId: number) => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('No autenticado');
-      return;
-    }
-    
-    if (!confirm('¿Seguro que quieres eliminar esta dirección?')) return;
-
-    try {
-      setLoading(true);
-      const headers = getRequestHeaders(token);
-      const res = await fetch(`${ADDRESS}/${addressId}`, {
-        method: 'DELETE',
-        headers,
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Error ${res.status}: ${errorText || 'Error eliminando dirección'}`);
-      }
-
-      setUserData(prevUserData => {
-        if (!prevUserData) return prevUserData;
-        
-        const updatedAddresses = prevUserData.addresses.filter((a) => a.id !== addressId);
-        
-        return {
-          ...prevUserData,
-          addresses: updatedAddresses
-        };
-      });
-
-      setSelectedAddress(prevSelected => 
-        prevSelected?.id === addressId ? null : prevSelected
+      setError(
+        'Completa todos los campos obligatorios de la dirección'
       );
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error eliminando dirección:', error);
-      setError(`No se pudo eliminar la dirección: ${error.message || 'Error desconocido'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const nextStep = () => {
-    if (step === 1 && cartItems.length === 0) {
-      setError('Tu carrito está vacío');
       return;
     }
-    
-    if (step === 2) {
-      if (isAuthenticated) {
-        if (!selectedAddress) {
-          setError('Selecciona una dirección de envío');
-          return;
-        }
-      } else {
-        if (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone) {
-          setError('Completa tus datos de contacto para continuar');
-          return;
-        }
-        
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(anonymousUserInfo.email)) {
-          setError('Ingresa un email válido');
-          return;
-        }
-        
-        if (anonymousUserInfo.phone.replace(/\D/g, '').length < 8) {
-          setError('Ingresa un número de teléfono válido');
-          return;
-        }
-        
-        if (!selectedAddress) {
-          setError('Debes agregar una dirección de envío');
-          return;
-        }
-        
-        if (!selectedAddress.address?.trim() || !selectedAddress.city?.trim() || 
-            !selectedAddress.state?.trim() || !selectedAddress.country?.trim()) {
-          setError('Completa todos los campos de la dirección');
-          return;
-        }
-      }
-    }
-    
-    setStep((prev) => Math.min(prev + 1, 3));
-    setError('');
-  };
 
-  const prevStep = () => {
-    setStep((prev) => Math.max(prev - 1, 1));
+    setAddressSaving(true);
     setError('');
-  };
-
-  // 🔴 CREAR ORDEN SILENCIOSAMENTE (sin notificar al usuario)
-  const createOrderSilently = async (): Promise<OrderResponse | null> => {
-    if (cartItems.length === 0 || !selectedAddress) {
-      console.log('⚠️ No se puede crear orden: carrito vacío o sin dirección');
-      return null;
-    }
 
     try {
-      console.log('🤫 Creando nueva orden automáticamente...');
-      
-      let orderResponse: OrderResponse;
-      
-      if (isAuthenticated) {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          console.error('Usuario no autenticado');
-          return null;
-        }
-        
-        const headers = getRequestHeaders(token);
-        const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify({
-            shippingAddressId: selectedAddress.id
-          }),
-        });
+      const response = await fetch(ADDRESS, {
+        method: 'POST',
+        headers: getRequestHeaders(token),
+        credentials: 'include',
+        body: JSON.stringify(newAddress)
+      });
 
-        if (!orderRes.ok) {
-          console.error('Error creando orden autenticada:', orderRes.status);
-          return null;
-        }
-
-        orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Nueva orden creada automáticamente:', orderResponse.id);
-        
-      } else {
-        if (!anonymousUserInfo.email) {
-          console.error('Email requerido para usuarios anónimos');
-          return null;
-        }
-        
-        const headers = getRequestHeaders();
-        const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
-          method: 'POST',
-          headers,
-          credentials: 'include',
-          body: JSON.stringify({
-            customerEmail: anonymousUserInfo.email,
-            customerFirstName: anonymousUserInfo.firstName,
-            customerLastName: anonymousUserInfo.lastName,
-            customerPhone: anonymousUserInfo.phone,
-            shippingAddress: {
-              address: selectedAddress.address,
-              city: selectedAddress.city,
-              state: selectedAddress.state,
-              country: selectedAddress.country
-            }
-          }),
-        });
-
-        if (!orderRes.ok) {
-          console.error('Error creando orden anónima:', orderRes.status);
-          return null;
-        }
-
-        orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Nueva orden anónima creada automáticamente:', orderResponse.id);
+      if (!response.ok) {
+        throw new Error(
+          'No fue posible guardar la dirección'
+        );
       }
 
-      if (!orderResponse.id) {
-        console.error('No se pudo obtener el ID de la orden');
-        return null;
-      }
+      const createdAddress =
+        (await response.json()) as Address;
 
-      setCreatedOrder(orderResponse);
+      setUserData((currentUser) => {
+        if (!currentUser) return currentUser;
 
-      // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
-      const currentCartHash = calculateCartHash(cartItems);
-      localStorage.setItem('lastOrderCartHash', currentCartHash);
-      cartHashRef.current = currentCartHash;
-      
-      console.log('📋 Hash del carrito actualizado:', currentCartHash);
+        const exists = currentUser.addresses.some(
+          (address) => address.id === createdAddress.id
+        );
 
-      // Guardar orden en localStorage
-      localStorage.setItem('pendingOrderId', orderResponse.id.toString());
-      localStorage.setItem('pendingOrderData', JSON.stringify({
-        shippingAddress: selectedAddress,
-        customerInfo: isAuthenticated ? userData : anonymousUserInfo,
-        createdAt: new Date().toISOString(),
-        total: orderResponse.totalPrice,
-        cartHash: currentCartHash
-      }));
+        return {
+          ...currentUser,
+          addresses: exists
+            ? currentUser.addresses
+            : [createdAddress, ...currentUser.addresses]
+        };
+      });
 
-      setOrderId(orderResponse.id.toString());
-      setOrderCreated(true);
-      orderFromStorageRef.current = null;
-
-      return orderResponse;
-
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error creando orden automáticamente:', error);
-      return null;
+      setSelectedAddress(createdAddress);
+      setNewAddress(EMPTY_ADDRESS);
+      setAddingAddress(false);
+      setSuccessMessage('Dirección guardada');
+    } catch (addressError) {
+      setError(
+        addressError instanceof Error
+          ? addressError.message
+          : 'No fue posible guardar la dirección'
+      );
+    } finally {
+      setAddressSaving(false);
     }
-  };
+  }, [getRequestHeaders, newAddress]);
 
-  // 🔴 FUNCIÓN PARA CREAR ORDEN (usada por el usuario)
-  const createOrder = useCallback(async (): Promise<OrderResponse | null> => {
+  const deleteAddress = useCallback(
+    async (addressId: number) => {
+      const token = localStorage.getItem('token');
+
+      if (!token || addressSaving) return;
+
+      setAddressSaving(true);
+      setError('');
+
+      try {
+        const response = await fetch(
+          `${ADDRESS}/${addressId}`,
+          {
+            method: 'DELETE',
+            headers: getRequestHeaders(token),
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            'No fue posible eliminar la dirección'
+          );
+        }
+
+        setUserData((currentUser) => {
+          if (!currentUser) return currentUser;
+
+          return {
+            ...currentUser,
+            addresses: currentUser.addresses.filter(
+              (address) => address.id !== addressId
+            )
+          };
+        });
+
+        setSelectedAddress((currentAddress) =>
+          currentAddress?.id === addressId
+            ? null
+            : currentAddress
+        );
+      } catch (deleteError) {
+        setError(
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'No fue posible eliminar la dirección'
+        );
+      } finally {
+        setAddressSaving(false);
+      }
+    },
+    [addressSaving, getRequestHeaders]
+  );
+
+  const validateCheckout = useCallback(() => {
     if (cartItems.length === 0) {
-      setError('Carrito vacío');
-      return null;
+      setError('Tu carrito está vacío');
+      return false;
     }
-    
-    if (!selectedAddress) {
-      setError('Selecciona una dirección');
-      return null;
+
+    if (!contactIsValid) {
+      setError(
+        isAuthenticated
+          ? 'No fue posible validar tus datos de contacto'
+          : 'Completa correctamente tus datos de contacto'
+      );
+      return false;
+    }
+
+    if (!shippingIsValid) {
+      setError(
+        'Completa o selecciona una dirección de envío'
+      );
+      return false;
     }
 
     if (checkoutPricing.total <= 0) {
-      setError('Error en el cálculo del total. Por favor, recarga la página.');
-      return null;
+      setError(
+        'No fue posible calcular el total del pedido'
+      );
+      return false;
     }
 
-    try {
-      setIsProcessingPayment(true);
-      setError('');
-      setSuccessMessage('');
+    return true;
+  }, [
+    cartItems.length,
+    checkoutPricing.total,
+    contactIsValid,
+    isAuthenticated,
+    shippingIsValid
+  ]);
 
-      console.log('🚀 Creando orden...');
-      
-      let orderResponse: OrderResponse;
-      
+  const createOrder = useCallback(async () => {
+    if (!validateCheckout()) return null;
+
+    setPaymentProcessing(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const token = localStorage.getItem('token');
+      let response: Response;
+
       if (isAuthenticated) {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('Usuario no autenticado');
-        
-        const headers = getRequestHeaders(token);
-        const orderRes = await fetch(CHECKOUT_AUTHENTICATED, {
+        if (!token || !selectedAddress) {
+          throw new Error(
+            'Selecciona una dirección de envío'
+          );
+        }
+
+        response = await fetch(CHECKOUT_AUTHENTICATED, {
           method: 'POST',
-          headers,
+          headers: getRequestHeaders(token),
           credentials: 'include',
           body: JSON.stringify({
             shippingAddressId: selectedAddress.id
-          }),
+          })
         });
-
-        if (!orderRes.ok) {
-          let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
-          try {
-            const errorData = await orderRes.text();
-            errorMessage = errorData || errorMessage;
-          } catch {}
-          throw new Error(errorMessage);
-        }
-
-        orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden creada:', orderResponse.id);
-        
       } else {
-        if (!anonymousUserInfo.email) {
-          throw new Error('Email requerido para usuarios anónimos');
-        }
-        
-        const headers = getRequestHeaders();
-        const orderRes = await fetch(CHECKOUT_ANONYMOUS, {
+        response = await fetch(CHECKOUT_ANONYMOUS, {
           method: 'POST',
-          headers,
+          headers: getRequestHeaders(),
           credentials: 'include',
           body: JSON.stringify({
-            customerEmail: anonymousUserInfo.email,
-            customerFirstName: anonymousUserInfo.firstName,
-            customerLastName: anonymousUserInfo.lastName,
-            customerPhone: anonymousUserInfo.phone,
+            customerEmail: guestInfo.email.trim(),
+            customerFirstName:
+              guestInfo.firstName.trim(),
+            customerLastName:
+              guestInfo.lastName.trim(),
+            customerPhone: guestInfo.phone.trim(),
             shippingAddress: {
-              address: selectedAddress.address,
-              city: selectedAddress.city,
-              state: selectedAddress.state,
-              country: selectedAddress.country
+              address: guestAddress.address.trim(),
+              city: guestAddress.city.trim(),
+              state: guestAddress.state.trim(),
+              country: guestAddress.country.trim(),
+              postalCode:
+                guestAddress.postalCode?.trim() || undefined
             }
-          }),
+          })
         });
-
-        if (!orderRes.ok) {
-          let errorMessage = `Error ${orderRes.status}: ${orderRes.statusText}`;
-          try {
-            const errorData = await orderRes.text();
-            errorMessage = errorData || errorMessage;
-          } catch {}
-          throw new Error(errorMessage);
-        }
-
-        orderResponse = await orderRes.json() as OrderResponse;
-        console.log('✅ Orden creada:', orderResponse.id);
       }
 
-      if (!orderResponse.id) {
-        throw new Error('No se pudo obtener el ID de la orden');
+      if (!response.ok) {
+        const responseText = await response.text();
+
+        throw new Error(
+          responseText ||
+            `No fue posible crear la orden (${response.status})`
+        );
       }
 
-      setCreatedOrder(orderResponse);
+      const order =
+        (await response.json()) as OrderResponse;
 
-      // 🔴 GUARDAR HASH DEL CARRITO ACTUAL
-      const currentCartHash = calculateCartHash(cartItems);
-      localStorage.setItem('lastOrderCartHash', currentCartHash);
-      cartHashRef.current = currentCartHash;
-      
-      console.log('📋 Hash del carrito guardado:', currentCartHash);
+      if (!order.id) {
+        throw new Error(
+          'El backend no devolvió el identificador de la orden'
+        );
+      }
 
-      // Guardar orden en localStorage
-      localStorage.setItem('pendingOrderId', orderResponse.id.toString());
-      localStorage.setItem('pendingOrderData', JSON.stringify({
-        shippingAddress: selectedAddress,
-        customerInfo: isAuthenticated ? userData : anonymousUserInfo,
-        createdAt: new Date().toISOString(),
-        total: orderResponse.totalPrice,
-        cartHash: currentCartHash
-      }));
+      const currentHash = calculateCartHash(cartItems);
 
-      setOrderId(orderResponse.id.toString());
+      localStorage.setItem(
+        'pendingOrderId',
+        String(order.id)
+      );
+      localStorage.setItem(
+        'lastOrderCartHash',
+        currentHash
+      );
+      localStorage.setItem(
+        'pendingOrderData',
+        JSON.stringify({
+          shippingAddress: isAuthenticated
+            ? selectedAddress
+            : guestAddress,
+          customerInfo: isAuthenticated
+            ? userData
+            : guestInfo,
+          createdAt: new Date().toISOString(),
+          total: order.totalPrice,
+          cartHash: currentHash
+        })
+      );
+
+      cartHashRef.current = currentHash;
+      setCreatedOrder(order);
+      setOrderId(String(order.id));
       setOrderCreated(true);
-      setSuccessMessage(`Orden #${orderResponse.id} creada exitosamente`);
-      
-      if (orderFromStorageRef.current) {
-        orderFromStorageRef.current = null;
-      }
+      setSuccessMessage(
+        `Orden #${order.id} preparada`
+      );
 
-      return orderResponse;
+      return order;
+    } catch (orderError) {
+      console.error('Error creando orden:', orderError);
 
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error creando orden:', error);
-      setError(`Error al crear la orden: ${error.message || 'Error desconocido'}`);
-      setOrderCreated(false);
+      setError(
+        orderError instanceof Error
+          ? orderError.message
+          : 'No fue posible crear la orden'
+      );
+
       setCreatedOrder(null);
+      setOrderCreated(false);
       return null;
     } finally {
-      setIsProcessingPayment(false);
+      setPaymentProcessing(false);
     }
-  }, [selectedAddress, cartItems, isAuthenticated, anonymousUserInfo, userData, getRequestHeaders, checkoutPricing.total, calculateCartHash]);
+  }, [
+    calculateCartHash,
+    cartItems,
+    getRequestHeaders,
+    guestAddress,
+    guestInfo,
+    isAuthenticated,
+    selectedAddress,
+    userData,
+    validateCheckout
+  ]);
 
-  // 🔴 FUNCIÓN PARA CREAR PREFERENCIA
-  // 🔴 FUNCIÓN PARA CREAR PREFERENCIA - VERSIÓN CORREGIDA
-const createMercadoPagoPreference = async (orderId: string) => {
-  try {
-    setMercadoPagoLoading(true);
-    setError('');
-    
-    console.log('💳 Creando preferencia para orden:', orderId);
-    
-    // 🔴 VERIFICAR EXPIRACIÓN ANTES DE CREAR PREFERENCIA
-    await checkAndHandleExpiredOrder();
-    
-    const token = localStorage.getItem('token');
-    const headers = getRequestHeaders(token);
-    
-    // 🔴 OBTENER LA ORDEN PARA USAR SU TOTAL
-    const orderData = localStorage.getItem('pendingOrderData');
-    let productsTotal = total; // fallback al total del carrito
-    
-    if (orderData) {
+  const checkOrderExpiration = useCallback(
+    async (targetOrderId: string) => {
+      if (!targetOrderId) return false;
+
       try {
-        const parsedOrder = JSON.parse(orderData);
-        if (parsedOrder.total) {
-          productsTotal = parsedOrder.total; // Total de productos CON descuentos
-          console.log('💰 Total productos (con descuentos):', productsTotal);
-        }
-      } catch (e) {
-        console.error('Error parseando orderData:', e);
-      }
-    }
-    
-    // 🔴 CALCULAR TOTAL CON ENVÍO
-    const totalWithShipping = productsTotal + shippingCost;
-    console.log('📦 Total productos:', productsTotal);
-    console.log('🚚 Costo envío:', shippingCost);
-    console.log('💰 Total con envío:', totalWithShipping);
-    
-    const response = await fetch(MERCADOPAGO_CREATE_PREFERENCE, {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: JSON.stringify({
-        orderId: parseInt(orderId),
-        totalAmount: totalWithShipping, // ← AHORA INCLUYE ENVÍO
-        paymentMethod: "MERCADO_PAGO",
-        shippingAmount: shippingCost
-      }),
-    });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Error creando preferencia:', errorText);
-        
-        let errorMessage = `Error ${response.status}: ${errorText || 'Error creando preferencia'}`;
-        
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.error) {
-            errorMessage = errorJson.error;
-            
-            // 🔴 SI LA ORDEN ESTÁ EXPIRADA, CREAR NUEVA AUTOMÁTICAMENTE
-            if (errorMessage.includes('expirada') || errorMessage.includes('CANCELADA')) {
-              console.log('🔄 Orden expirada, creando nueva automáticamente...');
-              
-              // Limpiar datos
-              localStorage.removeItem('pendingOrderId');
-              localStorage.removeItem('pendingOrderData');
-              localStorage.removeItem('pendingPreferenceId');
-              localStorage.removeItem('lastOrderCartHash');
-              
-              setOrderCreated(false);
-              setCreatedOrder(null);
-              setOrderId('');
-              setMercadoPagoData(null);
-              setPaymentStatus(null);
-              
-              // Crear nueva orden automáticamente
-              const newOrder = await createOrderSilently();
-              if (newOrder) {
-                // Crear preferencia para la nueva orden
-                return await createMercadoPagoPreference(newOrder.id.toString());
-              }
-            }
-          }
-        } catch {}
-        
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json() as MercadoPagoResponse;
-      console.log('✅ Preferencia creada:', data.preferenceId);
-      
-      if (data.hasExistingPreference) {
-        console.log('🔄 Usando preferencia existente');
-      }
-      
-      if (!data.success) {
-        throw new Error('No se pudo crear la preferencia de pago');
-      }
-      
-      // 🔴 INICIALIZAR MERCADO PAGO
-      if (data.publicKey) {
-        const initialized = initializeMercadoPago(data.publicKey);
-        if (!initialized) {
-          console.warn('⚠️ No se pudo inicializar MercadoPago');
-        }
-      }
-      
-      setMercadoPagoData(data);
-      
-      localStorage.setItem('pendingPreferenceId', data.preferenceId);
-      localStorage.setItem('mercadoPagoOrderId', orderId);
-      
-      return data;
-      
-    } catch (err: unknown) {
-      const error = err as Error;
-      console.error('🛑 Error creando preferencia:', error);
-      
-      if (error.message.includes('no coincide') || 
-          error.message.includes('monto') || 
-          error.message.includes('PAYMENT_VALIDATION_FAILED') ||
-          error.message.includes('manipulación')) {
-        
-        setError(`Error de validación: ${error.message}. Por favor, recarga la página e intenta nuevamente.`);
-        
-        // Limpiar datos y reintentar
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
-        localStorage.removeItem('pendingPreferenceId');
-        setOrderCreated(false);
-        setCreatedOrder(null);
-        setOrderId('');
-        setMercadoPagoData(null);
-        
-        // Forzar recarga del carrito
         const token = localStorage.getItem('token');
-        await fetchCart(token);
-        
-      } else if (error.message.includes('Acceso denegado') || error.message.includes('no tienes permiso')) {
-        setError('No tienes permiso para acceder a esta orden. Por favor, inicia sesión nuevamente.');
-        
-        localStorage.removeItem('token');
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
-        setIsAuthenticated(false);
-        
-      } else if (error.message.includes('ya fue procesada')) {
-        setError('Esta orden ya fue procesada. Se creará una nueva orden automáticamente.');
-        
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
-        setOrderCreated(false);
-        setCreatedOrder(null);
-        setOrderId('');
-        
-        // Crear nueva orden automáticamente
-        await createOrderSilently();
-        
-      } else {
-        setError(`Error al crear el pago: ${error.message || 'Error desconocido'}`);
+
+        const response = await fetch(
+          ORDER_CHECK_EXPIRATION.replace(
+            '{orderId}',
+            targetOrderId
+          ),
+          {
+            method: 'POST',
+            headers: getRequestHeaders(token),
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) return false;
+
+        const data = (await response.json()) as {
+          expired?: boolean;
+        };
+
+        if (data.expired) {
+          clearPendingOrder(
+            'La reserva anterior expiró. Revisa los datos y prepara el pago nuevamente.'
+          );
+          return true;
+        }
+
+        return false;
+      } catch (expirationError) {
+        console.error(
+          'Error verificando expiración:',
+          expirationError
+        );
+        return false;
       }
-      
-      return null;
-    } finally {
-      setMercadoPagoLoading(false);
-    }
-  };
+    },
+    [clearPendingOrder, getRequestHeaders]
+  );
 
-  // 🔴 VERIFICAR ESTADO DEL PAGO
-  const checkPaymentStatus = async (orderId: string): Promise<PaymentStatusResponse | null> => {
-    try {
-      console.log('🔄 Verificando estado del pago para orden:', orderId);
-      
-      const token = localStorage.getItem('token');
-      const headers = getRequestHeaders(token);
-      
-      const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
-        method: 'GET',
-        headers,
-        credentials: 'include',
-      });
+  const createMercadoPagoPreference = useCallback(
+    async (
+      targetOrderId: string,
+      order?: OrderResponse | null
+    ) => {
+      setMercadoPagoLoading(true);
+      setError('');
 
-      if (!response.ok) {
-        console.error('❌ Error verificando estado:', response.status);
+      try {
+        const expired =
+          await checkOrderExpiration(targetOrderId);
+
+        if (expired) return null;
+
+        const token = localStorage.getItem('token');
+
+        const productsTotal = Number(
+          order?.totalPrice ||
+            createdOrder?.totalPrice ||
+            checkoutPricing.productsSubtotal -
+              checkoutPricing.firstPurchaseDiscount
+        );
+
+        const totalAmount =
+          productsTotal + checkoutPricing.shippingCost;
+
+        const response = await fetch(
+          MERCADOPAGO_CREATE_PREFERENCE,
+          {
+            method: 'POST',
+            headers: getRequestHeaders(token),
+            credentials: 'include',
+            body: JSON.stringify({
+              orderId: Number(targetOrderId),
+              totalAmount,
+              paymentMethod: 'MERCADO_PAGO',
+              shippingAmount:
+                checkoutPricing.shippingCost
+            })
+          }
+        );
+
+        if (!response.ok) {
+          const responseText = await response.text();
+
+          throw new Error(
+            responseText ||
+              `No fue posible preparar el pago (${response.status})`
+          );
+        }
+
+        const data =
+          (await response.json()) as MercadoPagoResponse;
+
+        if (!data.success || !data.preferenceId) {
+          throw new Error(
+            data.message ||
+              'Mercado Pago no devolvió una preferencia válida'
+          );
+        }
+
+        if (data.publicKey) {
+          initializeMercadoPago(data.publicKey);
+        }
+
+        setMercadoPagoData(data);
+        localStorage.setItem(
+          'pendingPreferenceId',
+          data.preferenceId
+        );
+        localStorage.setItem(
+          'mercadoPagoOrderId',
+          targetOrderId
+        );
+
+        return data;
+      } catch (preferenceError) {
+        console.error(
+          'Error creando preferencia:',
+          preferenceError
+        );
+
+        setError(
+          preferenceError instanceof Error
+            ? preferenceError.message
+            : 'No fue posible preparar el pago'
+        );
+
+        return null;
+      } finally {
+        setMercadoPagoLoading(false);
+      }
+    },
+    [
+      checkOrderExpiration,
+      checkoutPricing.firstPurchaseDiscount,
+      checkoutPricing.productsSubtotal,
+      checkoutPricing.shippingCost,
+      createdOrder,
+      getRequestHeaders,
+      initializeMercadoPago
+    ]
+  );
+
+  const handleSuccessfulPayment = useCallback(
+    (successfulOrderId: string) => {
+      clearPaymentTimers();
+
+      localStorage.removeItem('lastOrderCartHash');
+      localStorage.removeItem('pendingOrderId');
+      localStorage.removeItem('pendingOrderData');
+      localStorage.removeItem('pendingPreferenceId');
+      localStorage.removeItem('mercadoPagoOrderId');
+      localStorage.removeItem(CART_SESSION_KEY);
+
+      setCartItems([]);
+      setSubtotal(0);
+      setShippingCost(0);
+      setTotalItems(0);
+      setOriginalSubtotal(0);
+
+      setSuccessMessage(
+        `Pago aprobado. Orden #${successfulOrderId} confirmada.`
+      );
+
+      window.setTimeout(() => {
+        window.location.href = `/checkout/success?orderId=${successfulOrderId}`;
+      }, 2200);
+    },
+    [clearPaymentTimers]
+  );
+
+  const checkPaymentStatus = useCallback(
+    async (targetOrderId: string) => {
+      try {
+        const token = localStorage.getItem('token');
+
+        const response = await fetch(
+          `${MERCADOPAGO_STATUS}/${targetOrderId}`,
+          {
+            method: 'GET',
+            headers: getRequestHeaders(token),
+            credentials: 'include'
+          }
+        );
+
+        if (!response.ok) return null;
+
+        const data =
+          (await response.json()) as PaymentStatusResponse;
+
+        setPaymentStatus(data);
+
+        const approved =
+          data.status === 'PAGO_APROBADO' ||
+          data.mercadoPagoStatus === 'approved';
+
+        const rejected =
+          data.status === 'PAGO_RECHAZADO' ||
+          data.mercadoPagoStatus === 'rejected';
+
+        const canceled =
+          data.status === 'CANCELADO' ||
+          data.stockReservationExpired ||
+          data.cancellationReason
+            ?.toLowerCase()
+            .includes('expirado');
+
+        if (approved) {
+          handleSuccessfulPayment(targetOrderId);
+        } else if (rejected) {
+          clearPaymentTimers();
+          setError(
+            'El pago fue rechazado. Usa otro medio de pago o inténtalo nuevamente.'
+          );
+        } else if (canceled) {
+          clearPendingOrder(
+            'La reserva de la orden expiró. Prepara el pago nuevamente.'
+          );
+        }
+
+        return data;
+      } catch (statusError) {
+        console.error(
+          'Error consultando estado del pago:',
+          statusError
+        );
         return null;
       }
+    },
+    [
+      clearPaymentTimers,
+      clearPendingOrder,
+      getRequestHeaders,
+      handleSuccessfulPayment
+    ]
+  );
 
-      const data = await response.json() as PaymentStatusResponse;
-      console.log('📊 Estado del pago:', {
-        orderStatus: data.status,
-        mpStatus: data.mercadoPagoStatus,
-        reservationMinutesLeft: data.stockReservationMinutesLeft,
-        // 🔴 MOSTRAR INFO DESCUENTO
-        firstPurchaseDiscount: data.firstPurchaseDiscountApplied ? `${data.firstPurchaseDiscountPercentage}% ($${data.firstPurchaseDiscountAmount})` : 'No aplicado'
-      });
-      
-      setPaymentStatus(data);
-      
-      // 🔴 VERIFICAR SI LA ORDEN ESTÁ CANCELADA (EXPIRADA)
-      if (data.status === 'CANCELADO' || data.cancellationReason?.includes('expirado')) {
-        console.log('🔴 Orden cancelada, creando nueva automáticamente...');
-        
-        // Limpiar datos
-        localStorage.removeItem('pendingOrderId');
-        localStorage.removeItem('pendingOrderData');
-        localStorage.removeItem('pendingPreferenceId');
-        localStorage.removeItem('lastOrderCartHash');
-        
-        setOrderCreated(false);
-        setCreatedOrder(null);
-        setOrderId('');
-        setMercadoPagoData(null);
-        
-        // Crear nueva orden automáticamente
-        await createOrderSilently();
-        return data;
-      }
-      
-      if (data.status === 'PAGO_APROBADO' || data.mercadoPagoStatus === 'approved') {
-        handleSuccessfulPayment(orderId);
-        return data;
-      }
-      
-      if (data.status === 'PAGO_RECHAZADO' || data.mercadoPagoStatus === 'rejected') {
-        setError('El pago fue rechazado. Por favor intenta con otro método de pago.');
-        return data;
-      }
-      
-      // 🔴 VERIFICAR RESERVA DE STOCK
-      if (data.stockReservationMinutesLeft !== undefined && data.stockReservationMinutesLeft <= 0) {
-        console.warn('⚠️ Reserva de stock expirada');
-        if (!data.stockReservationExpired) {
-          setError('La reserva de stock ha expirado. Creando nueva orden automáticamente...');
-          
-          localStorage.removeItem('pendingOrderId');
-          localStorage.removeItem('pendingOrderData');
-          localStorage.removeItem('pendingPreferenceId');
-          setOrderCreated(false);
-          
-          // Crear nueva orden automáticamente
-          await createOrderSilently();
-        }
-      }
-      
-      return data;
-      
-    } catch (err: unknown) {
-      console.error('🛑 Error verificando estado del pago:', err);
-      return null;
-    }
-  };
-
-  // 🔴 INICIAR POLLING PARA VERIFICAR ESTADO
-  const startPaymentStatusPolling = (orderId: string) => {
-    if (paymentStatusIntervalRef.current) {
-      clearInterval(paymentStatusIntervalRef.current);
-    }
-    
-    checkPaymentStatus(orderId);
-    
-    paymentStatusIntervalRef.current = setInterval(async () => {
-      await checkPaymentStatus(orderId);
-      
-      // 🔴 VERIFICAR EXPIRACIÓN CADA 30 SEGUNDOS
-      await checkAndHandleExpiredOrder();
-    }, 30000);
-    
-    // Detener después de 15 minutos
-    setTimeout(() => {
-      if (paymentStatusIntervalRef.current) {
-        clearInterval(paymentStatusIntervalRef.current);
-        paymentStatusIntervalRef.current = null;
-      }
-    }, 900000);
-  };
-
-  // 🔴 MANEJAR PAGO EXITOSO
-  const handleSuccessfulPayment = (orderId: string) => {
-    if (paymentStatusIntervalRef.current) {
-      clearInterval(paymentStatusIntervalRef.current);
-      paymentStatusIntervalRef.current = null;
-    }
-    
-    // 🔴 LIMPIAR DATOS
-    localStorage.removeItem('lastOrderCartHash');
-    cartHashRef.current = '';
-    
-    localStorage.removeItem('pendingOrderId');
-    localStorage.removeItem('pendingOrderData');
-    localStorage.removeItem('pendingPreferenceId');
-    localStorage.removeItem('mercadoPagoOrderId');
-    localStorage.removeItem('cartSessionId');
-    
-    setCartItems([]);
-    setSubtotal(0);
-    setShippingCost(0);
-    setTotal(0);
-    setTotalItems(0);
-    setOrderCreated(false);
-    setCreatedOrder(null);
-    setOrderId('');
-    setMercadoPagoData(null);
-    
-    setSuccessMessage(`✅ ¡Pago exitoso! Tu orden #${orderId} ha sido confirmada. Redirigiendo...`);
-    
-    setTimeout(() => {
-      window.location.href = `/checkout/success?orderId=${orderId}`;
-    }, 3000);
-  };
-
-  // 🔴 REINTENTAR PAGO
-  const retryPayment = async () => {
-    if (!orderId) {
-      setError('No hay una orden para reintentar el pago');
+  useEffect(() => {
+    if (!orderCreated || !orderId) {
+      clearPaymentTimers();
       return;
     }
-    
-    // 🔴 VERIFICAR SI LA ORDEN SIGUE VÁLIDA
-    await checkAndHandleExpiredOrder();
-    
-    // Limpiar preferencia anterior
+
+    void checkPaymentStatus(orderId);
+
+    paymentIntervalRef.current = window.setInterval(() => {
+      void checkPaymentStatus(orderId);
+    }, PAYMENT_POLL_INTERVAL);
+
+    paymentStopTimerRef.current = window.setTimeout(() => {
+      clearPaymentTimers();
+    }, PAYMENT_POLL_DURATION);
+
+    return clearPaymentTimers;
+  }, [
+    checkPaymentStatus,
+    clearPaymentTimers,
+    orderCreated,
+    orderId
+  ]);
+
+  const preparePayment = useCallback(async () => {
+    if (!validateCheckout()) return;
+
+    setError('');
+    setSuccessMessage('');
+
+    let activeOrder = createdOrder;
+    let activeOrderId = orderId;
+
+    if (!orderCreated || !activeOrderId) {
+      activeOrder = await createOrder();
+
+      if (!activeOrder) return;
+
+      activeOrderId = String(activeOrder.id);
+    }
+
+    await createMercadoPagoPreference(
+      activeOrderId,
+      activeOrder
+    );
+
+    window.setTimeout(() => {
+      paymentSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }, 120);
+  }, [
+    createMercadoPagoPreference,
+    createOrder,
+    createdOrder,
+    orderCreated,
+    orderId,
+    validateCheckout
+  ]);
+
+  const retryPayment = useCallback(async () => {
+    if (!orderId) {
+      await preparePayment();
+      return;
+    }
+
     localStorage.removeItem('pendingPreferenceId');
     setMercadoPagoData(null);
     setError('');
-    
-    // Actualizar carrito antes de reintentar
-    try {
-      const token = localStorage.getItem('token');
-      await fetchCart(token);
-      
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-    } catch (error) {
-      console.error('Error actualizando carrito:', error);
-    }
-    
-    await createMercadoPagoPreference(orderId);
-  };
 
-  // 🔴 EFECTO PARA CREAR ORDEN Y PREFERENCIA AUTOMÁTICAMENTE
-  useEffect(() => {
-    const createOrderAndPreference = async () => {
-      if (step === 3 && !orderCreated && !isProcessingPayment && !mercadoPagoData) {
-        console.log('🔄 Step 3: Procesando orden...');
-        
-        if (orderFromStorageRef.current) {
-          console.log('📦 Usando orden almacenada:', orderFromStorageRef.current);
-          
-          // Verificar si la orden almacenada sigue válida
-          await checkAndHandleExpiredOrder();
-          
-          setOrderId(orderFromStorageRef.current);
-          setOrderCreated(true);
-          await createMercadoPagoPreference(orderFromStorageRef.current);
-        } else {
-          console.log('📦 Creando nueva orden...');
-          const order = await createOrder();
-          if (order) {
-            console.log('💳 Creando preferencia...');
-            await createMercadoPagoPreference(order.id.toString());
-          }
-        }
-      }
-    };
-    
-    createOrderAndPreference();
-  }, [step, orderCreated, isProcessingPayment, mercadoPagoData, createOrder, createMercadoPagoPreference, checkAndHandleExpiredOrder]);
+    await createMercadoPagoPreference(
+      orderId,
+      createdOrder
+    );
+  }, [
+    createMercadoPagoPreference,
+    createdOrder,
+    orderId,
+    preparePayment
+  ]);
 
-  // 🔴 EFECTO PARA INICIAR POLLING
-  useEffect(() => {
-    if (step === 3 && orderId && !mercadoPagoLoading && orderCreated) {
-      console.log('📊 Iniciando verificación de estado para orden:', orderId);
-      startPaymentStatusPolling(orderId);
+  const primaryAction = useCallback(() => {
+    if (mercadoPagoData?.preferenceId) {
+      paymentSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+      return;
     }
-    
-    return () => {
-      if (paymentStatusIntervalRef.current) {
-        clearInterval(paymentStatusIntervalRef.current);
-        paymentStatusIntervalRef.current = null;
-      }
-    };
-  }, [step, orderId, mercadoPagoLoading, orderCreated]);
 
-  // 🔴 EFECTO PARA VERIFICAR CAMBIOS EN EL CARRITO PERIÓDICAMENTE
-  useEffect(() => {
-    if (step === 3 && orderCreated) {
-      const interval = setInterval(async () => {
-        // Verificar si el carrito ha sido modificado recientemente
-        const timeSinceLastUpdate = Date.now() - lastCartUpdateRef.current;
-        if (timeSinceLastUpdate < 5000) { // Si se modificó hace menos de 5 segundos
-          console.log('🔄 Carrito modificado recientemente, verificando cambios...');
-          
-          // Forzar actualización del carrito para detectar cambios
-          const token = localStorage.getItem('token');
-          await fetchCart(token);
-        }
-      }, 10000); // Verificar cada 10 segundos
-      
-      return () => clearInterval(interval);
-    }
-  }, [step, orderCreated, fetchCart]);
+    void preparePayment();
+  }, [mercadoPagoData?.preferenceId, preparePayment]);
 
-  // 🔴 COMPONENTE PARA MOSTRAR DESCUENTO PRIMERA COMPRA
-  const FirstPurchaseDiscountBanner = () => {
-    if (loadingDiscountConfig) return null;
-    
-    if (!discountConfig.enabled) {
-      return null; // No mostrar si está desactivado
-    }
-    
-    // Verificar si aplica a este usuario
-    const appliesToUser = discountConfig.applyToAnonymous || isAuthenticated;
-    if (!appliesToUser) return null;
-    
-    return (
-      <div className="checkout-first-purchase-banner">
-        <div className="checkout-first-purchase-content">
-          <div className="checkout-first-purchase-icon">
-            <Gift className="checkout-icon" />
-          </div>
-          <div className="checkout-first-purchase-text">
-            <strong>¡Primera compra!</strong>
-            <span>Podrías obtener un {discountConfig.discountPercentage}% de descuento en tu primera compra. Lo confirmaremos con tu correo.</span>
-          </div>
-          <div className="checkout-first-purchase-badge">
-            <Percent className="checkout-icon" size={14} />
-            {discountConfig.discountPercentage}% OFF
-          </div>
+  const renderItemPrice = (item: CartItem) => {
+    const itemTotal = item.price * item.quantity;
+    const originalItemTotal =
+      item.originalPrice * item.quantity;
+
+    if (
+      item.hasDiscount &&
+      Number(item.discountPercentage || 0) > 0
+    ) {
+      return (
+        <div className="checkout-item-prices">
+          <del>{formatPrice(originalItemTotal)}</del>
+          <strong>{formatPrice(itemTotal)}</strong>
+          <span>-{item.discountPercentage}%</span>
         </div>
-      </div>
+      );
+    }
+
+    return (
+      <strong className="checkout-item-price">
+        {formatPrice(itemTotal)}
+      </strong>
     );
   };
 
-  // 🔴 COMPONENTE PARA MOSTRAR DESCUENTO PRIMERA COMPRA EN EL RESUMEN DE PAGO
-  const FirstPurchaseDiscountApplied = ({ pricing }: { pricing: CheckoutPricing }) => {
-    if (pricing.firstPurchaseStatus === 'hidden' || pricing.firstPurchaseDiscount <= 0) {
-      return null;
-    }
-
-    const isEstimated = pricing.firstPurchaseStatus === 'estimated';
-
+  if (initialLoading) {
     return (
-      <div className={`checkout-first-purchase-applied ${isEstimated ? 'estimated' : ''}`}>
-        <div className="checkout-first-purchase-applied-header">
-          <Gift className="checkout-icon" size={16} />
-          <span>{isEstimated ? 'Descuento primera compra estimado' : 'Descuento primera compra'}</span>
-        </div>
-        <div className="checkout-first-purchase-applied-details">
-          <span className="checkout-first-purchase-applied-percentage">
-            -{pricing.firstPurchasePercentage || 0}%
-          </span>
-          <span className="checkout-first-purchase-applied-amount">
-            -{formatPrice(pricing.firstPurchaseDiscount)}
-          </span>
-        </div>
-      </div>
-    );
-  };
-
-  const steps = [
-    { number: 1, label: "Carrito", icon: ShoppingBag },
-    { number: 2, label: isAuthenticated ? "Envío" : "Datos", icon: isAuthenticated ? MapPin : User },
-    { number: 3, label: "Pago", icon: CreditCard },
-  ];
-
-  if (loading && step === 1) {
-    return (
-      <div className="checkout-page">
+      <main className="checkout-page checkout-page-loading">
         <div className="checkout-loading-state">
-          <div className="checkout-spinner"></div>
-          <p>Cargando tu carrito...</p>
+          <span className="checkout-spinner" />
+          <p>Preparando tu compra</p>
         </div>
-      </div>
+      </main>
     );
   }
 
+  if (cartItems.length === 0) {
+    return (
+      <main className="checkout-page">
+        <section className="checkout-empty-state">
+          <span className="checkout-empty-code">VALSE / CHECKOUT</span>
+          <ShoppingBag aria-hidden="true" />
+          <h1>Tu carrito está vacío</h1>
+          <p>
+            Agrega productos antes de continuar con el pago.
+          </p>
+          <button
+            type="button"
+            className="checkout-primary-button"
+            onClick={() => router.push('/menu')}
+          >
+            Explorar catálogo
+            <span aria-hidden="true">→</span>
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  const preparingPayment =
+    paymentProcessing || mercadoPagoLoading;
+
   return (
-    <div className="checkout-page">
-      <div className="checkout-decorative-elements">
-        <div className="checkout-decorative-icon star">
-          <Star className="checkout-icon-sm" fill="currentColor" />
-        </div>
-        <div className="checkout-decorative-icon moon">
-          <Star className="checkout-icon-md" />
-        </div>
-        <div className="checkout-decorative-icon rocket">
-          <Star className="checkout-icon-lg" />
-        </div>
-        <div className="checkout-decorative-icon sparkles">
-          <Sparkles className="checkout-icon-sm" />
-        </div>
-      </div>
+    <main className="checkout-page">
+      <header className="checkout-header">
+        <div className="checkout-header-inner">
+          <button
+            type="button"
+            className="checkout-back-link"
+            onClick={() => router.push('/menu')}
+          >
+            <ChevronLeft aria-hidden="true" />
+            Volver al catálogo
+          </button>
 
-      {/* 🔴 BANNER DESCUENTO PRIMERA COMPRA */}
-      {step === 1 && <FirstPurchaseDiscountBanner />}
+          <div className="checkout-brand">
+            <span>VALSE</span>
+            <small>CHECKOUT SEGURO</small>
+          </div>
 
-      {/* 🔴 NOTIFICACIÓN DE AJUSTE DE CARRITO */}
-      {needsCartAdjustment && adjustedItems.length > 0 && (
-        <div className="checkout-cart-adjustment-notification">
-          <div className="checkout-cart-adjustment-content">
-            <div className="checkout-cart-adjustment-header">
-              <RefreshCw className="checkout-icon spinning" />
-              <h4>Stock actualizado</h4>
-              <button 
-                className="checkout-cart-adjustment-close" 
-                onClick={() => {
-                  setNeedsCartAdjustment(false);
-                  setAdjustedItems([]);
-                }}
-              >
-                <X className="checkout-icon" />
-              </button>
-            </div>
-            <p className="checkout-cart-adjustment-message">
-              Algunos productos en tu carrito excedían el stock disponible. Hemos ajustado las cantidades:
-            </p>
-            <div className="checkout-cart-adjustment-items">
-              {adjustedItems.map((item) => (
-                <div key={item.id} className="checkout-cart-adjustment-item">
-                  <span className="checkout-cart-adjustment-name">{item.name}</span>
-                  <span className="checkout-cart-adjustment-qty">
-                    {item.oldQty} → {item.newQty}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <button 
-              className="checkout-btn checkout-btn-outline checkout-btn-sm"
-              onClick={() => {
-                setNeedsCartAdjustment(false);
-                setAdjustedItems([]);
-              }}
-            >
-              Entendido
-            </button>
+          <div className="checkout-header-security">
+            <Lock aria-hidden="true" />
+            Conexión protegida
           </div>
         </div>
-      )}
+      </header>
 
-      <div className="checkout-progress-section">
-        <div className="checkout-progress-container">
-          <div className="checkout-progress-steps">
-            <div className="checkout-progress-line">
-              <div className="checkout-progress-line-fill" style={{ width: `${((step - 1) / 2) * 100}%` }} />
-            </div>
+      <div className="checkout-shell">
 
-            {steps.map((s) => {
-              const Icon = s.icon;
-              const isActive = step >= s.number;
-              const isCurrent = step === s.number;
-
-              return (
-                <div key={s.number} className={`checkout-step ${isActive ? "active" : ""} ${isCurrent ? "current" : ""}`}>
-                  <div className="checkout-step-circle">
-                    {isActive && step > s.number ? (
-                      <Check className="checkout-icon" strokeWidth={3} />
-                    ) : (
-                      <Icon className="checkout-icon" />
-                    )}
-                  </div>
-                  <span className="checkout-step-label">{s.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <main className="checkout-main">
         {error && (
-          <div className="checkout-error-message">
-            <AlertCircle className="checkout-icon" />
+          <div
+            className="checkout-alert checkout-alert-error"
+            role="alert"
+          >
+            <AlertCircle aria-hidden="true" />
             <span>{error}</span>
-            <button onClick={() => setError("")}>
-              <X className="checkout-icon" />
+            <button
+              type="button"
+              onClick={() => setError('')}
+              aria-label="Cerrar mensaje"
+            >
+              <X aria-hidden="true" />
             </button>
           </div>
         )}
 
         {successMessage && (
-          <div className="checkout-success-message">
-            <Check className="checkout-icon" />
+          <div
+            className="checkout-alert checkout-alert-success"
+            role="status"
+          >
+            <Check aria-hidden="true" />
             <span>{successMessage}</span>
-          </div>
-        )}
-
-        <div className="checkout-main-grid">
-          <div className="checkout-main-content">
-            {step === 1 && (
-              <div className="checkout-animate-in">
-                <div className="checkout-section-header">
-                  <div className="checkout-section-icon cart">
-                    <ShoppingBag className="checkout-icon" />
-                  </div>
-                  <div>
-                    <h2 className="checkout-section-title">Tu Carrito</h2>
-                    <p className="checkout-section-subtitle">{cartItems.length} producto(s) - {totalItems} unidad(es)</p>
-                    {!isAuthenticated && (
-                      <p className="checkout-guest-notice">
-                        <User className="checkout-icon" size={16} />
-                        Estás comprando como invitado
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {cartItems.length === 0 ? (
-                  <div className="checkout-empty-cart">
-                    <div className="checkout-empty-cart-icon">
-                      <ShoppingBag className="checkout-icon" />
-                    </div>
-                    <h3>Tu carrito está vacío</h3>
-                    <p>¡Explora nuestra colección de pijamas espaciales!</p>
-                    <button className="checkout-btn checkout-btn-secondary" onClick={() => (window.location.href = "/")}>
-                      Seguir Comprando
-                    </button>
-                  </div>
-                ) : (
-                  <div className="checkout-cart-items">
-                    {cartItems.map((item) => (
-                      <div key={`cart-${item.id}`} className="checkout-cart-item">
-                        <div className="checkout-cart-item-inner">
-                          <div className="checkout-cart-item-image">
-                            <Image
-                              src={item.image}
-                              alt={item.name}
-                              fill
-                              style={{ objectFit: "cover" }}
-                              sizes="(max-width: 640px) 100vw, 9rem"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = '/images/placeholder.png';
-                              }}
-                            />
-                            {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
-                              <span className="checkout-cart-item-discount-badge">
-                                -{item.discountPercentage}%
-                              </span>
-                            )}
-                            <span className="checkout-cart-item-size-badge">{item.size}</span>
-                          </div>
-
-                          <div className="checkout-cart-item-content">
-                            <div>
-                              <h3 className="checkout-cart-item-name">{item.name}</h3>
-                              <div className="checkout-cart-item-badges">
-                                <span className="checkout-badge checkout-badge-outline checkout-badge-purple">{item.color}</span>
-                                <span className="checkout-badge checkout-badge-outline checkout-badge-mint">
-                                Disponible
-                                </span>
-                                {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
-                                  <span className="checkout-badge checkout-badge-discount">
-                                    <Star className="checkout-icon" size={12} />
-                                    Oferta especial
-                                  </span>
-                                )}
-                              </div>
-                              {renderItemPrice(item)}
-                            </div>
-
-                            <div className="checkout-cart-item-actions">
-                              <div className="checkout-quantity-controls">
-                                <button
-                                  className="checkout-quantity-btn"
-                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                  disabled={loading || item.quantity <= 1}
-                                >
-                                  <Minus className="checkout-icon" />
-                                </button>
-                                <span className="checkout-quantity-value">{item.quantity}</span>
-                                <button
-                                  className="checkout-quantity-btn"
-                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                  disabled={loading || Boolean(((item.maxStock ?? item.stock) ?? 0) && item.quantity >= (item.maxStock ?? item.stock ?? 0))}
-                                >
-                                  <Plus className="checkout-icon" />
-                                </button>
-                              </div>
-
-                              <div className="checkout-cart-item-subtotal">
-                                <p className="checkout-subtotal-text">
-                                  Subtotal: <span>{formatPrice(item.price * item.quantity)}</span>
-                                </p>
-                                <button 
-                                  className="checkout-delete-btn" 
-                                  onClick={() => removeItem(item.id)}
-                                  disabled={loading}
-                                >
-                                  <Trash2 className="checkout-icon" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="checkout-animate-in-right">
-                <div className="checkout-section-header">
-                  <div className="checkout-section-icon address">
-                    {isAuthenticated ? <MapPin className="checkout-icon" /> : <User className="checkout-icon" />}
-                  </div>
-                  <div>
-                    <h2 className="checkout-section-title">
-                      {isAuthenticated ? 'Dirección de Envío' : 'Tus Datos de Contacto'}
-                    </h2>
-                    <p className="checkout-section-subtitle">
-                      {isAuthenticated ? '¿A dónde enviamos tus pijamas?' : 'Necesitamos algunos datos para tu pedido'}
-                    </p>
-                    {!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && step < 3 && (
-                      <p className="checkout-first-purchase-note">
-                        <Gift className="checkout-icon" size={14} />
-                        Validaremos con tu correo si aplica el descuento de primera compra
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="checkout-card">
-                  <div className="checkout-card-content">
-                    {!isAuthenticated && (
-                      <div className="checkout-user-info-form">
-                        <h3 className="checkout-user-info-title">
-                          <User className="checkout-icon" />
-                          Información de Contacto
-                        </h3>
-                        <div className="checkout-form-grid">
-                          <div className="checkout-form-group">
-                            <label htmlFor="email">
-                              <Mail className="checkout-icon" size={16} />
-                              Email *
-                            </label>
-                            <input
-                              id="email"
-                              type="email"
-                              className="checkout-form-input"
-                              placeholder="tu@email.com"
-                              value={anonymousUserInfo.email}
-                              onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, email: e.target.value})}
-                              required
-                            />
-                          </div>
-                          
-                          <div className="checkout-form-grid-2">
-                            <div className="checkout-form-group">
-                              <label htmlFor="firstName">Nombre *</label>
-                              <input
-                                id="firstName"
-                                type="text"
-                                className="checkout-form-input"
-                                placeholder="Tu nombre"
-                                value={anonymousUserInfo.firstName}
-                                onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, firstName: e.target.value})}
-                                required
-                              />
-                            </div>
-                            <div className="checkout-form-group">
-                              <label htmlFor="lastName">Apellido</label>
-                              <input
-                                id="lastName"
-                                type="text"
-                                className="checkout-form-input"
-                                placeholder="Tu apellido"
-                                value={anonymousUserInfo.lastName}
-                                onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, lastName: e.target.value})}
-                              />
-                            </div>
-                          </div>
-                          
-                          <div className="checkout-form-group">
-                            <label htmlFor="phone">
-                              <Phone className="checkout-icon" size={16} />
-                              Teléfono *
-                            </label>
-                            <input
-                              id="phone"
-                              type="tel"
-                              className="checkout-form-input"
-                              placeholder="+57 300 123 4567"
-                              value={anonymousUserInfo.phone}
-                              onChange={(e) => setAnonymousUserInfo({...anonymousUserInfo, phone: e.target.value})}
-                              required
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="checkout-address-section">
-                      <h3 className="checkout-address-section-title">
-                        <MapPin className="checkout-icon" />
-                        Dirección de Envío
-                      </h3>
-
-                      {isAuthenticated ? (
-                        <>
-                          {loading ? (
-                            <div className="checkout-loading-state">
-                              <div className="checkout-spinner"></div>
-                              <p>Cargando tus direcciones...</p>
-                            </div>
-                          ) : userData && userData.addresses.length === 0 ? (
-                            <div className="checkout-empty-address">
-                              <MapPin className="checkout-icon" />
-                              <p>No tienes direcciones guardadas</p>
-                            </div>
-                          ) : userData ? (
-                            <div className="checkout-address-list">
-                              {userData.addresses.map((address) => (
-                                <div
-                                  key={address.id}
-                                  onClick={() => setSelectedAddress(address)}
-                                  className={`checkout-address-card ${selectedAddress?.id === address.id ? "selected" : ""}`}
-                                >
-                                  <div className="checkout-address-card-inner">
-                                    <div className="checkout-address-radio">
-                                      {selectedAddress?.id === address.id && <Check className="checkout-icon" strokeWidth={3} />}
-                                    </div>
-                                    <div className="checkout-address-details">
-                                      <p>{address.address}</p>
-                                      <p>
-                                        {address.city}, {address.state}
-                                      </p>
-                                      <p>{address.country}</p>
-                                    </div>
-                                    <button
-                                      className="checkout-address-delete-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        deleteAddress(address.id);
-                                      }}
-                                      disabled={loading}
-                                    >
-                                      <Trash2 className="checkout-icon" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {addingAddress ? (
-                            <div className="checkout-add-address-form">
-                              <h3 className="checkout-add-address-title">
-                                <Plus className="checkout-icon" />
-                                Nueva Dirección
-                              </h3>
-                              <div className="checkout-form-grid">
-                                <div className="checkout-form-group">
-                                  <label htmlFor="address">Dirección Completa *</label>
-                                  <input
-                                    id="address"
-                                    type="text"
-                                    className="checkout-form-input"
-                                    placeholder="Calle 123 #45-67, Apto 301"
-                                    value={newAddress.address}
-                                    onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-                                    required
-                                  />
-                                </div>
-                                <div className="checkout-form-grid-2">
-                                  <div className="checkout-form-group">
-                                    <label htmlFor="city">Ciudad *</label>
-                                    <input
-                                      id="city"
-                                      type="text"
-                                      className="checkout-form-input"
-                                      placeholder="Bogotá"
-                                      value={newAddress.city}
-                                      onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                                      required
-                                    />
-                                  </div>
-                                  <div className="checkout-form-group">
-                                    <label htmlFor="state">Departamento *</label>
-                                    <input
-                                      id="state"
-                                      type="text"
-                                      className="checkout-form-input"
-                                      placeholder="Cundinamarca"
-                                      value={newAddress.state}
-                                      onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-                                      required
-                                    />
-                                  </div>
-                                </div>
-                                <div className="checkout-form-group">
-                                  <label htmlFor="country">País *</label>
-                                  <input
-                                    id="country"
-                                    type="text"
-                                    className="checkout-form-input"
-                                    placeholder="Colombia"
-                                    value={newAddress.country}
-                                    onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
-                                    required
-                                  />
-                                </div>
-                                <div className="checkout-form-actions">
-                                  <button onClick={addAddress} className="checkout-btn checkout-btn-primary" disabled={loading}>
-                                    <Check className="checkout-icon" />
-                                    {loading ? 'Guardando...' : 'Guardar'}
-                                  </button>
-                                  <button onClick={() => setAddingAddress(false)} className="checkout-btn checkout-btn-outline">
-                                    Cancelar
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <button 
-                              className="checkout-add-address-btn" 
-                              onClick={() => setAddingAddress(true)}
-                              disabled={loading}
-                            >
-                              <Plus className="checkout-icon" />
-                              Agregar Nueva Dirección
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <div className="checkout-anonymous-address-form">
-                          <div className="checkout-form-grid">
-                            <div className="checkout-form-group">
-                              <label htmlFor="anon-address">Dirección Completa *</label>
-                              <input
-                                id="anon-address"
-                                type="text"
-                                className="checkout-form-input"
-                                placeholder="Calle 123 #45-67, Apto 301"
-                                value={selectedAddress?.address || ''}
-                                onChange={(e) => setSelectedAddress({
-                                  ...selectedAddress || {id: Date.now(), city: '', state: '', country: ''},
-                                  address: e.target.value
-                                })}
-                                required
-                              />
-                            </div>
-                            <div className="checkout-form-grid-2">
-                              <div className="checkout-form-group">
-                                <label htmlFor="anon-city">Ciudad *</label>
-                                <input
-                                  id="anon-city"
-                                  type="text"
-                                  className="checkout-form-input"
-                                  placeholder="Bogotá"
-                                  value={selectedAddress?.city || ''}
-                                  onChange={(e) => setSelectedAddress({
-                                    ...selectedAddress || {id: Date.now(), address: '', state: '', country: ''},
-                                    city: e.target.value
-                                  })}
-                                  required
-                                />
-                              </div>
-                              <div className="checkout-form-group">
-                                <label htmlFor="anon-state">Departamento *</label>
-                                <input
-                                  id="anon-state"
-                                  type="text"
-                                  className="checkout-form-input"
-                                  placeholder="Cundinamarca"
-                                  value={selectedAddress?.state || ''}
-                                  onChange={(e) => setSelectedAddress({
-                                    ...selectedAddress || {id: Date.now(), address: '', city: '', country: ''},
-                                    state: e.target.value
-                                  })}
-                                  required
-                                />
-                              </div>
-                            </div>
-                            <div className="checkout-form-group">
-                              <label htmlFor="anon-country">País *</label>
-                              <input
-                                id="anon-country"
-                                type="text"
-                                className="checkout-form-input"
-                                placeholder="Colombia"
-                                value={selectedAddress?.country || ''}
-                                onChange={(e) => setSelectedAddress({
-                                  ...selectedAddress || {id: Date.now(), address: '', city: '', state: ''},
-                                  country: e.target.value
-                                })}
-                                required
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="checkout-animate-in-right">
-                <div className="checkout-section-header">
-                  <div className="checkout-section-icon payment">
-                    <CreditCard className="checkout-icon" />
-                  </div>
-                  <div>
-                    <h2 className="checkout-section-title">Confirmar y Pagar</h2>
-                    <p className="checkout-section-subtitle">Un paso más y tus pijamas van a Marte</p>
-                    {!isAuthenticated && (
-                      <p className="checkout-guest-notice">
-                        <User className="checkout-icon" size={16} />
-                        Pedido como: {anonymousUserInfo.email}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="checkout-card">
-                  <div className="checkout-card-content">
-                    <div className="checkout-summary-section">
-                      <div className="checkout-user-summary">
-                        <div className="checkout-user-summary-header">
-                          <User className="checkout-icon" />
-                          <span>Datos del cliente:</span>
-                        </div>
-                        <p>
-                          {isAuthenticated 
-                            ? `${userData?.firstName || ''} ${userData?.lastName || ''} (${userData?.email || ''})`
-                            : `${anonymousUserInfo.firstName} ${anonymousUserInfo.lastName} (${anonymousUserInfo.email})`
-                          }
-                          <br />
-                          Tel: {isAuthenticated ? userData?.phone || '' : anonymousUserInfo.phone}
-                        </p>
-                      </div>
-
-                      {selectedAddress && (
-                        <div className="checkout-shipping-summary">
-                          <div className="checkout-shipping-summary-header">
-                            <MapPin className="checkout-icon" />
-                            <span>Envío a:</span>
-                          </div>
-                          <p>
-                            {selectedAddress.address}
-                            <br />
-                            {selectedAddress.city}, {selectedAddress.state}
-                            <br />
-                            {selectedAddress.country}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* 🔴 MOSTRAR DESCUENTO PRIMERA COMPRA SI ESTÁ APLICADO */}
-                      {checkoutPricing.firstPurchaseStatus !== 'hidden' && <FirstPurchaseDiscountApplied pricing={checkoutPricing} />}
-                    </div>
-
-                    <div className="checkout-order-items-preview">
-                      <h4>Resumen de Productos</h4>
-                      {cartItems.map((item) => (
-                        <div key={item.id} className="checkout-order-item-preview">
-                          <div className="checkout-order-item-preview-image">
-                            <Image
-                              src={item.image}
-                              alt={item.name}
-                              fill
-                              style={{ objectFit: "cover" }}
-                              sizes="3.5rem"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = '/images/placeholder.png';
-                              }}
-                            />
-                            {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
-                              <span className="checkout-order-item-preview-discount-badge">
-                                -{item.discountPercentage}%
-                              </span>
-                            )}
-                          </div>
-                          <div className="checkout-order-item-preview-details">
-                            <p className="checkout-order-item-preview-name">{item.name}</p>
-                            <p className="checkout-order-item-preview-meta">
-                              {item.size} • {item.color} • x{item.quantity}
-                            </p>
-                          </div>
-                          <span className="checkout-order-item-preview-price">{formatPrice(item.price * item.quantity)}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {isProcessingPayment && (
-                      <div className="checkout-processing-payment">
-                        <div className="checkout-spinner large"></div>
-                        <h4>Creando tu pedido...</h4>
-                        <p>Estamos preparando todo para que puedas realizar el pago.</p>
-                      </div>
-                    )}
-
-                    {mercadoPagoLoading && (
-                      <div className="checkout-processing-payment">
-                        <div className="checkout-spinner large purple"></div>
-                        <h4>Conectando con MercadoPago...</h4>
-                        <p>Preparando tu pago seguro.</p>
-                      </div>
-                    )}
-
-                    {paymentStatus && (
-                      <div className="checkout-payment-status">
-                        <div className="checkout-payment-status-header">
-                          <WalletIcon className="checkout-icon" />
-                          <h4>Estado del Pago</h4>
-                        </div>
-                        <div className="checkout-payment-status-info">
-                          <div className="checkout-payment-status-row">
-                            <span>Orden:</span>
-                            <strong>#{paymentStatus.orderId}</strong>
-                          </div>
-                          <div className="checkout-payment-status-row">
-                            <span>Estado Orden:</span>
-                            <span className={`checkout-payment-status-badge ${paymentStatus.status === 'PENDIENTE' ? 'pending' : paymentStatus.status === 'PAGO_APROBADO' ? 'approved' : 'rejected'}`}>
-                              {paymentStatus.status}
-                            </span>
-                          </div>
-                          {paymentStatus.mercadoPagoStatus && (
-                            <div className="checkout-payment-status-row">
-                              <span>Estado MercadoPago:</span>
-                              <span className={`checkout-payment-status-badge ${paymentStatus.mercadoPagoStatus === 'pending' ? 'pending' : paymentStatus.mercadoPagoStatus === 'approved' ? 'approved' : 'rejected'}`}>
-                                {paymentStatus.mercadoPagoStatus}
-                              </span>
-                            </div>
-                          )}
-                          {paymentStatus.firstPurchaseDiscountApplied && (
-                            <div className="checkout-payment-status-row discount">
-                              <span>Descuento primera compra:</span>
-                              <span className="checkout-payment-status-discount">
-                                -{paymentStatus.firstPurchaseDiscountPercentage}% ({formatPrice(paymentStatus.firstPurchaseDiscountAmount || 0)})
-                              </span>
-                            </div>
-                          )}
-                          {paymentStatus.stockReservationMinutesLeft !== undefined && (
-                            <div className="checkout-payment-status-row">
-                              <span>Tiempo reserva:</span>
-                              <span className={paymentStatus.stockReservationMinutesLeft > 0 ? 'text-green-600' : 'text-red-600'}>
-                                {paymentStatus.stockReservationMinutesLeft > 0 
-                                  ? `${paymentStatus.stockReservationMinutesLeft} minutos` 
-                                  : 'Expirada'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 🔴 CHECKOUT PRO - INICIALIZADO DINÁMICAMENTE */}
-{orderCreated && mercadoPagoData?.preferenceId && !mercadoPagoLoading && !isProcessingPayment && (
-  <div className="checkout-payment-action">
-    <div className="checkout-payment-ready">
-      <div className="checkout-payment-ready-header">
-        <Check className="checkout-icon" />
-        <h4>¡Listo para pagar!</h4>
-      </div>
-      <p>Tu orden ha sido creada. Completa el pago seguro con Mercado Pago.</p>
-      
-      <div className="checkout-payment-buttons">
-        {/* Si MercadoPago está inicializado, mostrar el Wallet */}
-        {isMercadoPagoInitialized && publicKey && (
-          <div className="wallet-container" style={{ width: '100%', minHeight: '48px' }}>
-            <Wallet
-              initialization={{
-                preferenceId: mercadoPagoData.preferenceId,
-                redirectMode: "self"
-              }}
-            />
-          </div>
-        )}
-        
-        {/* Fallback: usar initPoint si no se inicializó MercadoPago */}
-        {(!isMercadoPagoInitialized || !publicKey) && mercadoPagoData.initPoint && (
-          <div className="checkout-fallback-buttons">
-            <div className="checkout-fallback-alert">
-              <AlertCircle className="checkout-icon" />
-              <span>Usando método alternativo de pago</span>
-            </div>
             <button
-              className="checkout-btn checkout-btn-primary checkout-btn-lg checkout-btn-full"
-              onClick={() => {
-                window.location.href = mercadoPagoData.initPoint;
-              }}
+              type="button"
+              onClick={() => setSuccessMessage('')}
+              aria-label="Cerrar mensaje"
             >
-              <CreditCard className="checkout-icon" />
-              Pagar con MercadoPago
+              <X aria-hidden="true" />
             </button>
           </div>
         )}
-        
-        <div className="checkout-security-badges">
-          <div className="checkout-security-badge">
-            <Lock className="checkout-icon" size={14} />
-            <span>Pago 100% seguro</span>
-          </div>
-          <div className="checkout-security-badge">
-            <Check className="checkout-icon" size={14} />
-            <span>Certificado SSL</span>
-          </div>
-          <div className="checkout-security-badge">
-            <Shield size={14} />
-            <span>Protegido por Mercado Pago</span>
-          </div>
-        </div>
-        
-        {/* 🔴 TIMER DE EXPIRACIÓN DISCRETO */}
-        {paymentStatus?.stockReservationMinutesLeft && paymentStatus.stockReservationMinutesLeft > 0 && (
-          <div className="checkout-expiration-timer">
-            <Clock className="checkout-icon" size={14} />
-            <span>La reserva de stock expira en {paymentStatus.stockReservationMinutesLeft} minutos</span>
-            <div className="checkout-expiration-progress">
-              <div
-                className="checkout-expiration-progress-bar"
-                style={{ width: `${(paymentStatus.stockReservationMinutesLeft / 40) * 100}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  </div>
-)}
 
-                    {orderCreated && !mercadoPagoData && !isProcessingPayment && !mercadoPagoLoading && (
-                      <div className="checkout-payment-fallback">
-                        <AlertCircle className="checkout-icon" />
-                        <h4>Orden creada - Preparando pago</h4>
-                        <p>Tu orden #{orderId} ha sido creada. Preparamos tu pago seguro.</p>
-                        <button 
-                          className="checkout-btn checkout-btn-primary"
-                          onClick={retryPayment}
-                          disabled={mercadoPagoLoading}
+        {discountConfig.enabled &&
+          (discountConfig.applyToAnonymous ||
+            isAuthenticated) && (
+            <div className="checkout-discount-banner">
+              <Gift aria-hidden="true" />
+              <div>
+                <strong>
+                  Beneficio de primera compra
+                </strong>
+                <span>
+                  Ingresa tu correo y validaremos si aplica
+                  un {discountConfig.discountPercentage}% de
+                  descuento.
+                </span>
+              </div>
+              <span className="checkout-discount-badge">
+                <Percent aria-hidden="true" />
+                {discountConfig.discountPercentage}% OFF
+              </span>
+            </div>
+          )}
+
+        <div className="checkout-layout">
+          <div className="checkout-form-column">
+            <section className="checkout-section">
+              <div className="checkout-section-heading">
+                <span className="checkout-section-symbol" aria-hidden="true">
+                  <User />
+                </span>
+                <div>
+                  <h2>Datos de contacto</h2>
+                  <p>
+                    Te enviaremos la confirmación y el estado
+                    del pedido.
+                  </p>
+                </div>
+                {contactIsValid && (
+                  <Check
+                    className="checkout-section-check"
+                    aria-label="Sección completa"
+                  />
+                )}
+              </div>
+
+              {isAuthenticated && userData ? (
+                <div className="checkout-account-card">
+                  <span className="checkout-account-icon">
+                    <User aria-hidden="true" />
+                  </span>
+                  <div>
+                    <strong>
+                      {userData.firstName}{' '}
+                      {userData.lastName}
+                    </strong>
+                    <span>{userData.email}</span>
+                    <span>
+                      {userData.phone ||
+                        'Teléfono no registrado'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/perfil')}
+                  >
+                    Editar perfil
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="checkout-login-note">
+                    <User aria-hidden="true" />
+                    <span>
+                      Compra como invitado o{' '}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push('/login')
+                        }
+                      >
+                        inicia sesión
+                      </button>{' '}
+                      para usar tus direcciones guardadas.
+                    </span>
+                  </div>
+
+                  <div className="checkout-form-grid checkout-form-grid-two">
+                    <label className="checkout-field">
+                      <span>Nombre</span>
+                      <input
+                        type="text"
+                        value={guestInfo.firstName}
+                        onChange={(event) =>
+                          setGuestInfo((current) => ({
+                            ...current,
+                            firstName: event.target.value
+                          }))
+                        }
+                        autoComplete="given-name"
+                        placeholder="Tu nombre"
+                      />
+                    </label>
+
+                    <label className="checkout-field">
+                      <span>Apellido</span>
+                      <input
+                        type="text"
+                        value={guestInfo.lastName}
+                        onChange={(event) =>
+                          setGuestInfo((current) => ({
+                            ...current,
+                            lastName: event.target.value
+                          }))
+                        }
+                        autoComplete="family-name"
+                        placeholder="Tu apellido"
+                      />
+                    </label>
+
+                    <label className="checkout-field">
+                      <span>
+                        <Mail aria-hidden="true" />
+                        Correo
+                      </span>
+                      <input
+                        type="email"
+                        value={guestInfo.email}
+                        onChange={(event) =>
+                          setGuestInfo((current) => ({
+                            ...current,
+                            email: event.target.value
+                          }))
+                        }
+                        autoComplete="email"
+                        placeholder="correo@ejemplo.com"
+                      />
+                      {checkingFirstPurchase && (
+                        <small>
+                          Validando beneficio de primera compra…
+                        </small>
+                      )}
+                    </label>
+
+                    <label className="checkout-field">
+                      <span>
+                        <Phone aria-hidden="true" />
+                        Teléfono
+                      </span>
+                      <input
+                        type="tel"
+                        value={guestInfo.phone}
+                        onChange={(event) =>
+                          setGuestInfo((current) => ({
+                            ...current,
+                            phone: event.target.value
+                          }))
+                        }
+                        autoComplete="tel"
+                        placeholder="+57 300 000 0000"
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+            </section>
+
+            <section className="checkout-section">
+              <div className="checkout-section-heading">
+                <span className="checkout-section-symbol" aria-hidden="true">
+                  <MapPin />
+                </span>
+                <div>
+                  <h2>Entrega</h2>
+                  <p>
+                    Selecciona o escribe la dirección donde
+                    recibirás tu pedido.
+                  </p>
+                </div>
+                {shippingIsValid && (
+                  <Check
+                    className="checkout-section-check"
+                    aria-label="Sección completa"
+                  />
+                )}
+              </div>
+
+              {isAuthenticated ? (
+                <>
+                  {userData?.addresses?.length ? (
+                    <div className="checkout-address-list">
+                      {userData.addresses.map((address) => {
+                        const selected =
+                          selectedAddress?.id === address.id;
+
+                        return (
+                          <article
+                            key={address.id}
+                            className={`checkout-address-card ${
+                              selected
+                                ? 'checkout-address-selected'
+                                : ''
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className="checkout-address-select"
+                              onClick={() =>
+                                setSelectedAddress(address)
+                              }
+                              aria-pressed={selected}
+                            >
+                              <span className="checkout-radio">
+                                {selected && (
+                                  <Check aria-hidden="true" />
+                                )}
+                              </span>
+                              <span>
+                                <strong>
+                                  {address.address}
+                                </strong>
+                                <small>
+                                  {address.city},{' '}
+                                  {address.state}
+                                </small>
+                                <small>
+                                  {address.country}
+                                  {address.postalCode
+                                    ? ` · ${address.postalCode}`
+                                    : ''}
+                                </small>
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className="checkout-address-delete"
+                              onClick={() =>
+                                void deleteAddress(address.id)
+                              }
+                              disabled={addressSaving}
+                              aria-label="Eliminar dirección"
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="checkout-empty-address">
+                      <MapPin aria-hidden="true" />
+                      <p>
+                        Todavía no tienes direcciones guardadas.
+                      </p>
+                    </div>
+                  )}
+
+                  {addingAddress ? (
+                    <div className="checkout-address-form">
+                      <AddressFields
+                        address={newAddress}
+                        onChange={setNewAddress}
+                      />
+
+                      <div className="checkout-inline-actions">
+                        <button
+                          type="button"
+                          className="checkout-secondary-button"
+                          onClick={() => {
+                            setAddingAddress(false);
+                            setNewAddress(EMPTY_ADDRESS);
+                          }}
                         >
-                          {mercadoPagoLoading ? (
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="checkout-primary-button"
+                          onClick={() => void saveAddress()}
+                          disabled={addressSaving}
+                        >
+                          {addressSaving ? (
                             <>
-                              <Loader2 className="checkout-icon spinning" />
-                              Intentando nuevamente...
+                              <Loader2
+                                className="checkout-spin"
+                                aria-hidden="true"
+                              />
+                              Guardando
                             </>
                           ) : (
-                            'Continuar con el pago'
+                            'Guardar dirección'
                           )}
                         </button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="checkout-add-address"
+                      onClick={() => setAddingAddress(true)}
+                    >
+                      <Plus aria-hidden="true" />
+                      Agregar otra dirección
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="checkout-address-form checkout-address-form-guest">
+                  <AddressFields
+                    address={guestAddress}
+                    onChange={setGuestAddress}
+                  />
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </section>
 
-          <div className="checkout-sidebar">
-            <div className="checkout-sidebar-sticky">
-              <div className="checkout-card">
-                <div className="checkout-card-header navy">
-                  <h3 className="checkout-card-header-title">
-                    <Package className="checkout-icon" />
-                    Resumen de Compra
-                  </h3>
-                  <span className="checkout-card-header-badge">{totalItems} {totalItems === 1 ? 'producto' : 'productos'}</span>
+            <section
+              ref={paymentSectionRef}
+              className="checkout-section checkout-payment-section"
+            >
+              <div className="checkout-section-heading">
+                <span className="checkout-section-symbol" aria-hidden="true">
+                  <CreditCard />
+                </span>
+                <div>
+                  <h2>Pago</h2>
+                  <p>
+                    El total final permanece visible en el
+                    resumen de compra.
+                  </p>
                 </div>
-                <div className="checkout-card-content">
-                  <div className="checkout-summary-items">
-                    {cartItems.map((item) => (
-                      <div key={item.id} className="checkout-summary-item">
-                        <span className="checkout-summary-item-name">
-                          {item.name.length > 20 ? item.name.substring(0, 20) + "..." : item.name} x{item.quantity}
-                          {item.hasDiscount && item.discountPercentage && item.discountPercentage > 0 && (
-                            <span className="checkout-summary-item-discount"> (-{item.discountPercentage}%)</span>
+                {mercadoPagoData?.preferenceId && (
+                  <Check
+                    className="checkout-section-check"
+                    aria-label="Pago preparado"
+                  />
+                )}
+              </div>
+
+              {!mercadoPagoData?.preferenceId ? (
+                <div className="checkout-payment-start">
+                  <div className="checkout-payment-brand">
+                    <CreditCard aria-hidden="true" />
+                    <div>
+                      <strong>Mercado Pago</strong>
+                      <span>
+                        PSE, tarjetas y medios disponibles en
+                        la plataforma.
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="checkout-pay-button"
+                    onClick={() => void preparePayment()}
+                    disabled={
+                      !checkoutIsReady || preparingPayment
+                    }
+                  >
+                    {preparingPayment ? (
+                      <>
+                        <Loader2
+                          className="checkout-spin"
+                          aria-hidden="true"
+                        />
+                        Preparando pago
+                      </>
+                    ) : (
+                      <>
+                        Preparar pago seguro
+                        <span>
+                          {formatPrice(
+                            checkoutPricing.total
                           )}
                         </span>
-                        <span className="checkout-summary-item-price">{formatPrice(item.price * item.quantity)}</span>
-                      </div>
-                    ))}
+                      </>
+                    )}
+                  </button>
+
+                  {!checkoutIsReady && (
+                    <p className="checkout-payment-help">
+                      Completa los datos marcados arriba para
+                      habilitar el pago.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="checkout-payment-ready">
+                  <div className="checkout-payment-ready-title">
+                    <Check aria-hidden="true" />
+                    <div>
+                      <strong>Pago preparado</strong>
+                      <span>
+                        Orden #{orderId}. Revisa el total y
+                        continúa con Mercado Pago.
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="checkout-summary-divider">
-  {checkoutPricing.originalSubtotal > 0 && (
-    <div className="checkout-summary-row checkout-summary-original">
-      <span>Subtotal original</span>
-      <span className="checkout-original-price">{formatPrice(checkoutPricing.originalSubtotal)}</span>
-    </div>
-  )}
+                  {mercadoPagoInitialized && publicKey ? (
+                    <div className="checkout-wallet">
+                      <Wallet
+                        initialization={{
+                          preferenceId:
+                            mercadoPagoData.preferenceId,
+                          redirectMode: 'self'
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="checkout-pay-button"
+                      onClick={() => {
+                        window.location.href =
+                          mercadoPagoData.initPoint;
+                      }}
+                    >
+                      Ir a Mercado Pago
+                      <span>
+                        {formatPrice(
+                          checkoutPricing.total
+                        )}
+                      </span>
+                    </button>
+                  )}
 
-  {checkoutPricing.productsDiscount > 0 && (
-    <div className="checkout-summary-row checkout-discount-savings">
-      <span>
-        <Check className="checkout-icon" size={12} />
-        Descuento en productos
-      </span>
-      <span className="checkout-savings">-{formatPrice(checkoutPricing.productsDiscount)}</span>
-    </div>
-  )}
+                  <button
+                    type="button"
+                    className="checkout-retry-button"
+                    onClick={() => void retryPayment()}
+                    disabled={mercadoPagoLoading}
+                  >
+                    Volver a generar el enlace de pago
+                  </button>
+                </div>
+              )}
 
-  <div className="checkout-summary-row">
-    <span>Subtotal productos</span>
-    <span>{formatPrice(checkoutPricing.productsSubtotal)}</span>
-  </div>
+              {paymentStatus && (
+                <div className="checkout-payment-status">
+                  <div>
+                    <span>Estado</span>
+                    <strong>
+                      {paymentStatus.mercadoPagoStatus ||
+                        paymentStatus.status}
+                    </strong>
+                  </div>
 
-  {checkoutPricing.firstPurchaseStatus !== 'hidden' && step === 3 && (
-    <div className={`checkout-summary-row checkout-first-purchase-discount ${checkoutPricing.firstPurchaseStatus === 'estimated' ? 'estimated' : ''}`}>
-      <span>
-        <Gift className="checkout-icon" size={12} />
-        {checkoutPricing.firstPurchaseStatus === 'estimated'
-          ? `Descuento primera compra (estimado ${checkoutPricing.firstPurchasePercentage || 0}%)`
-          : `Descuento primera compra (${checkoutPricing.firstPurchasePercentage || 0}%)`}
-      </span>
-      <span className="checkout-savings">-{formatPrice(checkoutPricing.firstPurchaseDiscount)}</span>
-    </div>
-  )}
+                  {paymentStatus.paymentMethod && (
+                    <div>
+                      <span>Medio</span>
+                      <strong>
+                        {paymentStatus.paymentMethod}
+                      </strong>
+                    </div>
+                  )}
 
-  <div className="checkout-summary-row">
-    <span>Envío</span>
-    <span className={checkoutPricing.shippingCost === 0 ? "free" : ""}>
-      {checkoutPricing.shippingCost === 0 ? "Gratis" : formatPrice(checkoutPricing.shippingCost)}
-    </span>
-  </div>
+                  {paymentStatus.stockReservationMinutesLeft !==
+                    undefined && (
+                    <div>
+                      <span>
+                        <Clock aria-hidden="true" />
+                        Reserva
+                      </span>
+                      <strong>
+                        {paymentStatus.stockReservationMinutesLeft >
+                        0
+                          ? `${paymentStatus.stockReservationMinutesLeft} min`
+                          : 'Expirada'}
+                      </strong>
+                    </div>
+                  )}
+                </div>
+              )}
 
-  <div className="checkout-summary-total">
-    <span className="checkout-summary-total-label">Total</span>
-    <span className="checkout-summary-total-value">
-      {formatPrice(checkoutPricing.total)}
-    </span>
-  </div>
-</div>
+              <div className="checkout-security-row">
+                <span>
+                  <Lock aria-hidden="true" />
+                  Pago protegido
+                </span>
+                <span>
+                  <Shield aria-hidden="true" />
+                  Datos cifrados
+                </span>
+                <span>
+                  <Check aria-hidden="true" />
+                  Confirmación inmediata
+                </span>
+              </div>
+            </section>
+          </div>
 
-<p className="checkout-summary-iva">Incluye IVA</p>
+          <aside
+            ref={summarySectionRef}
+            className="checkout-summary-column"
+            aria-label="Resumen de compra"
+          >
+            <div className="checkout-summary-sticky">
+              <div className="checkout-summary-header">
+                <div>
+                  <span>RESUMEN</span>
+                  <h2>Resumen de tu compra</h2>
+                </div>
+                <span className="checkout-summary-count">
+                  {totalItems}{' '}
+                  {totalItems === 1
+                    ? 'unidad'
+                    : 'unidades'}
+                </span>
+              </div>
 
-<div className="checkout-trust-badges">
-  <div className="checkout-trust-badges-grid">
-    <div className="checkout-trust-badge">
-      <div className="checkout-trust-badge-icon mint">
-        <Check className="checkout-icon" />
-      </div>
-      <span>Pago Seguro</span>
-    </div>
-    <div className="checkout-trust-badge">
-      <div className="checkout-trust-badge-icon purple">
-        <Package className="checkout-icon" />
-      </div>
-      <span>Envío Rápido</span>
-    </div>
-    <div className="checkout-trust-badge">
-      <div className="checkout-trust-badge-icon orange">
-        <Star className="checkout-icon" />
-      </div>
-      <span>Calidad Garantizada</span>
-    </div>
-    <div className="checkout-trust-badge">
-      <div className="checkout-trust-badge-icon coral">
-        <Shield size={14} />
-      </div>
-      <span>100% Seguro</span>
-    </div>
-  </div>
-</div>
+              <div className="checkout-summary-items">
+                {cartItems.map((item) => (
+                  <article
+                    key={item.id}
+                    className="checkout-summary-item"
+                  >
+                    <div className="checkout-summary-image">
+                      <Image
+                        src={item.image}
+                        alt={item.name}
+                        fill
+                        sizes="84px"
+                        onError={(event) => {
+                          event.currentTarget.src =
+                            '/images/placeholder.png';
+                        }}
+                      />
+                      <span>{item.quantity}</span>
+                    </div>
 
-{!isAuthenticated && discountConfig.enabled && discountConfig.applyToAnonymous && step < 3 && (
-  <div className="checkout-first-purchase-prompt">
-    <Gift className="checkout-icon" size={16} />
-    <p>
-      <strong>¡Primera compra!</strong>
-      <br />
-      <small>{checkingFirstPurchase ? 'Validando tu correo...' : firstPurchaseEligibility === true ? `Tu correo califica para ${discountConfig.discountPercentage}% de descuento` : 'Ingresa tu correo para validar si aplica el descuento'}</small>
-    </p>
-  </div>
-)}
+                    <div className="checkout-summary-product">
+                      <div className="checkout-summary-product-top">
+                        <h3>{item.name}</h3>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void removeItem(item.id)
+                          }
+                          disabled={cartUpdating}
+                          aria-label={`Eliminar ${item.name}`}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </button>
+                      </div>
+
+                      <p>
+                        Talla {item.size} · {item.color}
+                      </p>
+
+                      <div className="checkout-summary-product-bottom">
+                        <div className="checkout-quantity">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void updateQuantity(
+                                item.id,
+                                item.quantity - 1
+                              )
+                            }
+                            disabled={
+                              cartUpdating ||
+                              item.quantity <= 1
+                            }
+                            aria-label="Reducir cantidad"
+                          >
+                            <Minus aria-hidden="true" />
+                          </button>
+
+                          <span>{item.quantity}</span>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void updateQuantity(
+                                item.id,
+                                item.quantity + 1
+                              )
+                            }
+                            disabled={
+                              cartUpdating ||
+                              (item.maxStock !== undefined &&
+                                item.quantity >=
+                                  item.maxStock)
+                            }
+                            aria-label="Aumentar cantidad"
+                          >
+                            <Plus aria-hidden="true" />
+                          </button>
+                        </div>
+
+                        {renderItemPrice(item)}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <div className="checkout-summary-pricing">
+                <div>
+                  <span>Subtotal</span>
+                  <strong>
+                    {formatPrice(
+                      checkoutPricing.productsSubtotal
+                    )}
+                  </strong>
+                </div>
+
+                {checkoutPricing.productsDiscount > 0 && (
+                  <div>
+                    <span>Descuentos de productos</span>
+                    <strong>
+                      −
+                      {formatPrice(
+                        checkoutPricing.productsDiscount
+                      )}
+                    </strong>
+                  </div>
+                )}
+
+                {checkoutPricing.firstPurchaseStatus !==
+                  'hidden' &&
+                  checkoutPricing.firstPurchaseDiscount >
+                    0 && (
+                    <div className="checkout-first-purchase-row">
+                      <span>
+                        <Gift aria-hidden="true" />
+                        Primera compra
+                        {checkoutPricing.firstPurchaseStatus ===
+                        'estimated'
+                          ? ' estimada'
+                          : ''}
+                      </span>
+                      <strong>
+                        −
+                        {formatPrice(
+                          checkoutPricing.firstPurchaseDiscount
+                        )}
+                      </strong>
+                    </div>
+                  )}
+
+                <div>
+                  <span>Envío</span>
+                  <strong>
+                    {checkoutPricing.shippingCost === 0
+                      ? 'Gratis'
+                      : formatPrice(
+                          checkoutPricing.shippingCost
+                        )}
+                  </strong>
                 </div>
               </div>
 
-              <div className="checkout-promo-card">
-                <div className="checkout-promo-card-content">
-                  <div className="checkout-promo-sparkles">
-                    <Sparkles className="checkout-icon" />
-                  </div>
-                  <h4>
-                    <Star className="checkout-icon" fill="currentColor" />
-                    Dulces Sueños Garantizados
-                  </h4>
-                  <p>Nuestros pijamas están hechos con amor para que tus pequeños viajen a las estrellas cada noche.</p>
-                </div>
+              <div className="checkout-summary-total">
+                <span>
+                  <strong>Total</strong>
+                  <small>
+                    Impuestos incluidos cuando aplique
+                  </small>
+                </span>
+                <strong>
+                  {formatPrice(checkoutPricing.total)}
+                </strong>
+              </div>
+
+              {!mercadoPagoData?.preferenceId && (
+                <button
+                  type="button"
+                  className="checkout-summary-pay"
+                  onClick={() => void preparePayment()}
+                  disabled={
+                    !checkoutIsReady || preparingPayment
+                  }
+                >
+                  {preparingPayment ? (
+                    <>
+                      <Loader2
+                        className="checkout-spin"
+                        aria-hidden="true"
+                      />
+                      Preparando
+                    </>
+                  ) : (
+                    <>
+                      Continuar al pago
+                      <span aria-hidden="true">→</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              <button
+                type="button"
+                className="checkout-summary-refresh"
+                onClick={() => void refreshCart()}
+                disabled={cartUpdating}
+              >
+                {cartUpdating ? (
+                  <Loader2
+                    className="checkout-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Package aria-hidden="true" />
+                )}
+                Actualizar carrito
+              </button>
+
+              <div className="checkout-summary-trust">
+                <Lock aria-hidden="true" />
+                <span>
+                  No se realizará ningún cobro hasta que
+                  confirmes en Mercado Pago.
+                </span>
               </div>
             </div>
-          </div>
+          </aside>
         </div>
+      </div>
 
-        <div className="checkout-navigation-buttons">
-          {step > 1 && (
-            <button className="checkout-btn checkout-btn-outline checkout-btn-lg" onClick={prevStep} disabled={loading || isProcessingPayment}>
-              <ChevronLeft className="checkout-icon" />
-              Anterior
-            </button>
-          )}
+      <div className="checkout-mobile-bar">
+        <button
+          type="button"
+          className="checkout-mobile-cart"
+          onClick={() =>
+            summarySectionRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            })
+          }
+          aria-label="Ver resumen de compra"
+        >
+          <span className="checkout-mobile-thumbnails">
+            {cartItems.slice(0, 3).map((item) => (
+              <span key={item.id}>
+                <Image
+                  src={item.image}
+                  alt=""
+                  fill
+                  sizes="32px"
+                />
+              </span>
+            ))}
+          </span>
 
-          {step === 1 && cartItems.length > 0 && (
-            <button className="checkout-btn checkout-btn-outline checkout-btn-lg" onClick={() => (window.location.href = "/")}>
-              <ChevronLeft className="checkout-icon" />
-              Seguir Comprando
-            </button>
-          )}
+          <span>
+            <small>
+              Ver pedido · {totalItems}{' '}
+              {totalItems === 1
+                ? 'unidad'
+                : 'unidades'}
+            </small>
+            <strong>
+              {formatPrice(checkoutPricing.total)}
+            </strong>
+          </span>
+        </button>
 
-          {step < 3 && cartItems.length > 0 && (
-            <button 
-              className="checkout-btn checkout-btn-primary checkout-btn-lg" 
-              onClick={nextStep} 
-              disabled={
-                (step === 2 && (
-                  (isAuthenticated && !selectedAddress) || 
-                  (!isAuthenticated && (!anonymousUserInfo.email || !anonymousUserInfo.firstName || !anonymousUserInfo.phone || !selectedAddress))
-                )) || 
-                loading || 
-                isProcessingPayment ||
-                needsCartAdjustment
-              }
-            >
-              Continuar
-              <ChevronRight className="checkout-icon" />
-            </button>
-          )}
-        </div>
-      </main>
-    </div>
+        <button
+          type="button"
+          className="checkout-mobile-pay"
+          onClick={primaryAction}
+          disabled={
+            (!mercadoPagoData?.preferenceId &&
+              !checkoutIsReady) ||
+            preparingPayment
+          }
+        >
+          {preparingPayment
+            ? 'Preparando…'
+            : mercadoPagoData?.preferenceId
+              ? 'Pagar'
+              : 'Continuar'}
+        </button>
+      </div>
+    </main>
   );
 };
+
+const AddressFields = ({
+  address,
+  onChange
+}: {
+  address: AddressForm;
+  onChange: (
+    value:
+      | AddressForm
+      | ((current: AddressForm) => AddressForm)
+  ) => void;
+}) => (
+  <div className="checkout-form-grid checkout-form-grid-two">
+    <label className="checkout-field checkout-field-full">
+      <span>
+        <MapPin aria-hidden="true" />
+        Dirección
+      </span>
+      <input
+        type="text"
+        value={address.address}
+        onChange={(event) =>
+          onChange((current) => ({
+            ...current,
+            address: event.target.value
+          }))
+        }
+        autoComplete="street-address"
+        placeholder="Calle, carrera, número y complemento"
+      />
+    </label>
+
+    <label className="checkout-field">
+      <span>Ciudad</span>
+      <input
+        type="text"
+        value={address.city}
+        onChange={(event) =>
+          onChange((current) => ({
+            ...current,
+            city: event.target.value
+          }))
+        }
+        autoComplete="address-level2"
+        placeholder="Medellín"
+      />
+    </label>
+
+    <label className="checkout-field">
+      <span>Departamento</span>
+      <input
+        type="text"
+        value={address.state}
+        onChange={(event) =>
+          onChange((current) => ({
+            ...current,
+            state: event.target.value
+          }))
+        }
+        autoComplete="address-level1"
+        placeholder="Antioquia"
+      />
+    </label>
+
+    <label className="checkout-field">
+      <span>País</span>
+      <input
+        type="text"
+        value={address.country}
+        onChange={(event) =>
+          onChange((current) => ({
+            ...current,
+            country: event.target.value
+          }))
+        }
+        autoComplete="country-name"
+        placeholder="Colombia"
+      />
+    </label>
+
+    <label className="checkout-field">
+      <span>Código postal</span>
+      <input
+        type="text"
+        value={address.postalCode || ''}
+        onChange={(event) =>
+          onChange((current) => ({
+            ...current,
+            postalCode: event.target.value
+          }))
+        }
+        autoComplete="postal-code"
+        placeholder="Opcional"
+      />
+    </label>
+  </div>
+);
 
 export default CheckoutPage;

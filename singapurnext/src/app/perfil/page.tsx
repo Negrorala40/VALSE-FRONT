@@ -5,7 +5,7 @@ const PerfilPage: React.FC = () => {
   return (
     <div>
       
-      <div style={{marginTop: '4rem'}}>
+      <div style={{marginTop: '2rem'}}>
         <Perfil />
       </div>
     </div>

@@ -1,18 +1,28 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import styles from './page.module.css';
 import axios from 'axios';
+import {
+  ArrowRight,
+  RotateCcw,
+  ShoppingBag
+} from 'lucide-react';
+
 import { MENU_PRODUCTS } from '../utils/Api';
+import styles from './page.module.css';
 
 interface Img {
   id: number;
   fileName: string;
   imageUrl: string;
 }
-
 
 interface ProductVariant {
   id: number;
@@ -38,378 +48,524 @@ interface Product {
   enabled?: boolean;
 }
 
+interface FeaturedProduct {
+  id: number;
+  name: string;
+  image: string;
+  gender: ProductGender;
+  price: number | null;
+}
+
+interface CategoryImages {
+  niños: string;
+  niñas: string;
+  unisex: string;
+  oferta: string;
+}
+
+const FALLBACK_IMAGE = '/images/placeholder.jpg';
+
+const EMPTY_CATEGORIES: CategoryImages = {
+  niños: FALLBACK_IMAGE,
+  niñas: FALLBACK_IMAGE,
+  unisex: FALLBACK_IMAGE,
+  oferta: FALLBACK_IMAGE
+};
+
+const formatPrice = (price: number | null) => {
+  if (price === null) return '';
+
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(price);
+};
+
+const getAvailableVariants = (product: Product) =>
+  product.variants.filter(
+    (variant) =>
+      variant.enabled !== false &&
+      variant.stock > 0 &&
+      Array.isArray(variant.images) &&
+      variant.images.some(
+        (image) => Boolean(image.imageUrl?.trim())
+      )
+  );
+
+const getProductImages = (product: Product) =>
+  getAvailableVariants(product).flatMap((variant) =>
+    variant.images
+      .map((image) => image.imageUrl?.trim())
+      .filter((imageUrl): imageUrl is string =>
+        Boolean(imageUrl)
+      )
+  );
+
+const getProductPrice = (product: Product) => {
+  const prices = getAvailableVariants(product)
+    .map((variant) => Number(variant.price))
+    .filter(
+      (price) => Number.isFinite(price) && price > 0
+    );
+
+  return prices.length > 0 ? Math.min(...prices) : null;
+};
+
+const filterAvailableProducts = (
+  products: Product[]
+): Product[] =>
+  products.filter(
+    (product) =>
+      product.enabled !== false &&
+      getAvailableVariants(product).length > 0
+  );
+
+const getStableImage = (
+  products: Product[],
+  fallback = FALLBACK_IMAGE
+) => {
+  const orderedProducts = [...products].sort(
+    (first, second) => first.id - second.id
+  );
+
+  for (const product of orderedProducts) {
+    const firstImage = getProductImages(product)[0];
+
+    if (firstImage) {
+      return firstImage;
+    }
+  }
+
+  return fallback;
+};
+
+const getFeaturedProduct = (
+  products: Product[]
+): FeaturedProduct | null => {
+  const candidates = [...products]
+    .map((product) => ({
+      product,
+      image: getProductImages(product)[0],
+      price: getProductPrice(product),
+      stock: getAvailableVariants(product).reduce(
+        (total, variant) => total + variant.stock,
+        0
+      )
+    }))
+    .filter(
+      (
+        candidate
+      ): candidate is {
+        product: Product;
+        image: string;
+        price: number | null;
+        stock: number;
+      } => Boolean(candidate.image)
+    )
+    .sort((first, second) => {
+      if (second.stock !== first.stock) {
+        return second.stock - first.stock;
+      }
+
+      return first.product.id - second.product.id;
+    });
+
+  const featured = candidates[0];
+
+  if (!featured) return null;
+
+  return {
+    id: featured.product.id,
+    name: featured.product.name,
+    image: featured.image,
+    gender: featured.product.gender,
+    price: featured.price
+  };
+};
+
+const SafeProductImage = ({
+  src,
+  alt,
+  fill = true,
+  className,
+  sizes,
+  priority = false
+}: {
+  src: string;
+  alt: string;
+  fill?: boolean;
+  className: string;
+  sizes: string;
+  priority?: boolean;
+}) => {
+  const [imageSource, setImageSource] = useState(
+    src || FALLBACK_IMAGE
+  );
+
+  useEffect(() => {
+    setImageSource(src || FALLBACK_IMAGE);
+  }, [src]);
+
+  return (
+    <Image
+      src={imageSource}
+      alt={alt}
+      fill={fill}
+      className={className}
+      sizes={sizes}
+      priority={priority}
+      onError={() => {
+        if (imageSource !== FALLBACK_IMAGE) {
+          setImageSource(FALLBACK_IMAGE);
+        }
+      }}
+    />
+  );
+};
+
 const Home = () => {
   const categoriesRef = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState({
-    categories: false
-  });
 
-  // Estado para productos aleatorios
-  const [categoryImages, setCategoryImages] = useState<{
-    niños: string;
-    niñas: string;
-    unisex: string;
-    oferta: string;
-  }>({
-    niños: '/images/placeholder.jpg',
-    niñas: '/images/placeholder.jpg',
-    unisex: '/images/placeholder.jpg',
-    oferta: '/images/placeholder.jpg'
-  });
+  const [categoryImages, setCategoryImages] =
+    useState<CategoryImages>(EMPTY_CATEGORIES);
+  const [featuredProduct, setFeaturedProduct] =
+    useState<FeaturedProduct | null>(null);
+  const [categoriesVisible, setCategoriesVisible] =
+    useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [error, setError] = useState('');
 
-  // Función para filtrar productos habilitados y con stock
-  const filterAvailableProducts = (products: Product[]): Product[] => {
-    return products.filter(product => {
-      if (product.enabled === false) return false;
-      return product.variants.some(variant => 
-        variant.enabled !== false && 
-        variant.stock > 0 && 
-        variant.images && 
-        variant.images.length > 0
-      );
-    });
-  };
-
-  // Función para obtener imágenes aleatorias de productos
   useEffect(() => {
-    const fetchCategoryImages = async () => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      setError('');
+
       try {
-        setLoading(true);
-        setError(null);
-        
-        const response = await axios.get<Product[]>(`${MENU_PRODUCTS}/active`);
-        const allProducts = response.data;
-        const availableProducts = filterAvailableProducts(allProducts);
-        
-        const niñosProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑOS);
-        const niñasProducts = availableProducts.filter(p => p.gender === ProductGender.NIÑAS);
-        const unisexProducts = availableProducts.filter(p => p.gender === ProductGender.UNISEX);
-        
-        const getValidImagesFromProduct = (product: Product): string[] => {
-          const images: string[] = [];
-          product.variants.forEach(variant => {
-            if (variant.enabled !== false && variant.stock > 0 && variant.images) {
-              variant.images.forEach(img => {
-                if (img.imageUrl && img.imageUrl.trim() !== '') {
-                  images.push(img.imageUrl);
-                }
-              });
-            }
-          });
-          return images;
-        };
+        const response = await axios.get<Product[]>(
+          `${MENU_PRODUCTS}/active`
+        );
 
-        const getRandomImage = (productArray: Product[]): string => {
-          if (productArray.length === 0) return '/images/placeholder.jpg';
-          
-          const allImages: string[] = [];
-          productArray.forEach(product => {
-            const productImages = getValidImagesFromProduct(product);
-            allImages.push(...productImages);
-          });
-          
-          if (allImages.length === 0) return '/images/placeholder.jpg';
-          return allImages[Math.floor(Math.random() * allImages.length)];
-        };
+        const products = Array.isArray(response.data)
+          ? response.data
+          : [];
 
-        const ofertaProducts = [...availableProducts]
-          .filter(p => {
-            const firstVariant = p.variants.find(v => 
-              v.enabled !== false && 
-              v.stock > 0 && 
-              v.images && 
-              v.images.length > 0
-            );
-            return firstVariant?.price;
-          })
-          .sort((a, b) => {
-            const aVariant = a.variants.find(v => v.enabled !== false && v.stock > 0);
-            const bVariant = b.variants.find(v => v.enabled !== false && v.stock > 0);
-            const aPrice = aVariant?.price || Infinity;
-            const bPrice = bVariant?.price || Infinity;
-            return aPrice - bPrice;
-          })
-          .slice(0, 10);
+        const availableProducts =
+          filterAvailableProducts(products);
+
+        const niñosProducts = availableProducts.filter(
+          (product) =>
+            product.gender === ProductGender.NIÑOS
+        );
+
+        const niñasProducts = availableProducts.filter(
+          (product) =>
+            product.gender === ProductGender.NIÑAS
+        );
+
+        const unisexProducts = availableProducts.filter(
+          (product) =>
+            product.gender === ProductGender.UNISEX
+        );
+
+        const offerProducts = [...availableProducts]
+          .filter(
+            (product) => getProductPrice(product) !== null
+          )
+          .sort((first, second) => {
+            const firstPrice =
+              getProductPrice(first) ??
+              Number.POSITIVE_INFINITY;
+            const secondPrice =
+              getProductPrice(second) ??
+              Number.POSITIVE_INFINITY;
+
+            return firstPrice - secondPrice;
+          });
 
         setCategoryImages({
-          niños: getRandomImage(niñosProducts),
-          niñas: getRandomImage(niñasProducts),
-          unisex: getRandomImage(unisexProducts),
-          oferta: getRandomImage(ofertaProducts)
+          niños: getStableImage(niñosProducts),
+          niñas: getStableImage(niñasProducts),
+          unisex: getStableImage(unisexProducts),
+          oferta: getStableImage(offerProducts)
         });
 
-        setLoading(false);
-      } catch (error: any) {
-        console.error('Error al cargar imágenes:', error);
-        setError('Error al cargar las imágenes de categorías');
+        setFeaturedProduct(
+          getFeaturedProduct(availableProducts)
+        );
+      } catch (requestError) {
+        console.error(
+          'Error cargando productos de la portada:',
+          requestError
+        );
+
+        setError(
+          'No pudimos actualizar las prendas destacadas.'
+        );
+        setCategoryImages(EMPTY_CATEGORIES);
+        setFeaturedProduct(null);
+      } finally {
         setLoading(false);
       }
     };
 
-    fetchCategoryImages();
-  }, []);
+    void fetchProducts();
+  }, [loadAttempt]);
 
-  // Intersection Observer
   useEffect(() => {
+    const target = categoriesRef.current;
+
+    if (!target) return;
+
     const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const section = entry.target.getAttribute('data-section');
-            if (section === 'categories') setIsVisible(prev => ({...prev, categories: true}));
-          }
-        });
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setCategoriesVisible(true);
+          observer.disconnect();
+        }
       },
       {
-        threshold: 0.2,
-        rootMargin: '0px 0px -50px 0px'
+        threshold: 0.12,
+        rootMargin: '0px 0px -40px 0px'
       }
     );
 
-    if (categoriesRef.current) observer.observe(categoriesRef.current);
+    observer.observe(target);
+
     return () => observer.disconnect();
   }, []);
 
-  if (error) {
-    return (
-      <div className={styles.homeContainer}>
-        <div className={styles.errorContainer}>
-          <h2>Error al cargar contenido</h2>
-          <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Reintentar</button>
-        </div>
-      </div>
-    );
-  }
+  const heroImage =
+    featuredProduct?.image || categoryImages.unisex;
+
+  const heroMeta = useMemo(
+    () => ({
+      name:
+        featuredProduct?.name ||
+        'Colección esencial VALSE',
+      gender:
+        featuredProduct?.gender === ProductGender.NIÑOS
+          ? 'Niños'
+          : featuredProduct?.gender ===
+              ProductGender.NIÑAS
+            ? 'Niñas'
+            : 'Unisex',
+      price: formatPrice(featuredProduct?.price ?? null)
+    }),
+    [featuredProduct]
+  );
 
   return (
-    <>
-      <div className={styles.homeContainer}>
-        <main className={styles.mainContent}>
-          {/* HERO SECTION */}
-          <section className={styles.heroSection}>
-            {/* Top decorative line */}
-            <div className={styles.heroTopLine} />
-
-            {/* Contenedor con imágenes de fondo - Desktop y Mobile */}
-            <div className={styles.heroImageContainer}>
-              {/* Imagen para Desktop */}
-              <div className={styles.heroBackgroundImageWrapperDesktop}>
-                <Image
-                  src=""
-                  alt="Fondo de pijama infantil espacial - Desktop"
-                  fill
-                  className={styles.heroBackgroundImage}
-                  priority
-                  sizes="(min-width: 769px) 100vw, 0px"
-                  quality={85}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = '/images/placeholder.jpg';
-                  }}
-                />
-              </div>
-
-              {/* Imagen para Móvil */}
-              <div className={styles.heroBackgroundImageWrapperMobile}>
-                <Image
-                  src=""
-                  alt="Fondo de pijama infantil espacial - Mobile"
-                  fill
-                  className={styles.heroBackgroundImage}
-                  priority
-                  sizes="(max-width: 768px) 100vw, 0px"
-                  quality={85}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = '/images/placeholder.jpg';
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Content - positioned over image */}
-            <div className={styles.heroContent}>
-              <div className={styles.heroTextBox}>
-                
-              </div>
-            </div>
-          </section>
-
-          {/* Categorías principales - 4 columnas en PC, 1 en móvil */}
-          <div 
-            ref={categoriesRef} 
-            data-section="categories"
-            className={`${styles.categoriesContainer} ${isVisible.categories ? styles.visible : ''}`}
+    <div className={styles.homeContainer}>
+      <main className={styles.mainContent}>
+        <section className={styles.heroSection}>
+          <div
+            className={styles.heroBackgroundMark}
+            aria-hidden="true"
           >
-            <div className={styles.categoriesGrid}>
-              {/* Niños */}
-              <Link href="/menu?category=ninos&type=SUPERIOR" className={styles.categoryCard}>
-                <div className={styles.categoryImageContainer}>
-                  {loading ? (
-                    <div className={styles.loadingSkeleton}></div>
-                  ) : (
-                    <>
-                      <Image
-                        src={categoryImages.niños}
-                        alt="Pijamas para Niños y Unisex"
-                        fill
-                        className={styles.categoryImage}
-                        sizes="(max-width: 768px) 100vw, 25vw"
-                        priority
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/images/placeholder.jpg';
-                        }}
-                      />
-                      <div className={styles.categoryOverlay}></div>
-                    </>
-                  )}
-                </div>
-                <div className={styles.categoryContent}>
-                  <h3 className={styles.categoryTitle}>NIÑOS</h3>
-                </div>
+            VALSE
+          </div>
+
+          <div className={styles.heroCopy}>
+            <span className={styles.heroEyebrow}>
+              VALSE / ESSENTIAL MOVEMENT
+            </span>
+
+            <h1>
+              Movimiento
+              <br />
+              sin exceso.
+            </h1>
+
+            <p>
+              Prendas diseñadas para acompañar tu ritmo con
+              comodidad, presencia y libertad de movimiento.
+            </p>
+
+            <div className={styles.heroActions}>
+              <Link
+                href="/menu"
+                className={styles.heroPrimaryAction}
+              >
+                Explorar colección
+                <ArrowRight aria-hidden="true" />
               </Link>
 
-              {/* Niñas */}
-              <Link href="/menu?category=ninas&type=SUPERIOR" className={styles.categoryCard}>
-                <div className={styles.categoryImageContainer}>
-                  {loading ? (
-                    <div className={styles.loadingSkeleton}></div>
-                  ) : (
-                    <>
-                      <Image
-                        src={categoryImages.niñas}
-                        alt="Pijamas para Niñas y Unisex"
-                        fill
-                        className={styles.categoryImage}
-                        sizes="(max-width: 768px) 100vw, 25vw"
-                        priority
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/images/placeholder.jpg';
-                        }}
-                      />
-                      <div className={styles.categoryOverlay}></div>
-                    </>
-                  )}
-                </div>
-                <div className={styles.categoryContent}>
-                  <h3 className={styles.categoryTitle}>NIÑAS</h3>
-                </div>
+              <Link
+                href="/menu?filter=descuento"
+                className={styles.heroSecondaryAction}
+              >
+                Ver ofertas
               </Link>
+            </div>
 
-              {/* Unisex */}
-              <Link href="/menu?gender=UNISEX&type=SUPERIOR" className={styles.categoryCard}>
-                <div className={styles.categoryImageContainer}>
-                  {loading ? (
-                    <div className={styles.loadingSkeleton}></div>
-                  ) : (
-                    <>
-                      <Image
-                        src={categoryImages.unisex}
-                        alt="Pijamas Unisex"
-                        fill
-                        className={styles.categoryImage}
-                        sizes="(max-width: 768px) 100vw, 25vw"
-                        priority
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/images/placeholder.jpg';
-                        }}
-                      />
-                      <div className={styles.categoryOverlay}></div>
-                    </>
-                  )}
-                </div>
-                <div className={styles.categoryContent}>
-                  <h3 className={styles.categoryTitle}>UNISEX</h3>
-                </div>
-              </Link>
-
-              {/* Ofertas */}
-              <Link href="/menu?filter=descuento" className={styles.categoryCard}>
-                <div className={styles.categoryImageContainer}>
-                  {loading ? (
-                    <div className={styles.loadingSkeleton}></div>
-                  ) : (
-                    <>
-                      <div className={styles.discountBadge}>OFERTA</div>
-                      <Image
-                        src={categoryImages.oferta}
-                        alt="Ofertas especiales"
-                        fill
-                        className={styles.categoryImage}
-                        sizes="(max-width: 768px) 100vw, 25vw"
-                        priority
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/images/placeholder.jpg';
-                        }}
-                      />
-                      <div className={styles.categoryOverlay}></div>
-                    </>
-                  )}
-                </div>
-                <div className={styles.categoryContent}>
-                  <h3 className={styles.categoryTitle}>OFERTAS</h3>
-                </div>
-              </Link>
+            <div className={styles.heroDetails}>
+              <span>Diseño funcional</span>
+              <span>Compra segura</span>
+              <span>Envíos en Colombia</span>
             </div>
           </div>
-        </main>
-      </div>
 
-      {/* CONTENIDO SEO INVISIBLE */}
-      <div 
-        style={{
-          position: 'absolute',
-          width: '1px',
-          height: '1px',
-          padding: '0',
-          margin: '-1px',
-          overflow: 'hidden',
-          clip: 'rect(0, 0, 0, 0)',
-          whiteSpace: 'nowrap',
-          border: '0',
-          pointerEvents: 'none',
-          opacity: 0
-        }}
-        aria-hidden="true"
-      >
-        <h1>A Marte Kids | Tienda de Pijamas Infantiles en Medellín</h1>
-        <h2>Pijamas Infantiles para Cada Etapa</h2>
-        <p>
-          A Marte Kids es una tienda de pijamas infantiles en Medellín, diseñadas para acompañar a los niños dentro y fuera de casa. Creamos pijamas cómodas, seguras y llenas de color, pensadas para dormir, jugar y explorar el mundo con libertad. 
-        </p>
-        <p>
-          Diseños pensados para el movimiento, el descanso y la rutina diaria de los más peques. 
-        </p>
-        <ul>
-          <li>Pijamas para Niños</li>
-          <li>Pijamas para Niñas</li>
-          <li>Pijamas para Todos</li>
-          <li>Más que Pijamas Infantiles</li>
-          <li>Comodidad que se queda en su lugar</li>
-          <li>Textiles suaves y transpirables</li>
-          <li>Diseño funcional y duradero</li>
-          <li>Materiales pensados para cuidar la piel y regular la temperatura</li>
-        </ul>
-        <p>
-          Nuestras pijamas no son solo para dormir. Son pijamas de casa para el mundo, diseñadas para usarse todo el día, sin necesidad de cambios.
-          Diseñamos y confeccionamos nuestras pijamas infantiles en Medellín, apoyando la producción local y cuidando cada detalle, desde el diseño hasta la confección.  
-        </p>
-        <p>
-          Búsquedas relacionadas: pijamas niños bogotá, ropa infantil temática, 
-          pijamas para niños colombia, pijamas de algodón para niños, 
-          regalos originales para niños, pijamas astronauta niña, 
-          pijamas cohete niño, pijamas planetas infantil.
-        </p>
-      </div>
-    </>
+          <div className={styles.heroVisual}>
+            <span className={styles.heroVisualEyebrow}>
+              PIEZA DESTACADA
+            </span>
+
+            <div className={styles.heroProductStage}>
+              <span
+                className={styles.heroProductOrbit}
+                aria-hidden="true"
+              />
+
+              <div className={styles.heroProductImage}>
+                {loading ? (
+                  <div
+                    className={styles.heroProductSkeleton}
+                    aria-label="Cargando prenda destacada"
+                  />
+                ) : (
+                  <SafeProductImage
+                    src={heroImage}
+                    alt={heroMeta.name}
+                    className={styles.heroFloatingProduct}
+                    sizes="(max-width: 768px) 88vw, 45vw"
+                    priority
+                  />
+                )}
+              </div>
+
+              <div className={styles.heroProductShadow} />
+
+              <div className={styles.heroProductMeta}>
+                <span>{heroMeta.gender}</span>
+                <h2>{heroMeta.name}</h2>
+
+                {heroMeta.price && (
+                  <strong>Desde {heroMeta.price}</strong>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {error && (
+          <div className={styles.catalogNotice} role="status">
+            <span>{error}</span>
+
+            <button
+              type="button"
+              onClick={() =>
+                setLoadAttempt((current) => current + 1)
+              }
+            >
+              <RotateCcw aria-hidden="true" />
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        <section
+          ref={categoriesRef}
+          className={`${styles.categoriesContainer} ${
+            categoriesVisible ? styles.visible : ''
+          }`}
+          aria-labelledby="categories-title"
+        >
+          <header className={styles.categoriesHeader}>
+            <div>
+              <span>COMPRA POR CATEGORÍA</span>
+              <h2 id="categories-title">
+                Encuentra tu próxima prenda.
+              </h2>
+            </div>
+
+            <Link href="/menu">
+              Ver toda la colección
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </header>
+
+          <div className={styles.categoriesGrid}>
+            <CategoryCard
+              href="/menu?category=ninos&type=SUPERIOR"
+              title="Niños"
+              image={categoryImages.niños}
+              loading={loading}
+            />
+
+            <CategoryCard
+              href="/menu?category=ninas&type=SUPERIOR"
+              title="Niñas"
+              image={categoryImages.niñas}
+              loading={loading}
+            />
+
+            <CategoryCard
+              href="/menu?gender=UNISEX&type=SUPERIOR"
+              title="Unisex"
+              image={categoryImages.unisex}
+              loading={loading}
+            />
+
+            <CategoryCard
+              href="/menu?filter=descuento"
+              title="Ofertas"
+              image={categoryImages.oferta}
+              loading={loading}
+              badge="SELECCIÓN"
+            />
+          </div>
+        </section>
+      </main>
+    </div>
   );
 };
+
+const CategoryCard = ({
+  href,
+  title,
+  image,
+  loading,
+  badge
+}: {
+  href: string;
+  title: string;
+  image: string;
+  loading: boolean;
+  badge?: string;
+}) => (
+  <Link href={href} className={styles.categoryCard}>
+    <div className={styles.categoryImageContainer}>
+      {loading ? (
+        <div className={styles.loadingSkeleton} />
+      ) : (
+        <>
+          <SafeProductImage
+            src={image}
+            alt={`Colección ${title}`}
+            className={styles.categoryImage}
+            sizes="(max-width: 768px) 100vw, (max-width: 1100px) 50vw, 25vw"
+          />
+
+          <div className={styles.categoryOverlay} />
+        </>
+      )}
+
+      {badge && (
+        <span className={styles.discountBadge}>
+          {badge}
+        </span>
+      )}
+    </div>
+
+    <div className={styles.categoryContent}>
+      <span>Explorar</span>
+      <h3>{title}</h3>
+      <ArrowRight aria-hidden="true" />
+    </div>
+  </Link>
+);
 
 export default Home;

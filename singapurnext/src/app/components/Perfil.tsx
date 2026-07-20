@@ -1,37 +1,52 @@
 'use client';
 
-import { PERFIL_ME, ADDRESS } from '../utils/Api';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import './Perfil.css';
-import { signOut } from "next-auth/react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
+import Cookies from 'js-cookie';
 import {
-  User,
-  Mail,
-  Phone,
-  MapPin,
+  AlertCircle,
+  ArrowLeft,
+  Building2,
+  Check,
+  ChevronRight,
   Edit3,
-  Trash2,
-  Save,
-  X,
-  LogOut,
-  Plus,
-  Rocket,
-  Star,
-  Moon,
-  Sparkles,
-  ChevronDown,
-  AlertTriangle,
-  CheckCircle,
-  Info,
-  Lock,
+  Globe2,
   Home,
-  Building,
-  Globe,
+  Loader2,
+  Lock,
+  LogOut,
+  Mail,
+  MapPin,
+  Phone,
+  Plus,
+  Save,
+  ShieldCheck,
+  Trash2,
+  User,
+  X
 } from 'lucide-react';
+
+import { ADDRESS, PERFIL_ME } from '../utils/Api';
+import './Perfil.css';
 
 interface Address {
   id: number;
+  address: string;
+  city: string;
+  state: string;
+  country: string;
+}
+
+interface AddressDraft {
   address: string;
   city: string;
   state: string;
@@ -46,853 +61,1363 @@ interface UserData {
   phone: string;
 }
 
+type ModalType = 'warning' | 'danger' | 'info';
+
 interface ModalConfig {
-  isOpen: boolean;
   title: string;
   message: string;
-  type: "warning" | "danger" | "info";
-  onConfirm: () => void;
+  type: ModalType;
+  confirmLabel: string;
+  onConfirm: () => void | Promise<void>;
 }
 
-// Componente de estrellas flotantes para el fondo
-const FloatingStars = () => (
-  <div className="perfil-floating-stars">
-    {[...Array(20)].map((_, i) => (
-      <div
-        key={i}
-        className="perfil-star-item"
-        style={{
-          left: `${Math.random() * 100}%`,
-          top: `${Math.random() * 100}%`,
-          animationDelay: `${Math.random() * 3}s`,
-          animationDuration: `${2 + Math.random() * 2}s`,
-        }}
-      >
-        <Star className="perfil-star-icon" style={{ width: 8 + Math.random() * 12, height: 8 + Math.random() * 12 }} />
-      </div>
-    ))}
-  </div>
-);
+const EMPTY_USER: UserData = {
+  id: 0,
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: ''
+};
 
-// Componente de modal personalizado
-const CustomModal: React.FC<{
+const EMPTY_ADDRESS: AddressDraft = {
+  address: '',
+  city: '',
+  state: '',
+  country: 'Colombia'
+};
+
+const readErrorMessage = async (
+  response: Response,
+  fallback: string
+) => {
+  const responseText = await response.text();
+
+  if (!responseText) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(responseText) as {
+      message?: string;
+      error?: string;
+    };
+
+    return parsed.message || parsed.error || fallback;
+  } catch {
+    return responseText;
+  }
+};
+
+const isAddressComplete = (address: AddressDraft) =>
+  Boolean(
+    address.address.trim() &&
+      address.city.trim() &&
+      address.state.trim() &&
+      address.country.trim()
+  );
+
+const dispatchToast = (
+  message: string,
+  type: 'success' | 'error' | 'info' = 'success'
+) => {
+  window.dispatchEvent(
+    new CustomEvent('show-toast', {
+      detail: {
+        message,
+        type,
+        duration: 3200
+      }
+    })
+  );
+};
+
+const ConfirmationModal = ({
+  config,
+  onClose
+}: {
   config: ModalConfig | null;
   onClose: () => void;
-}> = ({ config, onClose }) => {
-  if (!config || !config.isOpen) return null;
+}) => {
+  const [confirming, setConfirming] = useState(false);
 
-  const iconMap = {
-    warning: <AlertTriangle className="perfil-modal-icon perfil-modal-icon--warning" />,
-    danger: <Trash2 className="perfil-modal-icon perfil-modal-icon--danger" />,
-    info: <Info className="perfil-modal-icon perfil-modal-icon--info" />,
+  useEffect(() => {
+    if (!config) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !confirming) {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [config, confirming, onClose]);
+
+  if (!config) return null;
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+
+    try {
+      await config.onConfirm();
+      onClose();
+    } catch {
+      // La acción correspondiente ya muestra el error.
+    } finally {
+      setConfirming(false);
+    }
   };
 
   return (
-    <div className="perfil-modal-overlay" onClick={onClose}>
-      <div className="perfil-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="perfil-modal-header">
-          <div className="perfil-modal-icon-wrapper">{iconMap[config.type]}</div>
-          <h2 className="perfil-modal-title">{config.title}</h2>
-          <p className="perfil-modal-message">{config.message}</p>
-        </div>
-        <div className="perfil-modal-footer">
-          <button className="perfil-btn perfil-btn--outline" onClick={onClose}>
+    <div
+      className="perfil-modal-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          !confirming
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="perfil-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="perfil-modal-title"
+        aria-describedby="perfil-modal-description"
+      >
+        <button
+          type="button"
+          className="perfil-modal-close"
+          onClick={onClose}
+          disabled={confirming}
+          aria-label="Cerrar"
+        >
+          <X aria-hidden="true" />
+        </button>
+
+        <span
+          className={`perfil-modal-symbol perfil-modal-symbol--${config.type}`}
+          aria-hidden="true"
+        >
+          {config.type === 'danger' ? (
+            <Trash2 />
+          ) : config.type === 'warning' ? (
+            <LogOut />
+          ) : (
+            <Check />
+          )}
+        </span>
+
+        <span className="perfil-modal-eyebrow">
+          Confirmación
+        </span>
+
+        <h2 id="perfil-modal-title">{config.title}</h2>
+
+        <p id="perfil-modal-description">
+          {config.message}
+        </p>
+
+        <div className="perfil-modal-actions">
+          <button
+            type="button"
+            className="perfil-button perfil-button--secondary"
+            onClick={onClose}
+            disabled={confirming}
+          >
             Cancelar
           </button>
+
           <button
-            className={`perfil-btn perfil-btn--${config.type}`}
-            onClick={() => {
-              config.onConfirm();
-              onClose();
-            }}
+            type="button"
+            className="perfil-button perfil-button--primary"
+            onClick={() => void handleConfirm()}
+            disabled={confirming}
           >
-            Confirmar
+            {confirming ? (
+              <>
+                <Loader2
+                  className="perfil-spin"
+                  aria-hidden="true"
+                />
+                Procesando
+              </>
+            ) : (
+              config.confirmLabel
+            )}
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
 
-// Toast de éxito
-const SuccessToast: React.FC<{ message: string; show: boolean }> = ({ message, show }) => {
-  if (!show) return null;
+const AddressFields = ({
+  value,
+  onChange,
+  disabled = false
+}: {
+  value: AddressDraft;
+  onChange: (value: AddressDraft) => void;
+  disabled?: boolean;
+}) => (
+  <div className="perfil-address-form-grid">
+    <label className="perfil-field perfil-field--full">
+      <span>
+        <Home aria-hidden="true" />
+        Dirección
+      </span>
+      <input
+        type="text"
+        value={value.address}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            address: event.target.value
+          })
+        }
+        placeholder="Calle, carrera, número y complemento"
+        autoComplete="street-address"
+        disabled={disabled}
+      />
+    </label>
 
-  return (
-    <div className="perfil-toast perfil-toast--success">
-      <CheckCircle className="perfil-toast-icon" />
-      <span className="perfil-toast-message">{message}</span>
-    </div>
-  );
-};
+    <label className="perfil-field">
+      <span>
+        <Building2 aria-hidden="true" />
+        Ciudad
+      </span>
+      <input
+        type="text"
+        value={value.city}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            city: event.target.value
+          })
+        }
+        placeholder="Medellín"
+        autoComplete="address-level2"
+        disabled={disabled}
+      />
+    </label>
 
-// Componente de tarjeta de dirección
-const AddressCard: React.FC<{
-  address: Address;
-  isEditing: boolean;
-  editedAddress: Address | null;
-  onEdit: () => void;
-  onDelete: () => void;
-  onSave: () => void;
-  onCancel: () => void;
-  onEditChange: (address: Address) => void;
-}> = ({ address, isEditing, editedAddress, onEdit, onDelete, onSave, onCancel, onEditChange }) => {
-  if (isEditing && editedAddress) {
-    return (
-      <div className="perfil-address-card perfil-address-card--editing">
-        <div className="perfil-address-form-grid">
-          <div className="perfil-form-group">
-            <label className="perfil-form-label">
-              <Home className="perfil-label-icon" /> Dirección
-            </label>
-            <input
-              type="text"
-              className="perfil-form-input perfil-form-input--purple"
-              value={editedAddress.address}
-              onChange={(e) => onEditChange({ ...editedAddress, address: e.target.value })}
-              placeholder="Calle y número"
-            />
-          </div>
-          <div className="perfil-form-group">
-            <label className="perfil-form-label">
-              <Building className="perfil-label-icon" /> Ciudad
-            </label>
-            <input
-              type="text"
-              className="perfil-form-input perfil-form-input--purple"
-              value={editedAddress.city}
-              onChange={(e) => onEditChange({ ...editedAddress, city: e.target.value })}
-              placeholder="Ciudad"
-            />
-          </div>
-          <div className="perfil-form-group">
-            <label className="perfil-form-label">
-              <MapPin className="perfil-label-icon" /> Estado/Departamento
-            </label>
-            <input
-              type="text"
-              className="perfil-form-input perfil-form-input--purple"
-              value={editedAddress.state}
-              onChange={(e) => onEditChange({ ...editedAddress, state: e.target.value })}
-              placeholder="Estado o Departamento"
-            />
-          </div>
-          <div className="perfil-form-group">
-            <label className="perfil-form-label">
-              <Globe className="perfil-label-icon" /> País
-            </label>
-            <input
-              type="text"
-              className="perfil-form-input perfil-form-input--purple"
-              value={editedAddress.country}
-              onChange={(e) => onEditChange({ ...editedAddress, country: e.target.value })}
-              placeholder="País"
-            />
-          </div>
-        </div>
-        <div className="perfil-address-card-actions">
-          <button className="perfil-btn perfil-btn--success" onClick={onSave}>
-            <Save className="perfil-btn-icon" /> Guardar
-          </button>
-          <button className="perfil-btn perfil-btn--outline-danger" onClick={onCancel}>
-            <X className="perfil-btn-icon" /> Cancelar
-          </button>
-        </div>
-      </div>
-    );
-  }
+    <label className="perfil-field">
+      <span>
+        <MapPin aria-hidden="true" />
+        Departamento
+      </span>
+      <input
+        type="text"
+        value={value.state}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            state: event.target.value
+          })
+        }
+        placeholder="Antioquia"
+        autoComplete="address-level1"
+        disabled={disabled}
+      />
+    </label>
 
-  return (
-    <div className="perfil-address-card">
-      <div className="perfil-address-card-accent" />
-      <div className="perfil-address-card-content">
-        <div className="perfil-address-info-grid">
-          <div className="perfil-address-info-item">
-            <div className="perfil-address-info-icon perfil-address-info-icon--green">
-              <Home />
-            </div>
-            <div className="perfil-address-info-text">
-              <span className="perfil-address-info-label">Dirección</span>
-              <p className="perfil-address-info-value">{address.address}</p>
-            </div>
-          </div>
-          <div className="perfil-address-info-item">
-            <div className="perfil-address-info-icon perfil-address-info-icon--yellow">
-              <Building />
-            </div>
-            <div className="perfil-address-info-text">
-              <span className="perfil-address-info-label">Ciudad</span>
-              <p className="perfil-address-info-value">{address.city}</p>
-            </div>
-          </div>
-          <div className="perfil-address-info-item">
-            <div className="perfil-address-info-icon perfil-address-info-icon--purple">
-              <MapPin />
-            </div>
-            <div className="perfil-address-info-text">
-              <span className="perfil-address-info-label">Estado</span>
-              <p className="perfil-address-info-value">{address.state}</p>
-            </div>
-          </div>
-          <div className="perfil-address-info-item">
-            <div className="perfil-address-info-icon perfil-address-info-icon--pink">
-              <Globe />
-            </div>
-            <div className="perfil-address-info-text">
-              <span className="perfil-address-info-label">País</span>
-              <p className="perfil-address-info-value">{address.country}</p>
-            </div>
-          </div>
-        </div>
-        <div className="perfil-address-card-footer">
-          <button className="perfil-btn perfil-btn--outline-yellow" onClick={onEdit}>
-            <Edit3 className="perfil-btn-icon" /> Editar
-          </button>
-          <button className="perfil-btn perfil-btn--outline-danger" onClick={onDelete}>
-            <Trash2 className="perfil-btn-icon" /> Eliminar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+    <label className="perfil-field perfil-field--full">
+      <span>
+        <Globe2 aria-hidden="true" />
+        País
+      </span>
+      <input
+        type="text"
+        value={value.country}
+        onChange={(event) =>
+          onChange({
+            ...value,
+            country: event.target.value
+          })
+        }
+        placeholder="Colombia"
+        autoComplete="country-name"
+        disabled={disabled}
+      />
+    </label>
+  </div>
+);
 
 const Perfil = () => {
-  const [formData, setFormData] = useState<UserData>({
-    id: 0,
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-  });
+  const router = useRouter();
 
-  const [addresses, setAddresses] = useState<Address[]>([]);
-  const [newAddress, setNewAddress] = useState<Omit<Address, 'id'>>({
-    address: '',
-    city: '',
-    state: '',
-    country: '',
-  });
+  const fetchControllerRef =
+    useRef<AbortController | null>(null);
 
-  const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [editedAddress, setEditedAddress] = useState<Address | null>(null);
-  const [showAddressForm, setShowAddressForm] = useState(false);
-
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [showCheckmark, setShowCheckmark] = useState<boolean>(false);
-  
-  const [modal, setModal] = useState<ModalConfig | null>(null);
-
-  const [isClient, setIsClient] = useState(false);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isClient, setIsClient] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [user, setUser] = useState<UserData>(EMPTY_USER);
+  const [addresses, setAddresses] = useState<Address[]>([]);
+
+  const [newAddress, setNewAddress] =
+    useState<AddressDraft>(EMPTY_ADDRESS);
+  const [showNewAddress, setShowNewAddress] = useState(false);
+
+  const [editingAddressId, setEditingAddressId] =
+    useState<number | null>(null);
+  const [editedAddress, setEditedAddress] =
+    useState<AddressDraft>(EMPTY_ADDRESS);
+
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [addingAddress, setAddingAddress] = useState(false);
+  const [addressActionId, setAddressActionId] =
+    useState<number | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const [error, setError] = useState('');
+  const [modal, setModal] = useState<ModalConfig | null>(
+    null
+  );
 
   useEffect(() => {
     setIsClient(true);
-    const storedToken = localStorage.getItem('token');
-    setToken(storedToken);
-    setIsLoading(false);
+    setToken(localStorage.getItem('token'));
   }, []);
 
-  const authHeaders = useMemo(
+  const authHeaders = useMemo<Record<string, string>>(
     () => ({
+      Accept: 'application/json',
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      ...(token
+        ? {
+            Authorization: `Bearer ${token}`
+          }
+        : {})
     }),
     [token]
   );
 
-  const loadUserData = useCallback(async () => {
+  const loadProfile = useCallback(async () => {
     if (!token) {
-      setError('Usuario no identificado');
+      setLoading(false);
       return;
     }
 
-    try {
-      console.log('🔍 Cargando datos de usuario desde:', PERFIL_ME);
-      
-      const response = await fetch(PERFIL_ME, {
-        method: 'GET',
-        headers: authHeaders,
-      });
+    fetchControllerRef.current?.abort();
+    fetchControllerRef.current = new AbortController();
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error en respuesta:', errorText);
-        throw new Error(`Error ${response.status}: ${errorText || 'Error al cargar los datos del usuario'}`);
-      }
-
-      const userData: UserData = await response.json();
-      console.log('✅ Datos del usuario cargados:', userData);
-      
-      setFormData(userData);
-      setError(null);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al cargar los datos del usuario';
-      setError(errorMsg);
-      console.error('Error en loadUserData:', err);
-    }
-  }, [authHeaders, token]);
-
-  const loadAddresses = useCallback(async () => {
-    if (!token) return;
+    setLoading(true);
+    setError('');
 
     try {
-      const response = await fetch(ADDRESS, {
-        method: 'GET',
-        headers: authHeaders,
-      });
+      const [userResponse, addressesResponse] =
+        await Promise.all([
+          fetch(PERFIL_ME, {
+            method: 'GET',
+            headers: authHeaders,
+            credentials: 'include',
+            signal: fetchControllerRef.current.signal
+          }),
+          fetch(ADDRESS, {
+            method: 'GET',
+            headers: authHeaders,
+            credentials: 'include',
+            signal: fetchControllerRef.current.signal
+          })
+        ]);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText || 'Error al cargar direcciones'}`);
+      if (!userResponse.ok) {
+        throw new Error(
+          await readErrorMessage(
+            userResponse,
+            'No fue posible cargar tu información'
+          )
+        );
       }
 
-      const text = await response.text();
-      const addressList: Address[] = text ? JSON.parse(text) : [];
+      if (!addressesResponse.ok) {
+        throw new Error(
+          await readErrorMessage(
+            addressesResponse,
+            'No fue posible cargar tus direcciones'
+          )
+        );
+      }
 
-      setAddresses(addressList);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar direcciones');
-      console.error('Error en loadAddresses:', err);
+      const userData = (await userResponse.json()) as UserData;
+      const addressesText = await addressesResponse.text();
+
+      setUser({
+        id: Number(userData.id || 0),
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        email: userData.email || '',
+        phone: userData.phone || ''
+      });
+
+      setAddresses(
+        addressesText
+          ? (JSON.parse(addressesText) as Address[])
+          : []
+      );
+    } catch (loadError) {
+      if (
+        loadError instanceof Error &&
+        loadError.name === 'AbortError'
+      ) {
+        return;
+      }
+
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : 'No fue posible cargar tu perfil'
+      );
+    } finally {
+      setLoading(false);
     }
   }, [authHeaders, token]);
 
   useEffect(() => {
-    if (token && !isLoading) {
-      loadUserData();
-      loadAddresses();
-    }
-  }, [loadUserData, loadAddresses, token, isLoading]);
+    if (!isClient) return;
 
-  const showSuccessCheckmark = (message: string) => {
-    setSuccess(message);
-    setShowCheckmark(true);
-    setTimeout(() => {
-      setShowCheckmark(false);
-      setSuccess(null);
-    }, 2000);
-  };
+    void loadProfile();
 
-  const showModal = (
-    title: string, 
-    message: string, 
-    type: "warning" | "danger" | "info",
-    onConfirm: () => void
-  ) => {
-    setModal({
-      isOpen: true,
-      title,
-      message,
-      type,
-      onConfirm
-    });
-  };
+    return () => {
+      fetchControllerRef.current?.abort();
+    };
+  }, [isClient, loadProfile]);
 
-  const handleAddAddress = async () => {
+  const refreshAddresses = useCallback(async () => {
     if (!token) return;
-    
+
+    const response = await fetch(ADDRESS, {
+      method: 'GET',
+      headers: authHeaders,
+      credentials: 'include'
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        await readErrorMessage(
+          response,
+          'No fue posible actualizar tus direcciones'
+        )
+      );
+    }
+
+    const responseText = await response.text();
+
+    setAddresses(
+      responseText
+        ? (JSON.parse(responseText) as Address[])
+        : []
+    );
+  }, [authHeaders, token]);
+
+  const updateProfile = async () => {
+    if (!token) return;
+
+    const firstName = user.firstName.trim();
+    const lastName = user.lastName.trim();
+    const phone = user.phone.trim();
+
+    if (!firstName || !lastName || !phone) {
+      setError(
+        'Completa el nombre, apellido y teléfono antes de guardar.'
+      );
+      throw new Error('Formulario incompleto');
+    }
+
+    setSavingProfile(true);
+    setError('');
+
     try {
-      console.log('➕ Agregando dirección:', newAddress);
-      
-      const response = await fetch(ADDRESS, {
-        method: 'POST',
+      const response = await fetch(PERFIL_ME, {
+        method: 'PUT',
         headers: authHeaders,
-        body: JSON.stringify(newAddress),
+        credentials: 'include',
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          phone
+        })
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error ${response.status}: ${errorText || 'Error al agregar la dirección'}`);
+        throw new Error(
+          await readErrorMessage(
+            response,
+            'No fue posible actualizar tu información'
+          )
+        );
       }
 
-      setNewAddress({ address: '', city: '', state: '', country: '' });
-      setShowAddressForm(false);
-      await loadAddresses();
-      showSuccessCheckmark('¡Dirección agregada correctamente!');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al agregar la dirección');
-      console.error(err);
+      const responseText = await response.text();
+
+      if (responseText) {
+        const updatedUser = JSON.parse(
+          responseText
+        ) as Partial<UserData>;
+
+        setUser((current) => ({
+          ...current,
+          ...updatedUser,
+          email: updatedUser.email || current.email
+        }));
+      }
+
+      dispatchToast(
+        'Información personal actualizada',
+        'success'
+      );
+    } catch (updateError) {
+      const message =
+        updateError instanceof Error
+          ? updateError.message
+          : 'No fue posible actualizar tu información';
+
+      setError(message);
+      dispatchToast(message, 'error');
+      throw updateError;
+    } finally {
+      setSavingProfile(false);
     }
   };
 
-  const handleDeleteAddress = async (addressId: number) => {
+  const requestProfileUpdate = (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    setModal({
+      title: 'Guardar información',
+      message:
+        'Se actualizarán tu nombre, apellido y teléfono. El correo permanecerá sin cambios.',
+      type: 'info',
+      confirmLabel: 'Guardar cambios',
+      onConfirm: updateProfile
+    });
+  };
+
+  const addAddress = async () => {
+    if (!token || !isAddressComplete(newAddress)) {
+      setError(
+        'Completa todos los campos de la nueva dirección.'
+      );
+      throw new Error('Dirección incompleta');
+    }
+
+    setAddingAddress(true);
+    setError('');
+
+    try {
+      const response = await fetch(ADDRESS, {
+        method: 'POST',
+        headers: authHeaders,
+        credentials: 'include',
+        body: JSON.stringify({
+          address: newAddress.address.trim(),
+          city: newAddress.city.trim(),
+          state: newAddress.state.trim(),
+          country: newAddress.country.trim()
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(
+            response,
+            'No fue posible agregar la dirección'
+          )
+        );
+      }
+
+      await refreshAddresses();
+
+      setNewAddress(EMPTY_ADDRESS);
+      setShowNewAddress(false);
+      dispatchToast('Dirección agregada', 'success');
+    } catch (addressError) {
+      const message =
+        addressError instanceof Error
+          ? addressError.message
+          : 'No fue posible agregar la dirección';
+
+      setError(message);
+      dispatchToast(message, 'error');
+      throw addressError;
+    } finally {
+      setAddingAddress(false);
+    }
+  };
+
+  const startEditingAddress = (address: Address) => {
+    setEditingAddressId(address.id);
+    setEditedAddress({
+      address: address.address,
+      city: address.city,
+      state: address.state,
+      country: address.country
+    });
+    setShowNewAddress(false);
+    setError('');
+  };
+
+  const cancelEditingAddress = () => {
+    setEditingAddressId(null);
+    setEditedAddress(EMPTY_ADDRESS);
+  };
+
+  const updateAddress = async (addressId: number) => {
+    if (!token || !isAddressComplete(editedAddress)) {
+      setError(
+        'Completa todos los campos de la dirección.'
+      );
+      throw new Error('Dirección incompleta');
+    }
+
+    setAddressActionId(addressId);
+    setError('');
+
+    try {
+      const response = await fetch(
+        `${ADDRESS}/${addressId}`,
+        {
+          method: 'PUT',
+          headers: authHeaders,
+          credentials: 'include',
+          body: JSON.stringify({
+            id: addressId,
+            address: editedAddress.address.trim(),
+            city: editedAddress.city.trim(),
+            state: editedAddress.state.trim(),
+            country: editedAddress.country.trim()
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(
+            response,
+            'No fue posible actualizar la dirección'
+          )
+        );
+      }
+
+      await refreshAddresses();
+      cancelEditingAddress();
+      dispatchToast('Dirección actualizada', 'success');
+    } catch (addressError) {
+      const message =
+        addressError instanceof Error
+          ? addressError.message
+          : 'No fue posible actualizar la dirección';
+
+      setError(message);
+      dispatchToast(message, 'error');
+      throw addressError;
+    } finally {
+      setAddressActionId(null);
+    }
+  };
+
+  const deleteAddress = async (addressId: number) => {
     if (!token) return;
-    
-    showModal(
-      'Eliminar Dirección',
-      '¿Estás seguro de que deseas eliminar esta dirección? Esta acción no se puede deshacer.',
-      'danger',
-      async () => {
-        try {
-          const response = await fetch(`${ADDRESS}/${addressId}`, {
-            method: 'DELETE',
-            headers: authHeaders,
-          });
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error ${response.status}: ${errorText || 'Error al eliminar la dirección'}`);
-          }
+    setAddressActionId(addressId);
+    setError('');
 
-          await loadAddresses();
-          showSuccessCheckmark('Dirección eliminada correctamente');
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Error al eliminar la dirección');
-          console.error(err);
+    try {
+      const response = await fetch(
+        `${ADDRESS}/${addressId}`,
+        {
+          method: 'DELETE',
+          headers: authHeaders,
+          credentials: 'include'
         }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          await readErrorMessage(
+            response,
+            'No fue posible eliminar la dirección'
+          )
+        );
       }
-    );
-  };
 
-  const handleEditAddress = (index: number) => {
-    setEditIndex(index);
-    setEditedAddress(addresses[index]);
-  };
+      await refreshAddresses();
 
-  const handleSaveAddress = async () => {
-    if (!editedAddress || !token) return;
-
-    showModal(
-      'Guardar Cambios',
-      '¿Guardar los cambios en esta dirección?',
-      'info',
-      async () => {
-        try {
-          const response = await fetch(`${ADDRESS}/${editedAddress.id}`, {
-            method: 'PUT',
-            headers: authHeaders,
-            body: JSON.stringify(editedAddress),
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Error ${response.status}: ${errorText || 'Error al actualizar la dirección'}`);
-          }
-
-          setEditIndex(null);
-          setEditedAddress(null);
-          await loadAddresses();
-          showSuccessCheckmark('Dirección actualizada correctamente');
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Error al actualizar la dirección');
-          console.error(err);
-        }
+      if (editingAddressId === addressId) {
+        cancelEditingAddress();
       }
-    );
+
+      dispatchToast('Dirección eliminada', 'success');
+    } catch (addressError) {
+      const message =
+        addressError instanceof Error
+          ? addressError.message
+          : 'No fue posible eliminar la dirección';
+
+      setError(message);
+      dispatchToast(message, 'error');
+      throw addressError;
+    } finally {
+      setAddressActionId(null);
+    }
   };
 
-  const handleUpdateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) return;
-    
-    showModal(
-      'Actualizar Perfil',
-      '¿Deseas guardar los cambios en tu información personal?',
-      'info',
-      async () => {
-        setError(null);
-        
-        try {
-          const payload = {
-            firstName: formData.firstName.trim(),
-            lastName: formData.lastName.trim(),
-            phone: formData.phone.trim(),
-          };
+  const logout = async () => {
+    setLoggingOut(true);
 
-          console.log('🔄 Enviando actualización a:', PERFIL_ME);
-          console.log('📦 Payload:', payload);
-          
-          const response = await fetch(PERFIL_ME, {
-            method: 'PUT',
-            headers: authHeaders,
-            body: JSON.stringify(payload),
-          });
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('role');
+      localStorage.removeItem('userId');
 
-          const responseText = await response.text();
-          console.log('📥 Respuesta del servidor:', response.status, responseText);
-          
-          if (!response.ok) {
-            let errorMsg = responseText;
-            try {
-              const errorJson = JSON.parse(responseText);
-              errorMsg = errorJson.message || errorJson.error || responseText;
-            } catch {
-              // Si no es JSON, usar el texto tal cual
-            }
-            throw new Error(`Error ${response.status}: ${errorMsg}`);
-          }
+      Cookies.remove('token', {
+        path: '/'
+      });
 
-          const updatedUser = JSON.parse(responseText);
-          console.log('✅ Usuario actualizado:', updatedUser);
-          
-          setFormData({
-            id: updatedUser.id || formData.id,
-            firstName: updatedUser.firstName || formData.firstName,
-            lastName: updatedUser.lastName || formData.lastName,
-            email: updatedUser.email || formData.email,
-            phone: updatedUser.phone || formData.phone,
-          });
-          
-          showSuccessCheckmark('¡Información actualizada correctamente!');
-          
-          setTimeout(() => {
-            loadUserData();
-          }, 500);
-          
-        } catch (err) {
-          const errorMsg = err instanceof Error ? err.message : 'Error desconocido al actualizar';
-          setError(`❌ ${errorMsg}`);
-          console.error('Error completo en handleUpdateUser:', {
-            error: err,
-            formData,
-            token: token ? 'Presente' : 'Ausente',
-            url: PERFIL_ME
-          });
-        }
-      }
-    );
+      await signOut({
+        redirect: false
+      });
+
+      router.replace('/');
+      router.refresh();
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
-  const handleLogout = async () => {
-    showModal(
-      'Cerrar Sesión',
-      '¿Estás seguro de que deseas cerrar sesión? Se cerrará tu sesión en todos los dispositivos.',
-      'warning',
-      async () => {
-        localStorage.clear();
-        document.cookie.split(";").forEach((c) => {
-          document.cookie = c
-            .replace(/^ +/, "")
-            .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-        });
-        await signOut({ callbackUrl: "/" });
-      }
-    );
-  };
+  const initials = useMemo(() => {
+    const firstInitial = user.firstName
+      .trim()
+      .charAt(0)
+      .toUpperCase();
+    const lastInitial = user.lastName
+      .trim()
+      .charAt(0)
+      .toUpperCase();
 
-  if (!isClient || isLoading) {
+    return `${firstInitial}${lastInitial}` || 'V';
+  }, [user.firstName, user.lastName]);
+
+  const fullName =
+    `${user.firstName} ${user.lastName}`.trim() ||
+    'Tu cuenta';
+
+  if (!isClient || loading) {
     return (
-      <div className="perfil-page">
-        <div className="perfil-loading-screen">
-          <div className="perfil-loading-content">
-            <div className="perfil-loading-spinner">
-              <div className="perfil-spinner-track" />
-              <div className="perfil-spinner-gradient" />
-              <Rocket className="perfil-spinner-icon" />
-            </div>
-            <p className="perfil-loading-text">Cargando tu perfil espacial...</p>
-          </div>
+      <main className="perfil-page perfil-page--loading">
+        <div className="perfil-loading">
+          <span className="perfil-loader" aria-hidden="true" />
+          <p>Cargando tu cuenta</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (!token) {
     return (
-      <div className="perfil-page">
-        <div className="perfil-content-container">
-          <div className="perfil-header">
-            <h1 className="perfil-header-title">
-              <span className="perfil-brand-name">Acceso Restringido</span>
-            </h1>
-            <p className="perfil-header-subtitle">Por favor inicia sesión para ver tu perfil.</p>
-            <button 
-              onClick={() => window.location.href = '/login'} 
-              className="perfil-btn perfil-btn--primary"
-              style={{ marginTop: '20px', maxWidth: '250px' }}
-            >
-              Ir a Iniciar Sesión
-            </button>
-          </div>
-        </div>
-      </div>
+      <main className="perfil-page">
+        <section className="perfil-auth-required">
+          <Image
+            src="/images/logos/logLog.svg"
+            alt="VALSE"
+            width={180}
+            height={70}
+            className="perfil-auth-logo"
+            priority
+          />
+
+          <span>CUENTA VALSE</span>
+          <h1>Inicia sesión para ver tu perfil.</h1>
+          <p>
+            Accede a tus datos personales y direcciones de
+            entrega.
+          </p>
+
+          <button
+            type="button"
+            className="perfil-button perfil-button--primary"
+            onClick={() =>
+              router.push('/login?redirect=/perfil')
+            }
+          >
+            Iniciar sesión
+            <ChevronRight aria-hidden="true" />
+          </button>
+        </section>
+      </main>
     );
   }
 
   return (
-    <div className="perfil-page">
-      {/* Barra superior decorativa */}
-      <div className="perfil-top-bar" />
+    <main className="perfil-page">
+      <ConfirmationModal
+        config={modal}
+        onClose={() => setModal(null)}
+      />
 
-      {/* Modal */}
-      <CustomModal config={modal} onClose={() => setModal(null)} />
+      <header className="perfil-mobile-header">
+        <Link href="/" aria-label="Ir al inicio">
+          <Image
+            src="/images/logos/logLog.svg"
+            alt="VALSE"
+            width={150}
+            height={56}
+            priority
+          />
+        </Link>
+      </header>
 
-      {/* Toast de éxito */}
-      <SuccessToast message={success || ""} show={showCheckmark} />
+      <div className="perfil-shell">
+        <aside className="perfil-sidebar">
+          <Link
+            href="/"
+            className="perfil-logo-link"
+            aria-label="Ir al inicio de VALSE"
+          >
+            <Image
+              src="/images/logos/logLog.svg"
+              alt="VALSE"
+              width={190}
+              height={74}
+              className="perfil-logo"
+              priority
+            />
+          </Link>
 
-      <div className="perfil-content-container">
-        <FloatingStars />
+          <div className="perfil-account-summary">
+            <span className="perfil-avatar">
+              {initials}
+            </span>
 
-        {/* Header */}
-        <header className="perfil-header">
-          <div className="perfil-header-logo">
-            <div className="perfil-logo-icon">
-              {/* Tu imagen SVG del cohete */}
-              <Image
-                src="/images/logos/logCohete.svg"
-                alt="Cohete A Marte"
-                width={70}
-                height={70}
-                className="perfil-logo-svg"
+            <div>
+              <span className="perfil-sidebar-eyebrow">
+                MI CUENTA
+              </span>
+              <h1>{fullName}</h1>
+              <p>{user.email}</p>
+            </div>
+          </div>
+
+          <div className="perfil-sidebar-stat">
+            <span>Direcciones guardadas</span>
+            <strong>{addresses.length}</strong>
+          </div>
+
+          <nav
+            className="perfil-sidebar-nav"
+            aria-label="Secciones del perfil"
+          >
+            <a href="#informacion">
+              <User aria-hidden="true" />
+              Información personal
+              <ChevronRight aria-hidden="true" />
+            </a>
+
+            <a href="#direcciones">
+              <MapPin aria-hidden="true" />
+              Direcciones
+              <ChevronRight aria-hidden="true" />
+            </a>
+          </nav>
+
+          <div className="perfil-sidebar-security">
+            <ShieldCheck aria-hidden="true" />
+            <span>
+              Tu correo se mantiene protegido y no puede
+              modificarse desde esta sección.
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="perfil-logout-button"
+            onClick={() =>
+              setModal({
+                title: 'Cerrar sesión',
+                message:
+                  'Se cerrará la sesión actual. Tu carrito continuará disponible en este dispositivo.',
+                type: 'warning',
+                confirmLabel: 'Cerrar sesión',
+                onConfirm: logout
+              })
+            }
+            disabled={loggingOut}
+          >
+            {loggingOut ? (
+              <Loader2
+                className="perfil-spin"
+                aria-hidden="true"
               />
-              <div className="perfil-logo-badge">
-                <Sparkles />
-              </div>
-            </div>
-          </div>
-
-          <h1 className="perfil-header-title">
-            Bienvenido a tu Perfil en{" "}
-            <span className="perfil-brand-name">
-              A Marte
-              <span className="perfil-brand-underline" />
-            </span>{" "}
-            <Moon className="perfil-moon-icon" />
-          </h1>
-
-          <p className="perfil-header-subtitle">
-            Gestiona tu información personal y direcciones de envío para recibir tus pijamas espaciales
-          </p>
-        </header>
-
-        {/* Mensajes de error */}
-        {error && (
-          <div className="perfil-error-banner">
-            <AlertTriangle className="perfil-error-icon" />
-            <p className="perfil-error-text">{error}</p>
-            <button onClick={() => setError(null)} className="perfil-error-close">
-              <X />
-            </button>
-          </div>
-        )}
-
-        {/* Información Personal */}
-        <div className="perfil-card">
-          <div className="perfil-card-accent perfil-card-accent--green" />
-          <div className="perfil-card-header">
-            <div className="perfil-card-header-icon perfil-card-header-icon--green">
-              <User />
-            </div>
-            <div className="perfil-card-header-text">
-              <h2 className="perfil-card-title">Información Personal</h2>
-              <p className="perfil-card-description">Actualiza tus datos de contacto</p>
-            </div>
-          </div>
-          <div className="perfil-card-body">
-            <form onSubmit={handleUpdateUser} className="perfil-profile-form">
-              <div className="perfil-form-row">
-                <div className="perfil-form-group">
-                  <label className="perfil-form-label">
-                    <User className="perfil-label-icon" /> Nombre
-                  </label>
-                  <input
-                    type="text"
-                    className="perfil-form-input"
-                    value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    placeholder="Tu nombre"
-                    required
-                  />
-                </div>
-                <div className="perfil-form-group">
-                  <label className="perfil-form-label">
-                    <User className="perfil-label-icon" /> Apellido
-                  </label>
-                  <input
-                    type="text"
-                    className="perfil-form-input"
-                    value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    placeholder="Tu apellido"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="perfil-form-group">
-                <label className="perfil-form-label">
-                  <Mail className="perfil-label-icon" /> Email
-                  <span className="perfil-form-badge">
-                    <Lock className="perfil-badge-icon" />
-                    No editable
-                  </span>
-                </label>
-                <input type="email" className="perfil-form-input perfil-form-input--disabled" value={formData.email} disabled />
-                <p className="perfil-form-hint">El email es tu nombre de usuario y no se puede modificar</p>
-              </div>
-
-              <div className="perfil-form-group">
-                <label className="perfil-form-label">
-                  <Phone className="perfil-label-icon" /> Teléfono
-                </label>
-                <input
-                  type="tel"
-                  className="perfil-form-input"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="Ej: 3001234567"
-                  required
-                />
-              </div>
-
-              <button type="submit" className="perfil-btn perfil-btn--primary">
-                <Save className="perfil-btn-icon" />
-                Guardar Cambios
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {/* Direcciones de Envío */}
-        <div className="perfil-card">
-          <div className="perfil-card-accent perfil-card-accent--orange" />
-          <div className="perfil-card-header">
-            <div className="perfil-card-header-icon perfil-card-header-icon--orange">
-              <MapPin />
-            </div>
-            <div className="perfil-card-header-text">
-              <h2 className="perfil-card-title">Direcciones de Envío</h2>
-              <p className="perfil-card-description">Gestiona tus direcciones para recibir tus pedidos</p>
-            </div>
-          </div>
-          <div className="perfil-card-body">
-            {addresses.length > 0 ? (
-              <div className="perfil-addresses-list">
-                {addresses.map((addr, index) => (
-                  <AddressCard
-                    key={addr.id}
-                    address={addr}
-                    isEditing={editIndex === index}
-                    editedAddress={editedAddress}
-                    onEdit={() => handleEditAddress(index)}
-                    onDelete={() => handleDeleteAddress(addr.id)}
-                    onSave={handleSaveAddress}
-                    onCancel={() => {
-                      setEditIndex(null);
-                      setEditedAddress(null);
-                    }}
-                    onEditChange={setEditedAddress}
-                  />
-                ))}
-              </div>
             ) : (
-              <div className="perfil-empty-state">
-                <div className="perfil-empty-state-icon">
-                  <MapPin />
-                </div>
-                <p className="perfil-empty-state-title">No hay direcciones registradas</p>
-                <p className="perfil-empty-state-text">Agrega una para recibir tus pedidos espaciales</p>
-              </div>
+              <LogOut aria-hidden="true" />
             )}
+            Cerrar sesión
+          </button>
+        </aside>
 
-            {/* Botón para agregar dirección */}
-            <button className="perfil-btn perfil-btn--dashed" onClick={() => setShowAddressForm(!showAddressForm)}>
-              {showAddressForm ? (
-                <>
-                  <ChevronDown className="perfil-btn-icon perfil-btn-icon--rotate" />
-                  Ocultar formulario
-                </>
-              ) : (
-                <>
-                  <Plus className="perfil-btn-icon" />
-                  Agregar nueva dirección
-                </>
-              )}
+        <section className="perfil-content">
+          <div className="perfil-content-header">
+            <button
+              type="button"
+              className="perfil-back-button"
+              onClick={() => router.back()}
+            >
+              <ArrowLeft aria-hidden="true" />
+              Volver
             </button>
 
-            {/* Formulario para agregar nueva dirección */}
-            {showAddressForm && (
-              <div className="perfil-new-address-form">
-                <div className="perfil-new-address-header">
-                  <div className="perfil-new-address-badge">+</div>
-                  Nueva Dirección
-                </div>
-                <div className="perfil-address-form-grid">
-                  <div className="perfil-form-group">
-                    <label className="perfil-form-label perfil-form-label--small">
-                      <Home className="perfil-label-icon" /> Dirección
-                    </label>
-                    <input
-                      type="text"
-                      className="perfil-form-input perfil-form-input--green"
-                      value={newAddress.address}
-                      onChange={(e) => setNewAddress({ ...newAddress, address: e.target.value })}
-                      placeholder="Calle y número"
-                    />
-                  </div>
-                  <div className="perfil-form-group">
-                    <label className="perfil-form-label perfil-form-label--small">
-                      <Building className="perfil-label-icon" /> Ciudad
-                    </label>
-                    <input
-                      type="text"
-                      className="perfil-form-input perfil-form-input--green"
-                      value={newAddress.city}
-                      onChange={(e) => setNewAddress({ ...newAddress, city: e.target.value })}
-                      placeholder="Ciudad"
-                    />
-                  </div>
-                  <div className="perfil-form-group">
-                    <label className="perfil-form-label perfil-form-label--small">
-                      <MapPin className="perfil-label-icon" /> Estado/Departamento
-                    </label>
-                    <input
-                      type="text"
-                      className="perfil-form-input perfil-form-input--green"
-                      value={newAddress.state}
-                      onChange={(e) => setNewAddress({ ...newAddress, state: e.target.value })}
-                      placeholder="Estado o Departamento"
-                    />
-                  </div>
-                  <div className="perfil-form-group">
-                    <label className="perfil-form-label perfil-form-label--small">
-                      <Globe className="perfil-label-icon" /> País
-                    </label>
-                    <input
-                      type="text"
-                      className="perfil-form-input perfil-form-input--green"
-                      value={newAddress.country}
-                      onChange={(e) => setNewAddress({ ...newAddress, country: e.target.value })}
-                      placeholder="País"
-                    />
-                  </div>
-                </div>
-                <button 
-                  className="perfil-btn perfil-btn--primary perfil-btn--full" 
-                  onClick={handleAddAddress}
-                  disabled={!newAddress.address || !newAddress.city || !newAddress.state || !newAddress.country}
+            <div>
+              <span>VALSE / PERFIL</span>
+              <h2>Gestiona tu cuenta</h2>
+              <p>
+                Actualiza tus datos y mantén listas tus
+                direcciones para una compra más rápida.
+              </p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="perfil-error" role="alert">
+              <AlertCircle aria-hidden="true" />
+              <span>{error}</span>
+              <button
+                type="button"
+                onClick={() => setError('')}
+                aria-label="Cerrar mensaje"
+              >
+                <X aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
+          <section
+            id="informacion"
+            className="perfil-section"
+          >
+            <div className="perfil-section-header">
+              <span className="perfil-section-icon">
+                <User aria-hidden="true" />
+              </span>
+
+              <div>
+                <span>INFORMACIÓN PERSONAL</span>
+                <h3>Tus datos</h3>
+                <p>
+                  El nombre y el teléfono se utilizarán para
+                  gestionar tus pedidos.
+                </p>
+              </div>
+            </div>
+
+            <form
+              className="perfil-profile-form"
+              onSubmit={requestProfileUpdate}
+            >
+              <div className="perfil-form-grid">
+                <label className="perfil-field">
+                  <span>
+                    <User aria-hidden="true" />
+                    Nombre
+                  </span>
+                  <input
+                    type="text"
+                    value={user.firstName}
+                    onChange={(event) =>
+                      setUser((current) => ({
+                        ...current,
+                        firstName: event.target.value
+                      }))
+                    }
+                    placeholder="Tu nombre"
+                    autoComplete="given-name"
+                    disabled={savingProfile}
+                    required
+                  />
+                </label>
+
+                <label className="perfil-field">
+                  <span>
+                    <User aria-hidden="true" />
+                    Apellido
+                  </span>
+                  <input
+                    type="text"
+                    value={user.lastName}
+                    onChange={(event) =>
+                      setUser((current) => ({
+                        ...current,
+                        lastName: event.target.value
+                      }))
+                    }
+                    placeholder="Tu apellido"
+                    autoComplete="family-name"
+                    disabled={savingProfile}
+                    required
+                  />
+                </label>
+
+                <label className="perfil-field perfil-field--full">
+                  <span>
+                    <Mail aria-hidden="true" />
+                    Correo electrónico
+                    <small>
+                      <Lock aria-hidden="true" />
+                      No editable
+                    </small>
+                  </span>
+                  <input
+                    type="email"
+                    value={user.email}
+                    autoComplete="email"
+                    disabled
+                  />
+                </label>
+
+                <label className="perfil-field perfil-field--full">
+                  <span>
+                    <Phone aria-hidden="true" />
+                    Teléfono
+                  </span>
+                  <input
+                    type="tel"
+                    value={user.phone}
+                    onChange={(event) =>
+                      setUser((current) => ({
+                        ...current,
+                        phone: event.target.value
+                      }))
+                    }
+                    placeholder="+57 300 000 0000"
+                    autoComplete="tel"
+                    disabled={savingProfile}
+                    required
+                  />
+                </label>
+              </div>
+
+              <div className="perfil-form-actions">
+                <button
+                  type="submit"
+                  className="perfil-button perfil-button--primary"
+                  disabled={savingProfile}
                 >
-                  <Plus className="perfil-btn-icon" />
-                  Agregar Dirección
+                  {savingProfile ? (
+                    <>
+                      <Loader2
+                        className="perfil-spin"
+                        aria-hidden="true"
+                      />
+                      Guardando
+                    </>
+                  ) : (
+                    <>
+                      <Save aria-hidden="true" />
+                      Guardar cambios
+                    </>
+                  )}
                 </button>
               </div>
+            </form>
+          </section>
+
+          <section
+            id="direcciones"
+            className="perfil-section"
+          >
+            <div className="perfil-section-header perfil-section-header--actions">
+              <span className="perfil-section-icon">
+                <MapPin aria-hidden="true" />
+              </span>
+
+              <div>
+                <span>DIRECCIONES DE ENVÍO</span>
+                <h3>Tus direcciones</h3>
+                <p>
+                  Administra los lugares donde recibirás tus
+                  pedidos.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="perfil-button perfil-button--secondary perfil-add-button"
+                onClick={() => {
+                  setShowNewAddress((current) => !current);
+                  cancelEditingAddress();
+                  setError('');
+                }}
+              >
+                {showNewAddress ? (
+                  <X aria-hidden="true" />
+                ) : (
+                  <Plus aria-hidden="true" />
+                )}
+                {showNewAddress ? 'Cancelar' : 'Nueva dirección'}
+              </button>
+            </div>
+
+            {showNewAddress && (
+              <div className="perfil-new-address">
+                <div className="perfil-inline-header">
+                  <div>
+                    <span>NUEVA DIRECCIÓN</span>
+                    <h4>Agrega un lugar de entrega</h4>
+                  </div>
+                </div>
+
+                <AddressFields
+                  value={newAddress}
+                  onChange={setNewAddress}
+                  disabled={addingAddress}
+                />
+
+                <div className="perfil-inline-actions">
+                  <button
+                    type="button"
+                    className="perfil-button perfil-button--secondary"
+                    onClick={() => {
+                      setShowNewAddress(false);
+                      setNewAddress(EMPTY_ADDRESS);
+                    }}
+                    disabled={addingAddress}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    className="perfil-button perfil-button--primary"
+                    onClick={() =>
+                      setModal({
+                        title: 'Agregar dirección',
+                        message:
+                          'La nueva dirección quedará disponible para tus próximos pedidos.',
+                        type: 'info',
+                        confirmLabel: 'Agregar dirección',
+                        onConfirm: addAddress
+                      })
+                    }
+                    disabled={
+                      addingAddress ||
+                      !isAddressComplete(newAddress)
+                    }
+                  >
+                    {addingAddress ? (
+                      <>
+                        <Loader2
+                          className="perfil-spin"
+                          aria-hidden="true"
+                        />
+                        Agregando
+                      </>
+                    ) : (
+                      <>
+                        <Plus aria-hidden="true" />
+                        Agregar dirección
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Cerrar Sesión */}
-        <div className="perfil-card perfil-card--logout">
-          <div className="perfil-card-body perfil-card-body--center">
-            <button className="perfil-btn perfil-btn--logout" onClick={handleLogout}>
-              <LogOut className="perfil-btn-icon" />
-              Cerrar Sesión
-            </button>
-            <p className="perfil-logout-hint">Se cerrará tu sesión en todos los dispositivos</p>
-          </div>
-        </div>
+            {addresses.length === 0 ? (
+              <div className="perfil-empty-state">
+                <span>
+                  <MapPin aria-hidden="true" />
+                </span>
+                <h4>No tienes direcciones guardadas</h4>
+                <p>
+                  Agrega una dirección para completar tus
+                  compras más rápido.
+                </p>
+              </div>
+            ) : (
+              <div className="perfil-address-list">
+                {addresses.map((address, index) => {
+                  const isEditing =
+                    editingAddressId === address.id;
+                  const isWorking =
+                    addressActionId === address.id;
 
-        {/* Footer */}
-        <footer className="perfil-footer">
-          <div className="perfil-footer-content">
-            <Rocket className="perfil-footer-icon" />
-            <span>A Marte · Pijamas Espaciales para Pequeños Astronautas</span>
-            <Star className="perfil-footer-star" />
-          </div>
-        </footer>
+                  return (
+                    <article
+                      key={address.id}
+                      className={`perfil-address-card ${
+                        isEditing
+                          ? 'perfil-address-card--editing'
+                          : ''
+                      }`}
+                    >
+                      {isEditing ? (
+                        <>
+                          <div className="perfil-address-index">
+                            {String(index + 1).padStart(
+                              2,
+                              '0'
+                            )}
+                          </div>
+
+                          <div className="perfil-address-edit">
+                            <div className="perfil-inline-header">
+                              <div>
+                                <span>EDITAR DIRECCIÓN</span>
+                                <h4>
+                                  Actualiza los datos de
+                                  entrega
+                                </h4>
+                              </div>
+                            </div>
+
+                            <AddressFields
+                              value={editedAddress}
+                              onChange={setEditedAddress}
+                              disabled={isWorking}
+                            />
+
+                            <div className="perfil-inline-actions">
+                              <button
+                                type="button"
+                                className="perfil-button perfil-button--secondary"
+                                onClick={cancelEditingAddress}
+                                disabled={isWorking}
+                              >
+                                Cancelar
+                              </button>
+
+                              <button
+                                type="button"
+                                className="perfil-button perfil-button--primary"
+                                onClick={() =>
+                                  setModal({
+                                    title:
+                                      'Actualizar dirección',
+                                    message:
+                                      'Se guardarán los cambios realizados en esta dirección.',
+                                    type: 'info',
+                                    confirmLabel:
+                                      'Guardar dirección',
+                                    onConfirm: () =>
+                                      updateAddress(address.id)
+                                  })
+                                }
+                                disabled={
+                                  isWorking ||
+                                  !isAddressComplete(
+                                    editedAddress
+                                  )
+                                }
+                              >
+                                {isWorking ? (
+                                  <>
+                                    <Loader2
+                                      className="perfil-spin"
+                                      aria-hidden="true"
+                                    />
+                                    Guardando
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save aria-hidden="true" />
+                                    Guardar dirección
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="perfil-address-index">
+                            {String(index + 1).padStart(
+                              2,
+                              '0'
+                            )}
+                          </div>
+
+                          <div className="perfil-address-main">
+                            <span className="perfil-address-symbol">
+                              <Home aria-hidden="true" />
+                            </span>
+
+                            <div className="perfil-address-copy">
+                              <h4>{address.address}</h4>
+                              <p>
+                                {address.city},{' '}
+                                {address.state}
+                              </p>
+                              <span>{address.country}</span>
+                            </div>
+                          </div>
+
+                          <div className="perfil-address-actions">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                startEditingAddress(address)
+                              }
+                              disabled={isWorking}
+                              aria-label={`Editar ${address.address}`}
+                            >
+                              <Edit3 aria-hidden="true" />
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setModal({
+                                  title:
+                                    'Eliminar dirección',
+                                  message:
+                                    'Esta acción no se puede deshacer.',
+                                  type: 'danger',
+                                  confirmLabel:
+                                    'Eliminar dirección',
+                                  onConfirm: () =>
+                                    deleteAddress(address.id)
+                                })
+                              }
+                              disabled={isWorking}
+                              aria-label={`Eliminar ${address.address}`}
+                            >
+                              {isWorking ? (
+                                <Loader2
+                                  className="perfil-spin"
+                                  aria-hidden="true"
+                                />
+                              ) : (
+                                <Trash2 aria-hidden="true" />
+                              )}
+                              Eliminar
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </section>
       </div>
-    </div>
+    </main>
   );
 };
 
