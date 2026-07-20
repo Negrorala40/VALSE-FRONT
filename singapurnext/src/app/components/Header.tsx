@@ -160,7 +160,7 @@ const Header: React.FC = () => {
                 onLoad={() => setLogoLoaded(true)}
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
-                  target.src = '/images/logos/logver.png';
+                  target.src = '';
                 }}
                 className={`${styles.headerLogoImg} ${logoLoaded ? styles.headerLogoImgLoaded : ''}`}
               />

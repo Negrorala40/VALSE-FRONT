@@ -1,404 +1,628 @@
 'use client';
 
-import { useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import Image from "next/image";
-import styles from "./Footer.module.css";
-import { 
-  FaFacebook, 
-  FaInstagram, 
-  FaWhatsapp,
-  FaEnvelope,
-  FaHeadset,
-  FaShieldAlt,
-  FaTruck,
-  FaCreditCard,
-  FaTimes,
-  FaCcVisa,
+import {
   FaCcMastercard,
-  FaApple,
-  FaLock
-} from "react-icons/fa";
-import { SiMercadopago } from "react-icons/si";
+  FaCcVisa,
+  FaCreditCard,
+  FaEnvelope,
+  FaFacebookF,
+  FaInstagram,
+  FaLock,
+  FaShieldAlt,
+  FaTimes,
+  FaTruck,
+  FaWhatsapp
+} from 'react-icons/fa';
+import { SiMercadopago } from 'react-icons/si';
+import styles from './Footer.module.css';
 
-// Componente personalizado para PSE
-const PseIcon = () => (
-  <svg 
-    viewBox="0 0 24 24" 
-    width="1em" 
-    height="1em" 
-    className={styles.paymentSvg}
-    fill="currentColor"
+type LegalKey =
+  | 'terminos'
+  | 'privacidad'
+  | 'devoluciones'
+  | 'garantias'
+  | 'preguntas'
+  | 'aviso';
+
+interface LegalSection {
+  heading: string;
+  paragraphs?: string[];
+  bullets?: string[];
+  orderedItems?: string[];
+}
+
+interface LegalDocument {
+  title: string;
+  intro?: string;
+  sections: LegalSection[];
+}
+
+interface FooterLinkItem {
+  label: string;
+  href: string;
+}
+
+interface FooterLinkColumnProps {
+  title: string;
+  links: FooterLinkItem[];
+}
+
+interface LegalModalProps {
+  document: LegalDocument;
+  onClose: () => void;
+}
+
+const CONTACT = {
+  email: 'orbitaamarte@gmail.com',
+  whatsappLabel: '+57 314 385 3248',
+  whatsappUrl: 'https://wa.me/573143853248',
+  instagramUrl: 'https://www.instagram.com/amartekids.co/',
+  facebookUrl: 'https://www.facebook.com/profile.php?id=100087160562926'
+} as const;
+
+const shopLinks: FooterLinkItem[] = [
+  { label: 'Todos los productos', href: '/menu' },
+  { label: 'Niños', href: '/menu?category=ninos&type=SUPERIOR' },
+  { label: 'Niñas', href: '/menu?category=ninas&type=SUPERIOR' },
+  { label: 'Unisex', href: '/menu?gender=UNISEX&type=SUPERIOR' },
+  { label: 'Ofertas', href: '/menu?filter=descuento' }
+];
+
+const exploreLinks: FooterLinkItem[] = [
+  { label: 'Inicio', href: '/' },
+  { label: 'Catálogo', href: '/menu' },
+  { label: 'Novedades', href: '/menu' },
+  { label: 'Blog', href: '/blog' }
+];
+
+const legalDocuments: Record<LegalKey, LegalDocument> = {
+  terminos: {
+    title: 'Términos y condiciones',
+    intro:
+      'Estos términos regulan el acceso, navegación y compra de productos a través de la tienda online de VALSE.',
+    sections: [
+      {
+        heading: '1. Uso del sitio',
+        paragraphs: [
+          'El sitio debe utilizarse de manera lícita y respetando los derechos de VALSE, sus usuarios y terceros.'
+        ],
+        bullets: [
+          'No se permite intentar vulnerar la seguridad o disponibilidad de la plataforma.',
+          'No se permite utilizar el contenido con fines fraudulentos.',
+          'No se permite reproducir activos de marca sin autorización.'
+        ]
+      },
+      {
+        heading: '2. Productos y disponibilidad',
+        paragraphs: [
+          'Las fotografías buscan representar fielmente cada producto. Pueden existir variaciones menores de color según la pantalla, iluminación o lote de fabricación.',
+          'La disponibilidad depende del inventario de cada talla, color y variante.'
+        ]
+      },
+      {
+        heading: '3. Precios y pagos',
+        paragraphs: [
+          'Los precios visibles se expresan en pesos colombianos cuando no se indique lo contrario. El valor final, los descuentos aplicables y los costos de envío se muestran antes de confirmar la compra.',
+          'Los pagos son procesados mediante los proveedores habilitados en el checkout.'
+        ]
+      },
+      {
+        heading: '4. Envíos',
+        paragraphs: [
+          'Los tiempos de entrega son estimados y pueden variar según destino, disponibilidad, temporada y operador logístico.'
+        ]
+      }
+    ]
+  },
+  privacidad: {
+    title: 'Política de privacidad',
+    intro:
+      'VALSE utiliza la información personal únicamente para operar la tienda, atender solicitudes y mejorar la experiencia de compra.',
+    sections: [
+      {
+        heading: '1. Información recopilada',
+        bullets: [
+          'Datos de identificación y contacto proporcionados durante la compra.',
+          'Información necesaria para procesar pedidos, pagos y entregas.',
+          'Datos técnicos y de navegación utilizados para seguridad y analítica.'
+        ]
+      },
+      {
+        heading: '2. Finalidades',
+        bullets: [
+          'Gestionar pedidos, devoluciones y solicitudes de soporte.',
+          'Prevenir fraude y proteger la plataforma.',
+          'Enviar comunicaciones comerciales únicamente cuando exista autorización.'
+        ]
+      },
+      {
+        heading: '3. Protección de la información',
+        paragraphs: [
+          'Se aplican medidas técnicas y organizativas razonables para reducir riesgos de acceso, alteración, pérdida o divulgación no autorizada.'
+        ]
+      },
+      {
+        heading: '4. Derechos del titular',
+        paragraphs: [
+          `Puedes solicitar consulta, actualización, corrección o eliminación de tus datos escribiendo a ${CONTACT.email}.`
+        ]
+      }
+    ]
+  },
+  devoluciones: {
+    title: 'Cambios y devoluciones',
+    intro:
+      'Las solicitudes se revisan de acuerdo con el estado del producto, la fecha de entrega y las condiciones informadas durante la compra.',
+    sections: [
+      {
+        heading: '1. Condiciones generales',
+        bullets: [
+          'El producto debe conservar sus etiquetas, accesorios y empaque.',
+          'No debe presentar señales de uso, lavado, modificación o daño atribuible al cliente.',
+          'Debe incluirse el comprobante o número de pedido.'
+        ]
+      },
+      {
+        heading: '2. Solicitud',
+        orderedItems: [
+          'Comunícate con atención al cliente e indica el número de pedido.',
+          'Describe el motivo y adjunta evidencias cuando sean necesarias.',
+          'Espera la validación y las instrucciones de envío.',
+          'El producto será inspeccionado antes de aprobar el cambio o reembolso.'
+        ]
+      },
+      {
+        heading: '3. Reembolsos',
+        paragraphs: [
+          'Cuando corresponda, el reembolso se procesa al mismo medio de pago o mediante el mecanismo acordado con el cliente. Los tiempos finales dependen de la entidad financiera.'
+        ]
+      }
+    ]
+  },
+  garantias: {
+    title: 'Garantías',
+    intro:
+      'La garantía cubre defectos de calidad o fabricación identificados dentro del período aplicable al producto.',
+    sections: [
+      {
+        heading: '1. Cobertura',
+        bullets: [
+          'Defectos de fabricación.',
+          'Fallas en costuras, cierres o ensambles atribuibles al proceso productivo.',
+          'Problemas de material que no correspondan al desgaste normal.'
+        ]
+      },
+      {
+        heading: '2. Exclusiones',
+        bullets: [
+          'Desgaste normal por uso.',
+          'Daños por lavado o cuidado contrario a las instrucciones.',
+          'Accidentes, modificaciones o uso inadecuado.',
+          'Daños ocasionados por almacenamiento incorrecto.'
+        ]
+      },
+      {
+        heading: '3. Cómo solicitarla',
+        paragraphs: [
+          'Conserva el comprobante de compra y contacta a soporte con fotografías claras y una descripción del caso.'
+        ]
+      }
+    ]
+  },
+  preguntas: {
+    title: 'Preguntas frecuentes',
+    sections: [
+      {
+        heading: '¿Cuánto tarda un envío?',
+        paragraphs: [
+          'El tiempo depende de la ciudad y del operador logístico. La estimación se informa durante el checkout o después de confirmar el pedido.'
+        ]
+      },
+      {
+        heading: '¿Qué medios de pago están disponibles?',
+        paragraphs: [
+          'Los medios habilitados se muestran en el checkout y pueden incluir PSE, tarjetas y plataformas de pago digital.'
+        ]
+      },
+      {
+        heading: '¿Cómo elijo mi talla?',
+        paragraphs: [
+          'Consulta la guía asociada al producto y compara las medidas con una prenda similar. También puedes solicitar asesoría por WhatsApp.'
+        ]
+      },
+      {
+        heading: '¿Realizan envíos internacionales?',
+        paragraphs: [
+          'La cobertura actual debe confirmarse antes de finalizar la compra. Las opciones disponibles se muestran según la dirección ingresada.'
+        ]
+      }
+    ]
+  },
+  aviso: {
+    title: 'Aviso legal',
+    sections: [
+      {
+        heading: '1. Identidad y actividad',
+        paragraphs: [
+          'VALSE es una marca de ropa deportiva orientada al movimiento, el rendimiento y el diseño funcional.'
+        ]
+      },
+      {
+        heading: '2. Propiedad intelectual',
+        paragraphs: [
+          'El nombre, identidad gráfica, fotografías, textos, interfaces y demás contenidos del sitio están protegidos por la normativa aplicable y no pueden utilizarse sin autorización.'
+        ]
+      },
+      {
+        heading: '3. Responsabilidad',
+        paragraphs: [
+          'VALSE procura mantener la información disponible y actualizada, sin garantizar que el servicio esté libre de interrupciones temporales, errores técnicos o eventos fuera de su control.'
+        ]
+      },
+      {
+        heading: '4. Legislación aplicable',
+        paragraphs: [
+          'Las relaciones derivadas del uso de la tienda se interpretan conforme a la legislación de la República de Colombia.'
+        ]
+      }
+    ]
+  }
+};
+
+const legalLinks: Array<{ key: LegalKey; label: string }> = [
+  { key: 'terminos', label: 'Términos' },
+  { key: 'privacidad', label: 'Privacidad' },
+  { key: 'devoluciones', label: 'Devoluciones' },
+  { key: 'garantias', label: 'Garantías' },
+  { key: 'preguntas', label: 'FAQ' },
+  { key: 'aviso', label: 'Aviso legal' }
+];
+
+const serviceItems = [
+  {
+    icon: <FaLock aria-hidden="true" />,
+    title: 'Pago protegido',
+    description: 'Procesamiento mediante proveedores habilitados.'
+  },
+  {
+    icon: <FaTruck aria-hidden="true" />,
+    title: 'Envíos en Colombia',
+    description: 'Cobertura sujeta al destino y operador logístico.'
+  },
+  {
+    icon: <FaShieldAlt aria-hidden="true" />,
+    title: 'Compra con respaldo',
+    description: 'Soporte para cambios, garantías y pedidos.'
+  },
+  {
+    icon: <FaCreditCard aria-hidden="true" />,
+    title: 'Múltiples medios',
+    description: 'Opciones disponibles directamente en el checkout.'
+  }
+];
+
+const paymentMethods: Array<{ label: string; icon: ReactNode }> = [
+  { label: 'PSE', icon: <span className={styles.pseWordmark}>PSE</span> },
+  { label: 'Mastercard', icon: <FaCcMastercard aria-hidden="true" /> },
+  { label: 'Visa', icon: <FaCcVisa aria-hidden="true" /> },
+  { label: 'Mercado Pago', icon: <SiMercadopago aria-hidden="true" /> }
+];
+
+const ValseMark = () => (
+  <svg
+    className={styles.brandMark}
+    viewBox="0 0 120 96"
+    aria-hidden="true"
+    focusable="false"
   >
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-    <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4z"/>
-    <text x="6" y="18" fontSize="8" fontWeight="bold" fill="currentColor">PSE</text>
+    <path d="M6 8 45 35l12 25-18-8L23 36Z" />
+    <path d="m114 8-39 27-12 25 18-8 16-16Z" />
+    <path d="m50 35 10 16 10-16Z" />
+    <path d="m34 43 18 17v28L43 66Z" />
+    <path d="M86 43 68 60v28l9-22Z" />
   </svg>
 );
 
-interface LegalContent {
-  title: string;
-  content: string;
-}
+const FooterLinkColumn = ({ title, links }: FooterLinkColumnProps) => (
+  <nav className={styles.linkColumn} aria-label={title}>
+    <h3 className={styles.columnTitle}>{title}</h3>
+    <ul className={styles.linkList}>
+      {links.map((link) => (
+        <li key={`${title}-${link.label}`}>
+          <Link href={link.href} className={styles.footerLink}>
+            <span>{link.label}</span>
+            <span className={styles.linkArrow} aria-hidden="true">
+              ↗
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  </nav>
+);
+
+const LegalModal = ({ document, onClose }: LegalModalProps) => {
+  const titleId = useId();
+
+  return (
+    <div
+      className={styles.modalOverlay}
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className={styles.modalContent}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <header className={styles.modalHeader}>
+          <div>
+            <span className={styles.modalEyebrow}>VALSE / LEGAL</span>
+            <h2 id={titleId}>{document.title}</h2>
+          </div>
+
+          <button
+            type="button"
+            className={styles.modalClose}
+            onClick={onClose}
+            aria-label="Cerrar ventana"
+          >
+            <FaTimes aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className={styles.modalBody}>
+          {document.intro && <p className={styles.modalIntro}>{document.intro}</p>}
+
+          {document.sections.map((section) => (
+            <section className={styles.legalDocumentSection} key={section.heading}>
+              <h3>{section.heading}</h3>
+
+              {section.paragraphs?.map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
+
+              {section.bullets && (
+                <ul>
+                  {section.bullets.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              )}
+
+              {section.orderedItems && (
+                <ol>
+                  {section.orderedItems.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          ))}
+        </div>
+
+        <footer className={styles.modalFooter}>
+          <button type="button" className={styles.modalSecondaryBtn} onClick={onClose}>
+            Cerrar
+          </button>
+          <button
+            type="button"
+            className={styles.modalPrimaryBtn}
+            onClick={() => window.print()}
+          >
+            Imprimir
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+};
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
-  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [activeModal, setActiveModal] = useState<LegalKey | null>(null);
 
-  const openModal = (modalName: string) => {
-    setActiveModal(modalName);
-    document.body.style.overflow = "hidden";
-  };
+  useEffect(() => {
+    if (!activeModal) return;
 
-  const closeModal = () => {
-    setActiveModal(null);
-    document.body.style.overflow = "auto";
-  };
+    const previousOverflow = document.body.style.overflow;
 
-  const legalContent: Record<string, LegalContent> = {
-    terminos: {
-      title: "Términos y Condiciones",
-      content: `
-        <h3>1. ACEPTACIÓN DE TÉRMINOS</h3>
-        <p>Al acceder y utilizar este sitio web, usted acepta estar sujeto a estos términos y condiciones de uso, todas las leyes y regulaciones aplicables, y acepta que es responsable del cumplimiento de las leyes locales aplicables.</p>
-        
-        <h3>2. USO DEL SITIO</h3>
-        <p>Está autorizado a utilizar nuestro sitio web para fines legítimos. No puede utilizar este sitio de manera que:</p>
-        <ul>
-          <li>Viole cualquier ley o regulación local, nacional o internacional</li>
-          <li>Infrinja los derechos de propiedad intelectual de terceros</li>
-          <li>Sea fraudulenta o tenga propósito fraudulento</li>
-          <li>Transmita virus o cualquier otro código malicioso</li>
-        </ul>
-        
-        <h3>3. PRODUCTOS Y PRECIOS</h3>
-        <p>Nos reservamos el derecho de modificar los precios de los productos en cualquier momento sin previo aviso. Los precios mostrados son en dólares americanos (USD) e incluyen IVA cuando corresponda.</p>
-        
-        <h3>4. PAGOS</h3>
-        <p>Aceptamos los métodos de pago indicados en nuestro sitio. Todas las transacciones son procesadas de forma segura a través de pasarelas de pago certificadas.</p>
-        
-        <h3>5. ENVÍOS</h3>
-        <p>Realizamos envíos a todo Colombia. Los tiempos de entrega varían según la ubicación y el transportista seleccionado.</p>
-      `,
-    },
-    privacidad: {
-      title: "Política de Privacidad",
-      content: `
-        <h3>1. INFORMACIÓN QUE RECOPILAMOS</h3>
-        <p>Recopilamos información personal que usted nos proporciona voluntariamente al:</p>
-        <ul>
-          <li>Registrarse en nuestra tienda</li>
-          <li>Realizar una compra</li>
-          <li>Suscribirse a nuestro newsletter</li>
-          <li>Contactarnos por cualquier medio</li>
-        </ul>
-        
-        <h3>2. USO DE LA INFORMACIÓN</h3>
-        <p>Utilizamos su información personal para:</p>
-        <ul>
-          <li>Procesar sus pedidos y gestionar su cuenta</li>
-          <li>Enviar información sobre productos y ofertas (si nos ha dado su consentimiento)</li>
-          <li>Mejorar nuestros productos y servicios</li>
-          <li>Prevenir fraudes y actividades ilegales</li>
-        </ul>
-        
-        <h3>3. PROTECCIÓN DE DATOS</h3>
-        <p>Implementamos medidas de seguridad técnicas y organizativas para proteger sus datos personales contra accesos no autorizados, alteración, divulgación o destrucción.</p>
-        
-        <h3>4. DERECHOS DEL USUARIO</h3>
-        <p>Usted tiene derecho a acceder, rectificar y eliminar sus datos personales. Para ejercer estos derechos, contáctenos a info@amarte.com</p>
-      `,
-    },
-    devoluciones: {
-      title: "Política de Devoluciones",
-      content: `
-        <h3>1. PLAZO PARA DEVOLUCIONES</h3>
-        <p>Aceptamos devoluciones dentro de los 15 días posteriores a la recepción del producto. El producto debe estar en su estado original, sin usar y con todos los accesorios y empaques originales.</p>
-        
-        <h3>2. CONDICIONES PARA DEVOLUCIÓN</h3>
-        <p>Para ser elegible para una devolución:</p>
-        <ul>
-          <li>El producto debe estar en su estado original</li>
-          <li>Debe incluir la factura o comprobante de compra</li>
-          <li>Debe estar en su empaque original sin daños</li>
-          <li>No deben haber transcurrido más de 15 días desde la compra</li>
-        </ul>
-        
-        <h3>3. PROCESO DE DEVOLUCIÓN</h3>
-        <p>Para iniciar una devolución:</p>
-        <ol>
-          <li>Contacte a nuestro servicio al cliente</li>
-          <li>Proporcione el número de orden y detalles del producto</li>
-          <li>Recibirá instrucciones para el envío de retorno</li>
-          <li>Una vez recibido y verificado el producto, procesaremos el reembolso</li>
-        </ol>
-        
-        <h3>4. REEMBOLSOS</h3>
-        <p>Los reembolsos se procesarán dentro de los 5-7 días hábiles después de recibir y verificar el producto devuelto.</p>
-      `,
-    },
-    garantias: {
-      title: "Garantías",
-      content: `
-        <h3>1. PERÍODO DE GARANTÍA</h3>
-        <p>Todos nuestros productos cuentan con una garantía del fabricante que varía según el producto:</p>
-        <ul>
-          <li>Pijamas y ropa infantil: 3 meses</li>
-          <li>Accesorios y complementos: 2 meses</li>
-          <li>Productos especiales: Consultar garantía específica</li>
-        </ul>
-        
-        <h3>2. COBERTURA DE GARANTÍA</h3>
-        <p>La garantía cubre defectos de fabricación, fallos en costuras y problemas de calidad en los materiales.</p>
-        <p>La garantía NO cubre:</p>
-        <ul>
-          <li>Daños por uso inadecuado</li>
-          <li>Desgaste normal</li>
-          <li>Daños por lavado incorrecto</li>
-          <li>Modificaciones al producto</li>
-        </ul>
-        
-        <h3>3. ACTIVACIÓN DE GARANTÍA</h3>
-        <p>Para activar la garantía, conserve la factura de compra original y mantenga el producto en su empaque original.</p>
-      `,
-    },
-    preguntas: {
-      title: "Preguntas Frecuentes",
-      content: `
-        <h3>1. ¿Cuánto tardan los envíos?</h3>
-        <p>Los tiempos de envío varían según la ubicación:</p>
-        <ul>
-          <li>Bogotá, Medellín, Cali: 1-2 días hábiles</li>
-          <li>Otras ciudades principales: 2-4 días hábiles</li>
-          <li>Municipios y zonas rurales: 4-7 días hábiles</li>
-        </ul>
-        
-        <h3>2. ¿Qué métodos de pago aceptan?</h3>
-        <p>Aceptamos:</p>
-        <ul>
-          <li>Tarjetas de crédito/débito (Visa, Mastercard, Amex)</li>
-          <li>Transferencias bancarias</li>
-          <li>Nequi y Daviplata</li>
-          <li>Contraentrega en ciudades principales</li>
-        </ul>
-        
-        <h3>3. ¿Cómo sé mi talla?</h3>
-        <p>Disponemos de una guía de tallas detallada en cada producto. Si tienes dudas, contáctanos por WhatsApp para asesoría personalizada.</p>
-        
-        <h3>4. ¿Hacen envíos internacionales?</h3>
-        <p>Actualmente solo realizamos envíos dentro de Colombia.</p>
-      `,
-    },
-    aviso: {
-      title: "Aviso Legal",
-      content: `
-        <h3>1. INFORMACIÓN GENERAL</h3>
-        <p><strong>A MARTE</strong> es una empresa colombiana dedicada a la venta de pijamas infantiles de alta calidad.</p>
-        
-        <h3>2. PROPIEDAD INTELECTUAL</h3>
-        <p>Todos los contenidos de este sitio web, incluyendo textos, gráficos, logotipos, imágenes, y software, son propiedad de A MARTE o de sus proveedores de contenidos y están protegidos por las leyes de propiedad intelectual.</p>
-        
-        <h3>3. LIMITACIÓN DE RESPONSABILIDAD</h3>
-        <p>A MARTE no será responsable por daños indirectos, incidentales o consecuentes que resulten del uso o la imposibilidad de uso de los productos o servicios.</p>
-        
-        <h3>4. LEY APLICABLE</h3>
-        <p>Estos términos se regirán e interpretarán de acuerdo con las leyes de la República de Colombia.</p>
-        
-        <h3>5. MODIFICACIONES</h3>
-        <p>Nos reservamos el derecho de modificar estos términos en cualquier momento. Los cambios entrarán en vigor inmediatamente después de su publicación en el sitio web.</p>
-      `,
-    }
-  };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveModal(null);
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeModal]);
 
   return (
     <>
       <footer className={styles.footer}>
-        <div className={styles.footerContainer}>
-          {/* Column 1: Brand - Apple Style */}
-          <div className={styles.footerColumn}>
-            <div className={styles.logoWrapper}>
-              <div className={styles.logoGlow}></div>
-              <div className={styles.logoContainer}>
-                <Image 
-                  src="/images/logos/logverWhite.svg"
+        <div className={styles.footerWatermark} aria-hidden="true">
+          VALSE
+        </div>
+
+        <div className={styles.footerShell}>
+          <section className={styles.footerIntro}>
+            <div className={styles.brandBlock}>
+            <Link href="/" className={styles.brandLockup} aria-label="Ir al inicio de VALSE">
+            <Image 
+                  src="/images/logos/logLog.svg"
                   alt="A MARTE Logo"
-                  width={140}
-                  height={140}
+                  width={80}
+                  height={80}
                   className={styles.brandLogo}
                   priority={false}
                 />
+                <span className={styles.brandName}>VALSE</span>
+              </Link>
+
+              <span className={styles.brandEyebrow}>MOVE WITH PURPOSE</span>
+
+              <h2 className={styles.brandStatement}>
+                Diseñado para el movimiento.
+                <br />
+                Construido con intención.
+              </h2>
+
+              <p className={styles.brandDescription}>
+                Ropa deportiva funcional con una dirección limpia, precisa y contemporánea.
+              </p>
+            </div>
+
+            <div className={styles.socialBlock}>
+              <span className={styles.socialLabel}>Sigue el movimiento</span>
+
+              <div className={styles.socialLinks}>
+                <a
+                  href={CONTACT.instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.socialLink}
+                  aria-label="Instagram de VALSE"
+                >
+                  <FaInstagram aria-hidden="true" />
+                  <span>Instagram</span>
+                </a>
+
+                <a
+                  href={CONTACT.facebookUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.socialLink}
+                  aria-label="Facebook de VALSE"
+                >
+                  <FaFacebookF aria-hidden="true" />
+                  <span>Facebook</span>
+                </a>
+
+                <a
+                  href={CONTACT.whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={styles.socialLink}
+                  aria-label="WhatsApp de VALSE"
+                >
+                  <FaWhatsapp aria-hidden="true" />
+                  <span>WhatsApp</span>
+                </a>
               </div>
             </div>
-            <p className={styles.brandTagline}>Nos inspira su amor, su protección, su comodidad y su libertad para explorar.</p>
-            <p className={styles.brandDescription}>
-              Pijamas pensadas para soñar, moverse y explorar sin límites.
-            </p>
-            <div className={styles.socialSection}>
-              <a href="https://www.facebook.com/profile.php?id=100087160562926" aria-label="Facebook" target="_blank" rel="noopener noreferrer" className={styles.socialIcon}>
-                <FaFacebook />
+          </section>
+
+          <div className={styles.footerRule} />
+
+          <section className={styles.footerGrid}>
+            <FooterLinkColumn title="Comprar" links={shopLinks} />
+            <FooterLinkColumn title="Explorar" links={exploreLinks} />
+
+            <address className={styles.contactColumn}>
+              <h3 className={styles.columnTitle}>Contacto</h3>
+
+              <a className={styles.contactLink} href={`mailto:${CONTACT.email}`}>
+                <FaEnvelope aria-hidden="true" />
+                <span>
+                  <small>Información y soporte</small>
+                  {CONTACT.email}
+                </span>
               </a>
-              <a href="https://www.instagram.com/amartekids.co/" aria-label="Instagram" target="_blank" rel="noopener noreferrer" className={styles.socialIcon}>
-                <FaInstagram />
+
+              <a
+                className={styles.contactLink}
+                href={CONTACT.whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <FaWhatsapp aria-hidden="true" />
+                <span>
+                  <small>Asesoría por WhatsApp</small>
+                  {CONTACT.whatsappLabel}
+                </span>
               </a>
-              <a href="https://wa.me/573143853248" aria-label="WhatsApp" target="_blank" rel="noopener noreferrer" className={styles.socialIcon}>
-                <FaWhatsapp />
-              </a>
+            </address>
+
+            <div className={styles.manifestoColumn}>
+              <h3 className={styles.columnTitle}>VALSE</h3>
+              <p>
+                Movimiento, disciplina, rendimiento y elegancia dentro de un sistema visual
+                esencial.
+              </p>
+              <Link href="/menu" className={styles.catalogCta}>
+                Explorar catálogo
+                <span aria-hidden="true">→</span>
+              </Link>
             </div>
-          </div>
+          </section>
 
-          {/* Column 2: Quick Links */}
-          <div className={styles.footerColumn}>
-            <h4 className={styles.footerTitle}>Enlaces</h4>
-            <ul className={styles.footerLinks}>
-              <li>
-                <a href="/">Inicio</a>
-              </li>
-              <li>
-                <a href="/menu">Productos</a>
-              </li>
-              <li>
-                <a href="/home">Categorías</a>
-              </li>
-              <li>
-                <a href="/menu">Novedades</a>
-              </li>
-              <li>
-                <a href="/">Ofertas</a>
-              </li>
-            </ul>
-          </div>
-
-          {/* Column 3: Contact */}
-          <div className={styles.footerColumn}>
-            <h4 className={styles.footerTitle}>Contacto</h4>
-            <div className={styles.contactItems}>
-              <div className={styles.contactItem}>
-                <FaWhatsapp className={styles.contactIcon} />
+          <section className={styles.serviceStrip} aria-label="Beneficios de compra">
+            {serviceItems.map((item) => (
+              <article className={styles.serviceItem} key={item.title}>
+                <span className={styles.serviceIcon}>{item.icon}</span>
                 <div>
-                  <span className={styles.contactText}>+57 3143853248</span>
-                  <span className={styles.contactLabel}>WhatsApp</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
                 </div>
-              </div>
-              <div className={styles.contactItem}>
-                <FaEnvelope className={styles.contactIcon} />
-                <div>
-                  <span className={styles.contactText}>orbitaamarte@gmail.com</span>
-                  <span className={styles.contactLabel}>Información</span>
-                </div>
-              </div>
-              <div className={styles.contactItem}>
-                <FaHeadset className={styles.contactIcon} />
-                <div>
-                  <span className={styles.contactText}>orbitaamarte@gmail.com</span>
-                  <span className={styles.contactLabel}>Soporte</span>
-                </div>
-              </div>
-            </div>
-          </div>
+              </article>
+            ))}
+          </section>
 
-          {/* Column 4: Services */}
-          <div className={styles.footerColumn}>
-            <h4 className={styles.footerTitle}>Servicios</h4>
-            <div className={styles.servicesList}>
-              <div className={styles.serviceItem}>
-                <FaLock className={styles.serviceIcon} />
-                <span>Compra 100% Segura</span>
-              </div>
-              <div className={styles.serviceItem}>
-                <FaTruck className={styles.serviceIcon} />
-                <span>Envíos a todo Colombia</span>
-              </div>
-              <div className={styles.serviceItem}>
-                <FaCreditCard className={styles.serviceIcon} />
-                <span>Múltiples pagos</span>
-              </div>
-              <div className={styles.serviceItem}>
-                {/* <FaApple className={styles.serviceIcon} />
-                <span>Diseño Apple Style</span> */}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Section - Apple Style */}
-        <div className={styles.footerBottom}>
-          <div className={styles.bottomContent}>
-            {/* Payment Methods */}
-            <div className={styles.paymentMethods}>
-              <span className={styles.paymentTitle}>Métodos de pago</span>
+          <section className={styles.footerBottom}>
+            <div className={styles.paymentBlock}>
+              <span className={styles.paymentLabel}>Métodos de pago</span>
               <div className={styles.paymentIcons}>
-                <div className={styles.paymentIconWrapper} title="PSE">
-                  <PseIcon />
-                </div>
-                <div className={styles.paymentIconWrapper} title="Mastercard">
-                  <FaCcMastercard />
-                </div>
-                <div className={styles.paymentIconWrapper} title="Visa">
-                  <FaCcVisa />
-                </div>
-                <div className={styles.paymentIconWrapper} title="Mercado Pago">
-                  <SiMercadopago />
-                </div>
+                {paymentMethods.map((method) => (
+                  <span
+                    className={styles.paymentIcon}
+                    key={method.label}
+                    title={method.label}
+                    aria-label={method.label}
+                  >
+                    {method.icon}
+                  </span>
+                ))}
               </div>
             </div>
 
-            {/* Legal Links */}
-            <div className={styles.legalSection}>
-              <button className={styles.legalLink} onClick={() => openModal("terminos")}>
-                Términos
-              </button>
-              <span className={styles.separator}>•</span>
-              <button className={styles.legalLink} onClick={() => openModal("privacidad")}>
-                Privacidad
-              </button>
-              <span className={styles.separator}>•</span>
-              <button className={styles.legalLink} onClick={() => openModal("devoluciones")}>
-                Devoluciones
-              </button>
-              <span className={styles.separator}>•</span>
-              <button className={styles.legalLink} onClick={() => openModal("garantias")}>
-                Garantías
-              </button>
-              <span className={styles.separator}>•</span>
-              <button className={styles.legalLink} onClick={() => openModal("preguntas")}>
-                FAQ
-              </button>
-              <span className={styles.separator}>•</span>
-              <button className={styles.legalLink} onClick={() => openModal("aviso")}>
-                Aviso
-              </button>
-            </div>
+            <nav className={styles.legalLinks} aria-label="Información legal">
+              {legalLinks.map((item) => (
+                <button
+                  type="button"
+                  key={item.key}
+                  className={styles.legalLink}
+                  onClick={() => setActiveModal(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
 
-            {/* Copyright */}
-            <div className={styles.footerCopyright}>
-              &copy; {currentYear} <strong>A MARTE</strong> · Pijamas Infantiles · Colombia
-            </div>
-          </div>
+            <p className={styles.copyright}>
+              © {currentYear} VALSE. Colombia.
+            </p>
+          </section>
         </div>
       </footer>
 
-      {/* Modal */}
       {activeModal && (
-        <div className={styles.modalOverlay} onClick={closeModal}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>{legalContent[activeModal]?.title}</h2>
-              <button className={styles.modalClose} onClick={closeModal}>
-                <FaTimes />
-              </button>
-            </div>
-            <div className={styles.modalBody}>
-              <div dangerouslySetInnerHTML={{ __html: legalContent[activeModal]?.content }} />
-            </div>
-            <div className={styles.modalFooter}>
-              <button className={styles.modalBtn} onClick={closeModal}>
-                Cerrar
-              </button>
-              <button className={`${styles.modalBtn} ${styles.primary}`} onClick={() => window.print()}>
-                Imprimir
-              </button>
-            </div>
-          </div>
-        </div>
+        <LegalModal
+          document={legalDocuments[activeModal]}
+          onClose={() => setActiveModal(null)}
+        />
       )}
     </>
   );
