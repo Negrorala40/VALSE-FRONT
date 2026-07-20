@@ -1,58 +1,64 @@
-// app/components/PaymentResult.tsx
 'use client';
 
-import { useSearchParams, useRouter } from 'next/navigation';
-import { 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  Package, 
-  CreditCard, 
-  User, 
-  MapPin, 
-  ShoppingBag,
-  Loader2,
-  AlertCircle,
-  Shield,
-  Mail,
-  Phone,
-  Check,
-  ArrowLeft,
-  Home,
-  ExternalLink,
-  RefreshCw,
-  Calendar,
-  Truck,
-  Gift,
-  Share2,
-  Printer,
-  Download,
-  FileText,
-  MessageSquare,
-  Star,
-  Sparkles,
-  Lock,
-  CheckCheck,
-  RotateCcw
-} from 'lucide-react';
-import Link from 'next/link';
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react';
 import Image from 'next/image';
-import './PaymentResult.css';
-import { useEffect, useState, Suspense, useCallback, useRef } from 'react';
-import { trackPurchase } from '@/app/lib/tracking';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Cookies from 'js-cookie';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  Home,
+  Loader2,
+  Lock,
+  Mail,
+  MapPin,
+  Package,
+  Phone,
+  Printer,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  ShoppingBag,
+  Truck,
+  User,
+  XCircle
+} from 'lucide-react';
 
-// Importar las constantes desde tu Api.ts
-import { 
+import './PaymentResult.css';
+import { trackPurchase } from '@/app/lib/tracking';
+import {
   MERCADOPAGO_STATUS,
-  ORDER_DETAIL,
   ORDER_CHECK_EXPIRATION,
-  API_BASE_URL
+  ORDER_DETAIL
 } from '@/app/utils/Api';
 
-// Tipos de respuesta de Mercado Pago
+type PaymentViewStatus =
+  | 'approved'
+  | 'pending'
+  | 'rejected'
+  | 'unknown';
+
 interface MercadoPagoParams {
   collection_id?: string;
-  collection_status?: 'approved' | 'pending' | 'rejected' | 'in_process' | 'cancelled';
+  collection_status?:
+    | 'approved'
+    | 'pending'
+    | 'rejected'
+    | 'in_process'
+    | 'cancelled';
   payment_id?: string;
   status?: string;
   external_reference?: string;
@@ -64,20 +70,22 @@ interface MercadoPagoParams {
   payment_type?: string;
 }
 
+interface OrderItem {
+  id: number;
+  productVariantId?: number | string;
+  name: string;
+  image: string;
+  quantity: number;
+  price: number;
+  size?: string;
+  color?: string;
+}
+
 interface OrderDetails {
   id: string;
   status: string;
   total: number;
-  items: Array<{
-    id: number;
-    productVariantId?: number | string;
-    name: string;
-    image: string;
-    quantity: number;
-    price: number;
-    size?: string;
-    color?: string;
-  }>;
+  items: OrderItem[];
   customer: {
     name: string;
     email: string;
@@ -106,1213 +114,1575 @@ interface OrderDetails {
   cancellationReason?: string;
 }
 
-// Componente principal envuelto en Suspense
-function PaymentResultContent() {
-  const hasTrackedPurchaseRef = useRef(false);
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [orderDetails, setOrderDetails] = useState<OrderDetails | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'approved' | 'pending' | 'rejected' | 'unknown'>('unknown');
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
-  const [isOrderExpired, setIsOrderExpired] = useState(false);
-  const [isPolling, setIsPolling] = useState(false);
-  const [pollingAttempts, setPollingAttempts] = useState(0);
-
-  // 🔴 OBTENER SESSION ID (igual que en Checkout.tsx)
-  const getSessionId = useCallback(() => {
-    let sessionId = localStorage.getItem('cartSessionId');
-    
-    if (!sessionId) {
-      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('cartSessionId', sessionId);
-      console.log('🆕 Nuevo sessionId creado:', sessionId.substring(0, 8) + '...');
-    }
-    
-    sessionStorage.setItem('cartSessionId', sessionId);
-    return sessionId;
-  }, []);
-
-  // 🔴 OBTENER HEADERS (igual que en Checkout.tsx)
-  const getRequestHeaders = useCallback((token?: string | null) => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const currentSessionId = getSessionId();
-    headers['X-Cart-Session-Id'] = currentSessionId;
-    
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      console.log('📤 Headers enviados:', {
-        'X-Cart-Session-Id': currentSessionId.substring(0, 8) + '...',
-        'Authorization': token ? 'Presente' : 'No'
-      });
-    }
-
-    return headers;
-  }, [getSessionId]);
-
-  // Extraer parámetros de Mercado Pago
-  const getMercadoPagoParams = (): MercadoPagoParams => {
-    const params: MercadoPagoParams = {};
-    
-    const possibleParams = [
-      'collection_id', 'collection_status', 'payment_id', 'status',
-      'external_reference', 'merchant_order_id', 'preference_id',
-      'site_id', 'processing_mode', 'merchant_account_id', 'payment_type'
-    ];
-    
-    possibleParams.forEach(param => {
-      const value = searchParams.get(param);
-      if (value) {
-        (params as any)[param] = value;
-      }
-    });
-
-    const orderId = searchParams.get('orderId');
-    if (orderId && !params.external_reference) {
-      params.external_reference = orderId;
-    }
-
-    return params;
+interface PaymentStatusResponse {
+  success?: boolean;
+  error?: string;
+  orderId?: string | number;
+  id?: string | number;
+  status?: string;
+  orderStatus?: string;
+  totalPrice?: number;
+  total?: number;
+  items?: Array<Record<string, unknown>>;
+  orderItems?: Array<Record<string, unknown>>;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
   };
+  user?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  };
+  shippingAddress?: OrderDetails['shippingAddress'];
+  paymentMethod?: string;
+  installments?: number;
+  cardDetails?: OrderDetails['paymentInfo'] extends infer T
+    ? T extends { card?: infer C }
+      ? C
+      : never
+    : never;
+  voucherUrl?: string;
+  orderDate?: string;
+  createdAt?: string;
+  paymentId?: string;
+  mercadoPagoStatus?: string;
+  mpStatus?: string;
+  stockReservationMinutesLeft?: number;
+  stockReservationExpired?: boolean;
+  cancellationReason?: string;
+}
 
-  // 🔴 DETERMINAR ESTADO DEL PAGO - SOLO SEGÚN ESTADO DE LA ORDEN EN EL BACKEND (fuente de verdad)
-  const determinePaymentStatus = useCallback((orderData: any) => {
-    const status = orderData.status?.toUpperCase() || '';
-    const mpStatus = orderData.mercadoPagoStatus?.toLowerCase() || '';
+const CART_SESSION_KEY = 'cartSessionId';
+const CART_SESSION_COOKIE = 'cart_session_id';
+const CART_SESSION_HEADER = 'X-Cart-Session-Id';
+const FALLBACK_IMAGE = '/images/placeholder.png';
 
-    console.log('🔍 Estado desde backend (fuente de verdad):', { status, mpStatus });
+const POLL_INTERVAL_MS = 3000;
+const MAX_POLL_ATTEMPTS = 40;
 
-    // Solo mostrar "Pago aprobado" cuando el backend confirmó la orden (PAGO_APROBADO)
-    if (status === 'PAGO_APROBADO') {
-      setPaymentStatus('approved');
-      setSuccessMessage('✅ ¡Pago confirmado exitosamente! Tu pedido está en camino.');
+const normalizeText = (
+  value: unknown,
+  fallback = ''
+): string =>
+  typeof value === 'string' && value.trim()
+    ? value.trim()
+    : fallback;
 
-      localStorage.removeItem('pendingOrderId');
-      localStorage.removeItem('pendingOrderData');
-      localStorage.removeItem('pendingPreferenceId');
-      localStorage.removeItem('lastOrderCartHash');
-      localStorage.removeItem('cartSessionId');
-      sessionStorage.removeItem('cartSessionId');
+const normalizeNumber = (
+  value: unknown,
+  fallback = 0
+): number => {
+  const numericValue = Number(value);
 
-    } else if (status === 'PENDIENTE') {
-      setPaymentStatus('pending');
+  return Number.isFinite(numericValue)
+    ? numericValue
+    : fallback;
+};
 
-    } else if (status === 'PAGO_RECHAZADO' || status === 'RECHAZADO') {
-      setPaymentStatus('rejected');
-      setError(`❌ ${orderData.cancellationReason || 'El pago fue rechazado'}`);
+const getNestedString = (
+  source: Record<string, unknown>,
+  path: string[]
+): string | undefined => {
+  let current: unknown = source;
 
-    } else if (status === 'CANCELADO') {
-      setPaymentStatus('rejected');
-      setIsOrderExpired(true);
-      setError(`❌ ${orderData.cancellationReason || 'La orden fue cancelada por expiración'}`);
-
-      localStorage.removeItem('pendingOrderId');
-      localStorage.removeItem('pendingOrderData');
-      localStorage.removeItem('pendingPreferenceId');
-      localStorage.removeItem('lastOrderCartHash');
-
-    } else {
-      // Estado desconocido o no coincidente (ej. MP aprobó pero backend no confirmó)
-      setPaymentStatus('unknown');
-      console.warn('Estado desde backend no reconocido:', orderData);
+  for (const key of path) {
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      !(key in current)
+    ) {
+      return undefined;
     }
+
+    current = (current as Record<string, unknown>)[key];
+  }
+
+  return typeof current === 'string'
+    ? current
+    : undefined;
+};
+
+const getNestedNumber = (
+  source: Record<string, unknown>,
+  path: string[]
+): number | undefined => {
+  let current: unknown = source;
+
+  for (const key of path) {
+    if (
+      !current ||
+      typeof current !== 'object' ||
+      !(key in current)
+    ) {
+      return undefined;
+    }
+
+    current = (current as Record<string, unknown>)[key];
+  }
+
+  const numericValue = Number(current);
+
+  return Number.isFinite(numericValue)
+    ? numericValue
+    : undefined;
+};
+
+const normalizeItems = (
+  data: PaymentStatusResponse
+): OrderItem[] => {
+  const sourceItems = Array.isArray(data.items)
+    ? data.items
+    : Array.isArray(data.orderItems)
+      ? data.orderItems
+      : [];
+
+  return sourceItems.map((rawItem, index) => {
+    const item = rawItem as Record<string, unknown>;
+
+    const productName =
+      normalizeText(item.productName) ||
+      getNestedString(item, ['product', 'name']) ||
+      normalizeText(item.name) ||
+      `Producto ${index + 1}`;
+
+    const imageUrls = Array.isArray(item.imageUrls)
+      ? item.imageUrls
+      : [];
+
+    const firstImage =
+      imageUrls.find(
+        (image): image is string =>
+          typeof image === 'string' &&
+          Boolean(image.trim())
+      ) ||
+      normalizeText(item.image) ||
+      getNestedString(item, [
+        'product',
+        'images',
+        '0',
+        'imageUrl'
+      ]) ||
+      FALLBACK_IMAGE;
+
+    const itemId =
+      normalizeNumber(item.id, index + 1) ||
+      index + 1;
+
+    const variantId =
+      item.productVariantId ??
+      item.variantId ??
+      getNestedNumber(item, [
+        'productVariant',
+        'id'
+      ]) ??
+      itemId;
+
+    return {
+      id: itemId,
+      productVariantId:
+        typeof variantId === 'string' ||
+        typeof variantId === 'number'
+          ? variantId
+          : itemId,
+      name: productName,
+      image: firstImage,
+      quantity: Math.max(
+        1,
+        normalizeNumber(item.quantity, 1)
+      ),
+      price: normalizeNumber(item.price, 0),
+      size:
+        normalizeText(item.size) ||
+        getNestedString(item, [
+          'productVariant',
+          'size'
+        ]),
+      color:
+        normalizeText(item.color) ||
+        getNestedString(item, [
+          'productVariant',
+          'color'
+        ])
+    };
+  });
+};
+
+const normalizeOrderData = (
+  data: PaymentStatusResponse,
+  requestedOrderId: string
+): OrderDetails => {
+  const customerNameFromUser = data.user
+    ? `${data.user.firstName || ''} ${
+        data.user.lastName || ''
+      }`.trim()
+    : '';
+
+  return {
+    id: String(
+      data.orderId ?? data.id ?? requestedOrderId
+    ),
+    status:
+      normalizeText(
+        data.status || data.orderStatus,
+        'UNKNOWN'
+      ) || 'UNKNOWN',
+    total: normalizeNumber(
+      data.totalPrice ?? data.total,
+      0
+    ),
+    items: normalizeItems(data),
+    customer: {
+      name:
+        normalizeText(data.customerName) ||
+        normalizeText(data.customer?.name) ||
+        customerNameFromUser ||
+        'Cliente',
+      email:
+        normalizeText(data.customerEmail) ||
+        normalizeText(data.customer?.email) ||
+        normalizeText(data.user?.email),
+      phone:
+        normalizeText(data.customerPhone) ||
+        normalizeText(data.customer?.phone) ||
+        normalizeText(data.user?.phone)
+    },
+    shippingAddress: data.shippingAddress,
+    paymentInfo: {
+      method:
+        normalizeText(
+          data.paymentMethod,
+          'Mercado Pago'
+        ) || 'Mercado Pago',
+      installments: data.installments,
+      card: data.cardDetails,
+      voucherUrl: data.voucherUrl
+    },
+    createdAt:
+      normalizeText(
+        data.orderDate || data.createdAt,
+        new Date().toISOString()
+      ) || new Date().toISOString(),
+    mercadoPagoPaymentId: data.paymentId,
+    mercadoPagoStatus:
+      data.mercadoPagoStatus || data.mpStatus,
+    stockReservationMinutesLeft:
+      data.stockReservationMinutesLeft,
+    stockReservationExpired:
+      data.stockReservationExpired,
+    cancellationReason: data.cancellationReason
+  };
+};
+
+const SafeOrderImage = ({
+  src,
+  alt
+}: {
+  src: string;
+  alt: string;
+}) => {
+  const [imageSource, setImageSource] = useState(
+    src || FALLBACK_IMAGE
+  );
+
+  useEffect(() => {
+    setImageSource(src || FALLBACK_IMAGE);
+  }, [src]);
+
+  return (
+    <Image
+      src={imageSource}
+      alt={alt}
+      fill
+      className="payment-product-img"
+      sizes="(max-width: 640px) 82px, 96px"
+      onError={() => {
+        if (imageSource !== FALLBACK_IMAGE) {
+          setImageSource(FALLBACK_IMAGE);
+        }
+      }}
+    />
+  );
+};
+
+const StatusIcon = ({
+  status
+}: {
+  status: PaymentViewStatus;
+}) => {
+  if (status === 'approved') {
+    return <CheckCircle2 aria-hidden="true" />;
+  }
+
+  if (status === 'pending') {
+    return <Clock3 aria-hidden="true" />;
+  }
+
+  if (status === 'rejected') {
+    return <XCircle aria-hidden="true" />;
+  }
+
+  return <AlertCircle aria-hidden="true" />;
+};
+
+function PaymentResultContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const hasTrackedPurchaseRef = useRef(false);
+  const activeRequestRef =
+    useRef<AbortController | null>(null);
+  const pollingTimerRef = useRef<number | null>(null);
+  const pollingAttemptsRef = useRef(0);
+  const verifyPaymentRef = useRef<
+  ((orderId: string) => Promise<void>) | null
+>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [orderDetails, setOrderDetails] =
+    useState<OrderDetails | null>(null);
+  const [paymentStatus, setPaymentStatus] =
+    useState<PaymentViewStatus>('unknown');
+  const [timerSeconds, setTimerSeconds] =
+    useState<number | null>(null);
+  const [isOrderExpired, setIsOrderExpired] =
+    useState(false);
+  const [isPolling, setIsPolling] = useState(false);
+
+  const formatPrice = useCallback(
+    (price: number) =>
+      new Intl.NumberFormat('es-CO', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(price || 0),
+    []
+  );
+
+  const formatDate = useCallback((dateValue: string) => {
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return 'Fecha no disponible';
+    }
+
+    return new Intl.DateTimeFormat('es-CO', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   }, []);
 
-  // 🔴 VERIFICAR EXPIRACIÓN DE ORDEN
-  const checkOrderExpiration = useCallback(async (orderId: string): Promise<boolean> => {
-    try {
-      const token = localStorage.getItem('token');
-      const headers = getRequestHeaders(token);
-      
-      const response = await fetch(`${ORDER_CHECK_EXPIRATION.replace('{orderId}', orderId)}`, {
-        method: 'POST',
-        headers,
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        
-        if (data.expired) {
-          console.log('🔴 Orden expirada detectada');
-          setIsOrderExpired(true);
-          
-          // Limpiar datos de orden expirada
-          localStorage.removeItem('pendingOrderId');
-          localStorage.removeItem('pendingOrderData');
-          localStorage.removeItem('pendingPreferenceId');
-          localStorage.removeItem('lastOrderCartHash');
-          
-          setError('⚠️ La orden ha expirado porque no se completó el pago en 10 minutos.');
-          return true;
-        }
-      }
-    } catch (error) {
-      console.error('Error verificando expiración:', error);
-    }
-    
-    return false;
-  }, [getRequestHeaders]);
+  const formatTimer = useCallback((seconds: number) => {
+    const safeSeconds = Math.max(0, seconds);
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = safeSeconds % 60;
 
-  // 🔴 POLLING PARA WEBHOOK (máx 2 minutos)
-  const pollForWebhookCompletion = useCallback(async (orderId: string, maxAttempts = 120) => {
-    console.log('🔄 Iniciando polling para webhook (máx 2 minutos)...');
-    setIsPolling(true);
-    
-    let attempts = 0;
-    const pollInterval = setInterval(async () => {
-      attempts++;
-      
+    return `${String(minutes).padStart(2, '0')}:${String(
+      remainingSeconds
+    ).padStart(2, '0')}`;
+  }, []);
+
+  const getSessionId = useCallback(() => {
+    const existingSessionId =
+      localStorage.getItem(CART_SESSION_KEY) ||
+      sessionStorage.getItem(CART_SESSION_KEY) ||
+      Cookies.get(CART_SESSION_COOKIE);
+
+    if (existingSessionId) {
+      localStorage.setItem(
+        CART_SESSION_KEY,
+        existingSessionId
+      );
+      sessionStorage.setItem(
+        CART_SESSION_KEY,
+        existingSessionId
+      );
+
+      Cookies.set(
+        CART_SESSION_COOKIE,
+        existingSessionId,
+        {
+          expires: 7,
+          path: '/',
+          sameSite: 'lax',
+          secure:
+            window.location.protocol === 'https:'
+        }
+      );
+
+      return existingSessionId;
+    }
+
+    const generatedSessionId =
+      typeof crypto !== 'undefined' &&
+      typeof crypto.randomUUID === 'function'
+        ? `session_${crypto.randomUUID()}`
+        : `session_${Date.now()}_${Math.random()
+            .toString(36)
+            .slice(2, 11)}`;
+
+    localStorage.setItem(
+      CART_SESSION_KEY,
+      generatedSessionId
+    );
+    sessionStorage.setItem(
+      CART_SESSION_KEY,
+      generatedSessionId
+    );
+
+    Cookies.set(
+      CART_SESSION_COOKIE,
+      generatedSessionId,
+      {
+        expires: 7,
+        path: '/',
+        sameSite: 'lax',
+        secure:
+          window.location.protocol === 'https:'
+      }
+    );
+
+    return generatedSessionId;
+  }, []);
+
+  const getRequestHeaders = useCallback(
+    (token?: string | null) => {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        [CART_SESSION_HEADER]: getSessionId()
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      return headers;
+    },
+    [getSessionId]
+  );
+
+  const clearPolling = useCallback(() => {
+    if (pollingTimerRef.current !== null) {
+      window.clearTimeout(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+
+    pollingAttemptsRef.current = 0;
+    setIsPolling(false);
+  }, []);
+
+  const clearPendingOrderStorage = useCallback(
+    (clearCartSession = false) => {
+      localStorage.removeItem('pendingOrderId');
+      localStorage.removeItem('pendingOrderData');
+      localStorage.removeItem('pendingPreferenceId');
+      localStorage.removeItem('mercadoPagoOrderId');
+      localStorage.removeItem('lastOrderCartHash');
+
+      if (clearCartSession) {
+        localStorage.removeItem(CART_SESSION_KEY);
+        sessionStorage.removeItem(CART_SESSION_KEY);
+        Cookies.remove(CART_SESSION_COOKIE, {
+          path: '/'
+        });
+      }
+    },
+    []
+  );
+
+  const determinePaymentStatus = useCallback(
+    (order: OrderDetails) => {
+      const orderStatus = order.status.toUpperCase();
+      const mercadoPagoStatus =
+        order.mercadoPagoStatus?.toLowerCase() || '';
+
+      if (
+        orderStatus === 'PAGO_APROBADO' ||
+        mercadoPagoStatus === 'approved'
+      ) {
+        setPaymentStatus('approved');
+        setIsOrderExpired(false);
+        setError('');
+        clearPolling();
+        clearPendingOrderStorage(true);
+        return;
+      }
+
+      if (
+        orderStatus === 'PENDIENTE' ||
+        orderStatus === 'EN_PROCESO' ||
+        mercadoPagoStatus === 'pending' ||
+        mercadoPagoStatus === 'in_process'
+      ) {
+        setPaymentStatus('pending');
+        setIsOrderExpired(false);
+        return;
+      }
+
+      if (
+        orderStatus === 'PAGO_RECHAZADO' ||
+        orderStatus === 'RECHAZADO' ||
+        mercadoPagoStatus === 'rejected'
+      ) {
+        setPaymentStatus('rejected');
+        setIsOrderExpired(false);
+        setError(
+          order.cancellationReason ||
+            'El pago no fue aprobado.'
+        );
+        clearPolling();
+        return;
+      }
+
+      if (
+        orderStatus === 'CANCELADO' ||
+        order.stockReservationExpired ||
+        mercadoPagoStatus === 'cancelled'
+      ) {
+        setPaymentStatus('rejected');
+        setIsOrderExpired(true);
+        setError(
+          order.cancellationReason ||
+            'La reserva de la orden expiró.'
+        );
+        clearPolling();
+        clearPendingOrderStorage();
+        return;
+      }
+
+      setPaymentStatus('unknown');
+    },
+    [
+      clearPendingOrderStorage,
+      clearPolling
+    ]
+  );
+
+  const checkOrderExpiration = useCallback(
+    async (orderId: string) => {
       try {
         const token = localStorage.getItem('token');
-        const headers = getRequestHeaders(token);
-        
-        const response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
-          method: 'GET',
-          headers,
-          credentials: 'include'
-        });
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`✅ Poll intento ${attempts}: Estado = ${data.status}`);
-          
-          // Si el estado cambió de PENDIENTE, webhook llegó
-          if (data.status && data.status !== 'PENDIENTE') {
-            clearInterval(pollInterval);
-            console.log('🎉 Webhook procesado! Actualizando UI...');
-            setOrderDetails(data);
-            determinePaymentStatus(data);
-            setIsPolling(false);
-            return;
+        const response = await fetch(
+          ORDER_CHECK_EXPIRATION.replace(
+            '{orderId}',
+            orderId
+          ),
+          {
+            method: 'POST',
+            headers: getRequestHeaders(token),
+            credentials: 'include'
           }
+        );
+
+        if (!response.ok) {
+          return false;
         }
-      } catch (error) {
-        console.error(`❌ Error en poll intento ${attempts}:`, error);
-      }
-      
-      if (attempts >= maxAttempts) {
-        clearInterval(pollInterval);
-        console.log('⏱️ Timeout de polling (2 minutos) - Mostrando estado PENDIENTE');
-        setIsPolling(false);
-        return;
-      }
-      
-      setPollingAttempts(attempts);
-    }, 1000); // Polling cada 1 segundo
-    
-    return pollInterval;
-  }, [getRequestHeaders, determinePaymentStatus]);
 
-  // 🔴 VERIFICAR ESTADO DEL PAGO EN EL BACKEND
-  const verifyPayment = useCallback(async (orderId: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccessMessage('');
-      
-      console.log('🔍 Verificando pago para orden:', orderId);
+        const data = (await response.json()) as {
+          expired?: boolean;
+        };
 
+        if (!data.expired) {
+          return false;
+        }
+
+        setIsOrderExpired(true);
+        setPaymentStatus('rejected');
+        setError(
+          'La reserva de la orden expiró antes de completar el pago.'
+        );
+        clearPendingOrderStorage();
+        clearPolling();
+
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [
+      clearPendingOrderStorage,
+      clearPolling,
+      getRequestHeaders
+    ]
+  );
+
+  const fetchOrderData = useCallback(
+    async (
+      orderId: string,
+      signal?: AbortSignal
+    ): Promise<PaymentStatusResponse> => {
       const token = localStorage.getItem('token');
       const headers = getRequestHeaders(token);
-      
-      // 🔴 PRIMERO: VERIFICAR EXPIRACIÓN
-      const isExpired = await checkOrderExpiration(orderId);
-      if (isExpired) {
-        setLoading(false);
-        return;
-      }
 
-      // 🔴 SEGUNDO: OBTENER ESTADO DEL PAGO
-      console.log('📊 Consultando endpoint de pagos:', MERCADOPAGO_STATUS);
-      let response = await fetch(`${MERCADOPAGO_STATUS}/${orderId}`, {
-        method: 'GET',
-        headers,
-        credentials: 'include'
-      });
-
-      console.log('📊 Respuesta endpoint pagos:', response.status);
-
-      if (!response.ok) {
-        console.log('⚠️ Endpoint de pagos no disponible, intentando con orders...');
-        
-        // 🔴 ALTERNATIVA: OBTENER DETALLES DE LA ORDEN
-        response = await fetch(`${ORDER_DETAIL(parseInt(orderId))}`, {
+      let response = await fetch(
+        `${MERCADOPAGO_STATUS}/${orderId}`,
+        {
           method: 'GET',
           headers,
-          credentials: 'include'
-        });
-        
-        console.log('📊 Respuesta endpoint orders:', response.status);
+          credentials: 'include',
+          signal
+        }
+      );
+
+      if (!response.ok) {
+        response = await fetch(
+          ORDER_DETAIL(Number(orderId)),
+          {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+            signal
+          }
+        );
       }
 
       if (!response.ok) {
-        // Si ambos endpoints fallan, verificar si es una orden expirada
-        if (response.status === 404) {
-          const pendingOrderId = localStorage.getItem('pendingOrderId');
-          if (pendingOrderId === orderId) {
-            console.log('🔄 Orden encontrada en localStorage pero no en backend (probablemente expirada)');
-            
-            setOrderDetails({
-              id: orderId,
-              status: 'CANCELADO',
-              total: 0,
-              items: [],
-              customer: {
-                name: 'Cliente',
-                email: '',
-                phone: ''
-              },
-              createdAt: new Date().toISOString(),
-              cancellationReason: 'La orden ha expirado automáticamente (10 minutos)'
-            });
-            
-            setPaymentStatus('rejected');
-            setIsOrderExpired(true);
-            setError('⚠️ La orden ha expirado porque no se completó el pago en 10 minutos.');
-            
-            localStorage.removeItem('pendingOrderId');
-            localStorage.removeItem('pendingOrderData');
-            localStorage.removeItem('pendingPreferenceId');
-            
-            return;
-          }
-        }
-        
-        throw new Error(`Error ${response.status}: No se pudo verificar el estado del pago`);
+        const responseText = await response.text();
+
+        throw new Error(
+          responseText ||
+            `No fue posible consultar la orden (${response.status})`
+        );
       }
 
-      const data = await response.json();
-      console.log('✅ Datos recibidos del backend:', data);
-      
+      const data =
+        (await response.json()) as PaymentStatusResponse;
+
       if (data.error) {
         throw new Error(data.error);
       }
-      
-      // 🔴 PROCESAR RESPUESTA
-      let orderData: OrderDetails;
-      
-      // Formato 1: Desde /api/payments/status/{orderId}
-      if (data.success !== undefined) {
-        orderData = {
-          id: data.orderId?.toString() || orderId,
-          status: data.status || data.orderStatus || 'UNKNOWN',
-          total: Number(data.totalPrice) || Number(data.total) || 0,
-          items: data.items?.map((item: any, index: number) => ({
-            id: item.id || index,
-            productVariantId: item.productVariantId || item.variantId || item.id || index,
-            name: item.productName || item.name || `Producto ${index + 1}`,
-            image: item.imageUrls?.[0] || item.image || '/images/placeholder.png',
-            quantity: item.quantity || 1,
-            price: Number(item.price) || 0,
-            size: item.size,
-            color: item.color
-          })) || [],
-          customer: {
-            name: data.customerName || data.customer?.name || 'Cliente',
-            email: data.customerEmail || data.customer?.email || '',
-            phone: data.customerPhone || data.customer?.phone || ''
-          },
-          shippingAddress: data.shippingAddress,
-          paymentInfo: {
-            method: data.paymentMethod || 'Mercado Pago',
-            installments: data.installments,
-            card: data.cardDetails,
-            voucherUrl: data.voucherUrl
-          },
-          createdAt: data.orderDate || data.createdAt || new Date().toISOString(),
-          mercadoPagoPaymentId: data.paymentId,
-          mercadoPagoStatus: data.mercadoPagoStatus || data.mpStatus,
-          stockReservationMinutesLeft: data.stockReservationMinutesLeft,
-          stockReservationExpired: data.stockReservationExpired,
-          cancellationReason: data.cancellationReason
-        };
-      } 
-      // Formato 2: Desde /api/orders/{orderId}
-      else {
-        orderData = {
-          id: data.id?.toString() || orderId,
-          status: data.status || 'UNKNOWN',
-          total: Number(data.totalPrice) || 0,
-          items: data.orderItems?.map((item: any) => ({
-            id: item.id,
-            productVariantId: item.productVariantId || item.productVariant?.id || item.id,
-            name: item.product?.name || `Producto ${item.id}`,
-            image: item.product?.images?.[0]?.imageUrl || '/images/placeholder.png',
-            quantity: Number(item.quantity) || 1,
-            price: Number(item.price) || 0,
-            size: item.productVariant?.size,
-            color: item.productVariant?.color
-          })) || [],
-          customer: {
-            name: data.user ? `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() : data.customerEmail || 'Cliente',
-            email: data.user?.email || data.customerEmail || '',
-            phone: data.user?.phone || ''
-          },
-          shippingAddress: data.shippingAddress,
-          createdAt: data.orderDate || new Date().toISOString(),
-          mercadoPagoStatus: data.mercadoPagoStatus
-        };
+
+      return data;
+    },
+    [getRequestHeaders]
+  );
+
+  const schedulePolling = useCallback(
+    (orderId: string) => {
+      if (
+        pollingTimerRef.current !== null ||
+        pollingAttemptsRef.current >= MAX_POLL_ATTEMPTS
+      ) {
+        return;
       }
 
-      setOrderDetails(orderData);
-      determinePaymentStatus(orderData);
-      
-      // 🔴 INICIAR TIMER SI LA ORDEN ESTÁ PENDIENTE
-      if (orderData.status === 'PENDIENTE' && orderData.stockReservationMinutesLeft && orderData.stockReservationMinutesLeft > 0) {
-        setTimerSeconds(orderData.stockReservationMinutesLeft * 60);
-        
-        // 🔴 INICIAR POLLING PARA WEBHOOK (máx 2 minutos = 120 segundos)
-        console.log('🔔 Orden pendiente - iniciando polling para webhook...');
-        await pollForWebhookCompletion(orderId);
+      setIsPolling(true);
+
+      pollingTimerRef.current = window.setTimeout(
+        async () => {
+          pollingTimerRef.current = null;
+          pollingAttemptsRef.current += 1;
+
+          try {
+            const data = await fetchOrderData(orderId);
+            const normalizedOrder = normalizeOrderData(
+              data,
+              orderId
+            );
+
+            setOrderDetails(normalizedOrder);
+            determinePaymentStatus(normalizedOrder);
+
+            const normalizedStatus =
+              normalizedOrder.status.toUpperCase();
+
+            const remainsPending =
+              normalizedStatus === 'PENDIENTE' ||
+              normalizedStatus === 'EN_PROCESO' ||
+              normalizedOrder.mercadoPagoStatus ===
+                'pending' ||
+              normalizedOrder.mercadoPagoStatus ===
+                'in_process';
+
+            if (
+              remainsPending &&
+              pollingAttemptsRef.current <
+                MAX_POLL_ATTEMPTS
+            ) {
+              schedulePolling(orderId);
+            } else {
+              clearPolling();
+            }
+          } catch {
+            if (
+              pollingAttemptsRef.current <
+              MAX_POLL_ATTEMPTS
+            ) {
+              schedulePolling(orderId);
+            } else {
+              clearPolling();
+            }
+          }
+        },
+        POLL_INTERVAL_MS
+      );
+    },
+    [
+      clearPolling,
+      determinePaymentStatus,
+      fetchOrderData
+    ]
+  );
+
+  const verifyPayment = useCallback(
+    async (
+      orderId: string,
+      options?: {
+        background?: boolean;
+      }
+    ) => {
+      if (!orderId) return;
+
+      const background = Boolean(options?.background);
+
+      activeRequestRef.current?.abort();
+      activeRequestRef.current = new AbortController();
+
+      if (background) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
 
-    } catch (err) {
-      console.error('❌ Error verificando pago:', err);
-      setError(err instanceof Error ? err.message : 'Error desconocido al verificar el pago');
-    } finally {
-      setLoading(false);
-    }
-  }, [checkOrderExpiration, determinePaymentStatus, getRequestHeaders, pollForWebhookCompletion]);
+      setError('');
 
-  // 🔴 MANEJAR PARÁMETROS DE MERCADO PAGO
-  const handleMercadoPagoRedirect = useCallback(async (params: MercadoPagoParams) => {
-    console.log('📊 Parámetros recibidos de Mercado Pago:', params);
-    
-    let orderId: string | null = null;
+      try {
+        const expired =
+          await checkOrderExpiration(orderId);
 
-    // Prioridad 1: external_reference (orderId que enviamos)
-    if (params.external_reference) {
-      orderId = params.external_reference;
-      console.log('✅ OrderId de external_reference:', orderId);
-    } 
-    // Prioridad 2: orderId en URL
-    else {
-      orderId = searchParams.get('orderId');
-      console.log('🔍 OrderId de URL:', orderId);
-    }
+        if (expired) {
+          return;
+        }
 
-    // Prioridad 3: localStorage
+        const data = await fetchOrderData(
+          orderId,
+          activeRequestRef.current.signal
+        );
+
+        const normalizedOrder = normalizeOrderData(
+          data,
+          orderId
+        );
+
+        setOrderDetails(normalizedOrder);
+        determinePaymentStatus(normalizedOrder);
+
+        if (
+          normalizedOrder.stockReservationMinutesLeft !==
+            undefined &&
+          normalizedOrder.stockReservationMinutesLeft > 0
+        ) {
+          setTimerSeconds(
+            normalizedOrder.stockReservationMinutesLeft *
+              60
+          );
+        } else {
+          setTimerSeconds(null);
+        }
+
+        const status =
+          normalizedOrder.status.toUpperCase();
+
+        if (
+          status === 'PENDIENTE' ||
+          status === 'EN_PROCESO' ||
+          normalizedOrder.mercadoPagoStatus ===
+            'pending' ||
+          normalizedOrder.mercadoPagoStatus ===
+            'in_process'
+        ) {
+          schedulePolling(orderId);
+        }
+      } catch (verificationError) {
+        if (
+          verificationError instanceof Error &&
+          verificationError.name === 'AbortError'
+        ) {
+          return;
+        }
+
+        const message =
+          verificationError instanceof Error
+            ? verificationError.message
+            : 'No fue posible verificar el pago';
+
+        setError(message);
+        setPaymentStatus('unknown');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [
+      checkOrderExpiration,
+      determinePaymentStatus,
+      fetchOrderData,
+      schedulePolling
+    ]
+  );
+
+  useEffect(() => {
+    verifyPaymentRef.current = verifyPayment;
+  }, [verifyPayment]);
+
+  const mercadoPagoParams = useMemo(() => {
+    const parameterNames: Array<
+      keyof MercadoPagoParams
+    > = [
+      'collection_id',
+      'collection_status',
+      'payment_id',
+      'status',
+      'external_reference',
+      'merchant_order_id',
+      'preference_id',
+      'site_id',
+      'processing_mode',
+      'merchant_account_id',
+      'payment_type'
+    ];
+
+    const params: MercadoPagoParams = {};
+
+    parameterNames.forEach((parameterName) => {
+      const parameterValue =
+        searchParams.get(parameterName);
+
+      if (parameterValue) {
+        params[parameterName] =
+          parameterValue as never;
+      }
+    });
+
+    return params;
+  }, [searchParams]);
+
+  useEffect(() => {
+    const orderId =
+      mercadoPagoParams.external_reference ||
+      searchParams.get('orderId') ||
+      localStorage.getItem('pendingOrderId') ||
+      localStorage.getItem('mercadoPagoOrderId');
+
     if (!orderId) {
-      orderId = localStorage.getItem('pendingOrderId');
-      console.log('🔄 OrderId de localStorage:', orderId);
-    }
-
-    if (!orderId) {
-      setError('No se pudo identificar la orden. Por favor, contacta con soporte.');
       setLoading(false);
+      setPaymentStatus('unknown');
+      setError(
+        'No encontramos una orden asociada a esta página.'
+      );
       return;
     }
 
-    // Verificar estado del pago en el backend (única fuente de verdad)
-    await verifyPayment(orderId);
-    // El estado mostrado lo define determinePaymentStatus dentro de verifyPayment,
-    // según el status de la orden en el backend. No usamos params.collection_status
-    // para evitar mostrar "Pago aprobado" si el backend no confirmó (ej. validación de monto).
-  }, [searchParams, verifyPayment]);
+    void verifyPayment(orderId);
 
-  // 🔴 EFECTO PRINCIPAL
+    return () => {
+      activeRequestRef.current?.abort();
+      clearPolling();
+    };
+  }, [
+    clearPolling,
+    mercadoPagoParams.external_reference,
+    searchParams,
+    verifyPayment
+  ]);
+
   useEffect(() => {
-    const params = getMercadoPagoParams();
-    
-    if (Object.keys(params).length > 0) {
-      // ✅ CASO 1: Viene de Mercado Pago (pago completado o salió)
-      console.log('✅ CASO 1: Retorno desde Mercado Pago con parámetros');
-      handleMercadoPagoRedirect(params);
-    } else {
-      // Acceso directo a la página
-      const orderId = searchParams.get('orderId');
-      if (orderId) {
-        // ✅ CASO 2: URL directa con orderId
-        console.log('✅ CASO 2: URL directa con orderId');
-        verifyPayment(orderId);
-      } else {
-        // Verificar si hay orden pendiente en localStorage
-        const pendingOrderId = localStorage.getItem('pendingOrderId');
-        if (pendingOrderId) {
-          // ✅ CASO 3: Orden pendiente en localStorage
-          console.log('✅ CASO 3: Usuario accedió sin parámetros - Orden pendiente en localStorage:', pendingOrderId);
-          verifyPayment(pendingOrderId);
-        } else {
-          // 🔴 CASO 4: Usuario salió de Mercado Pago SIN parámetros y SIN orden pendiente
-          // Esto significa que:
-          // - Volvió de Mercado Pago sin completar pago (rechazó o cerró)
-          // - La orden EXISTE en backend pero aún no tiene referencia
-          console.log('⚠️ CASO 4: Usuario sin parámetros ni orden pendiente');
-          console.log('📋 Esto podría significar:');
-          console.log('   - Volvió de Mercado Pago sin completar pago');
-          console.log('   - Cerró la ventana de Mercado Pago');
-          console.log('   - Entrada directa a /checkout/success');
-          
-          // 🔴 INTENTAR RECUPERAR ORDEN DEL BACKEND POR SESSIONID
-          const sessionId = localStorage.getItem('cartSessionId');
-          if (sessionId) {
-            console.log('🔍 Intentando buscar orden por sessionId...');
-            // ✅ MOSTRAR ESTADO PENDIENTE CON MENSAJE AMIGABLE
-            setError('⚠️ Tu orden está pendiente de pago. Tienes 15 minutos para completar la transacción en Mercado Pago.');
-            setPaymentStatus('pending');
-            setLoading(false);
-            
-            // Intentar obtener los detalles de la orden por sessionId después
-            // (esto debería ser un endpoint adicional en el backend si es necesario)
-          } else {
-            // Sin sessionId, realmente no tenemos referencia
-            setError('❌ No se encontraron datos de tu orden. Por favor, inicia el proceso de pago desde el inicio.');
-            setLoading(false);
+    if (
+      timerSeconds === null ||
+      timerSeconds <= 0 ||
+      paymentStatus !== 'pending'
+    ) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setTimerSeconds((current) => {
+        if (current === null || current <= 1) {
+          window.clearInterval(timer);
+
+          if (orderDetails?.id) {
+            void checkOrderExpiration(orderDetails.id);
           }
+
+          return 0;
         }
-      }
-    }
-  }, [handleMercadoPagoRedirect, verifyPayment, searchParams]);
 
-  // 🔴 TIMER PARA ÓRDENES PENDIENTES
-  useEffect(() => {
-    if (timerSeconds !== null && timerSeconds > 0) {
-      const timer = setInterval(() => {
-        setTimerSeconds(prev => {
-          if (prev === null || prev <= 1) {
-            clearInterval(timer);
-            
-            // Si se acaba el tiempo, verificar expiración
-            if (orderDetails?.id) {
-              checkOrderExpiration(orderDetails.id);
-            }
-            
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        return current - 1;
+      });
+    }, 1000);
 
-      return () => clearInterval(timer);
-    }
-  }, [timerSeconds, orderDetails?.id, checkOrderExpiration]);
+    return () => window.clearInterval(timer);
+  }, [
+    checkOrderExpiration,
+    orderDetails?.id,
+    paymentStatus,
+    timerSeconds
+  ]);
 
   useEffect(() => {
-    if (paymentStatus !== 'approved') return;
-    if (!orderDetails) return;
-    if (!orderDetails.id) return;
-    if (!orderDetails.items || orderDetails.items.length === 0) return;
-  
+    if (
+      paymentStatus !== 'approved' ||
+      !orderDetails?.id ||
+      orderDetails.items.length === 0
+    ) {
+      return;
+    }
+
     const storageKey = `meta_purchase_tracked_${orderDetails.id}`;
-  
-    if (hasTrackedPurchaseRef.current) return;
-    if (typeof window !== 'undefined' && sessionStorage.getItem(storageKey) === 'true') {
+
+    if (
+      hasTrackedPurchaseRef.current ||
+      sessionStorage.getItem(storageKey) === 'true'
+    ) {
       hasTrackedPurchaseRef.current = true;
       return;
     }
-  
-    const items = orderDetails.items.map((item) => ({
-      id: String(item.productVariantId ?? item.id),
-      quantity: item.quantity,
-      item_price: item.price,
-    }));
-  
-    const numItems = orderDetails.items.reduce((acc, item) => acc + item.quantity, 0);
-  
+
     trackPurchase({
       orderId: orderDetails.id,
-      items,
+      items: orderDetails.items.map((item) => ({
+        id: String(
+          item.productVariantId ?? item.id
+        ),
+        quantity: item.quantity,
+        item_price: item.price
+      })),
       value: orderDetails.total,
-      numItems,
-      currency: 'COP',
+      numItems: orderDetails.items.reduce(
+        (total, item) => total + item.quantity,
+        0
+      ),
+      currency: 'COP'
     });
-  
+
     hasTrackedPurchaseRef.current = true;
-  
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(storageKey, 'true');
+    sessionStorage.setItem(storageKey, 'true');
+  }, [orderDetails, paymentStatus]);
+
+  const retryVerification = useCallback(() => {
+    const orderId =
+      orderDetails?.id ||
+      searchParams.get('orderId') ||
+      localStorage.getItem('pendingOrderId') ||
+      localStorage.getItem('mercadoPagoOrderId');
+
+    if (!orderId) {
+      setError(
+        'No encontramos una orden para verificar.'
+      );
+      return;
     }
-  
-    console.log('[Meta Pixel] Purchase enviado para orden:', orderDetails.id);
-  }, [paymentStatus, orderDetails]);
 
-  // Formatear precio
-  const formatPrice = useCallback((price: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price);
-  }, []);
+    void verifyPayment(orderId, {
+      background: true
+    });
+  }, [
+    orderDetails?.id,
+    searchParams,
+    verifyPayment
+  ]);
 
-  // Formatear fecha
-  const formatDate = useCallback((dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return new Intl.DateTimeFormat('es-CO', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(date);
-    } catch {
-      return 'Fecha no disponible';
-    }
-  }, []);
-
-  // 🔴 REINTENTAR VERIFICACIÓN
-  const retryVerification = () => {
-    if (orderDetails?.id) {
-      verifyPayment(orderDetails.id);
-    } else {
-      const pendingOrderId = localStorage.getItem('pendingOrderId');
-      if (pendingOrderId) {
-        verifyPayment(pendingOrderId);
-      } else {
-        setError('No hay orden para verificar');
-      }
-    }
-  };
-
-  // 🔴 CREAR NUEVA ORDEN (si expiró)
-  const createNewOrder = () => {
-    localStorage.removeItem('pendingOrderId');
-    localStorage.removeItem('pendingOrderData');
-    localStorage.removeItem('pendingPreferenceId');
+  const startNewCheckout = useCallback(() => {
+    clearPendingOrderStorage();
     router.push('/checkout');
-  };
+  }, [clearPendingOrderStorage, router]);
 
-  // Componente de loading
   if (loading) {
     return <PaymentLoadingFallback />;
   }
 
-  // Componente de error
-  if (error && !orderDetails) {
-    return (
-      <div className="payment-result-container">
-        <div className="payment-error-state">
-          <div className="payment-error-icon">
-            <AlertCircle className="payment-icon-xxl" />
-          </div>
-          <h1 className="payment-error-title">
-            {isOrderExpired ? 'Orden Expirada' : 'Error al verificar el pago'}
-          </h1>
-          <p className="payment-error-message">
-            {error}
-          </p>
-          
-          <div className="payment-error-actions">
-            {isOrderExpired ? (
-              <>
-                <button
-                  onClick={createNewOrder}
-                  className="payment-btn payment-btn-primary"
-                >
-                  <ShoppingBag className="payment-icon" />
-                  Crear Nueva Orden
-                </button>
-                <Link
-                  href="/"
-                  className="payment-btn payment-btn-outline"
-                >
-                  <Home className="payment-icon" />
-                  Volver al inicio
-                </Link>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={retryVerification}
-                  className="payment-btn payment-btn-primary"
-                >
-                  <RefreshCw className="payment-icon" />
-                  Reintentar
-                </button>
-                <Link
-                  href="/"
-                  className="payment-btn payment-btn-outline"
-                >
-                  <Home className="payment-icon" />
-                  Volver al inicio
-                </Link>
-                <Link
-                  href="/contact"
-                  className="payment-btn payment-btn-secondary"
-                >
-                  <Shield className="payment-icon" />
-                  Contactar soporte
-                </Link>
-              </>
-            )}
-            
-            {/* Botón oculto para ir al checkout (se muestra si el usuario salió de MP) */}
-            <button
-              id="go-to-checkout-btn"
-              onClick={() => router.push('/checkout')}
-              className="payment-btn payment-btn-outline"
-              style={{ display: 'none' }}
-            >
-              <ArrowLeft className="payment-icon" />
-              Volver al Checkout
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const title =
+    paymentStatus === 'approved'
+      ? 'Pago confirmado'
+      : paymentStatus === 'pending'
+        ? 'Estamos confirmando tu pago'
+        : paymentStatus === 'rejected'
+          ? isOrderExpired
+            ? 'La reserva expiró'
+            : 'El pago no fue aprobado'
+          : 'Estamos revisando el estado';
 
-  // Renderizar según estado del pago
-  const renderByStatus = () => {
-    switch (paymentStatus) {
-      case 'approved':
-        return renderApproved();
-      case 'pending':
-        return renderPending();
-      case 'rejected':
-        return renderRejected();
-      default:
-        return renderUnknown();
-    }
-  };
+  const description =
+    paymentStatus === 'approved'
+      ? 'Tu orden fue confirmada y comenzará a prepararse.'
+      : paymentStatus === 'pending'
+        ? 'Mercado Pago o tu entidad financiera todavía está procesando la transacción.'
+        : paymentStatus === 'rejected'
+          ? isOrderExpired
+            ? 'El tiempo disponible para completar el pago terminó.'
+            : 'Puedes intentarlo nuevamente usando otro medio de pago.'
+          : 'No pudimos obtener una confirmación definitiva de la orden.';
 
-  // Pago aprobado
-  const renderApproved = () => {
-    if (!orderDetails) return null;
-
-    return (
-      <div className="payment-result-container">
-        {/* Decoraciones */}
-        <div className="payment-decorative-elements">
-          <div className="payment-decorative-icon star">
-            <Star className="payment-icon-sm" fill="currentColor" />
-          </div>
-          <div className="payment-decorative-icon sparkles">
-            <Sparkles className="payment-icon-md" />
-          </div>
-        </div>
-
-        {/* Encabezado de éxito */}
-        <header className="payment-status-header payment-status-approved">
-          <div className="payment-status-icon">
-            <CheckCircle className="payment-icon-xxl" />
-          </div>
-          <h1 className="payment-status-title">¡Pago Aprobado!</h1>
-          <p className="payment-status-subtitle">
-            Tu pedido ha sido confirmado exitosamente.
-            <br />
-            <span className="payment-order-info">
-              Orden #{orderDetails.id} • {formatDate(orderDetails.createdAt)}
-            </span>
-          </p>
-          <div className="payment-success-badges">
-            <div className="payment-success-badge">
-              <CheckCheck className="payment-icon-sm" />
-              <span>Stock confirmado</span>
-            </div>
-            <div className="payment-success-badge">
-              <Package className="payment-icon-sm" />
-              <span>Preparando envío</span>
-            </div>
-            <div className="payment-success-badge">
-              <Truck className="payment-icon-sm" />
-              <span>Entrega en 3-5 días</span>
-            </div>
-          </div>
-        </header>
-
-        <main className="payment-result-main">
-          <div className="payment-back-button">
-            <Link href="/" className="payment-back-link">
-              <ArrowLeft className="payment-icon" />
-              <span>Volver al inicio</span>
-            </Link>
-          </div>
-
-          {/* Tarjeta de resumen */}
-          <div className="payment-summary-card">
-            <div className="payment-summary-grid">
-              {/* Información del cliente */}
-              <div className="payment-customer-info">
-                <h2 className="payment-section-title">
-                  <User className="payment-icon" />
-                  Información del Cliente
-                </h2>
-                <div className="payment-info-grid">
-                  <div>
-                    <p className="payment-info-label">Nombre</p>
-                    <p className="payment-info-value">{orderDetails.customer.name}</p>
-                  </div>
-                  <div>
-                    <p className="payment-info-label">Email</p>
-                    <p className="payment-info-value">{orderDetails.customer.email}</p>
-                  </div>
-                  {orderDetails.customer.phone && (
-                    <div>
-                      <p className="payment-info-label">Teléfono</p>
-                      <p className="payment-info-value">{orderDetails.customer.phone}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Información de envío */}
-              {orderDetails.shippingAddress && (
-                <div className="payment-shipping-info">
-                  <h2 className="payment-section-title">
-                    <MapPin className="payment-icon" />
-                    Dirección de Envío
-                  </h2>
-                  <div className="payment-address-details">
-                    <p className="payment-address-line">{orderDetails.shippingAddress.address}</p>
-                    <p className="payment-address-line">
-                      {orderDetails.shippingAddress.city}, {orderDetails.shippingAddress.state}
-                    </p>
-                    <p className="payment-address-line">{orderDetails.shippingAddress.country}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Productos */}
-          <div className="payment-products-card">
-            <h2 className="payment-section-title">
-              <ShoppingBag className="payment-icon" />
-              Productos ({orderDetails.items.length})
-            </h2>
-            <div className="payment-products-list">
-              {orderDetails.items.map((item) => (
-                <div key={item.id} className="payment-product-item">
-                  <div className="payment-product-image">
-                    <Image
-                      src={item.image}
-                      alt={item.name}
-                      fill
-                      className="payment-product-img"
-                      sizes="(max-width: 768px) 100px, 120px"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = '/images/placeholder.png';
-                      }}
-                    />
-                  </div>
-                  <div className="payment-product-details">
-                    <h3 className="payment-product-name">{item.name}</h3>
-                    <div className="payment-product-attributes">
-                      {item.size && <span className="payment-product-size">Talla: {item.size}</span>}
-                      {item.color && <span className="payment-product-color">Color: {item.color}</span>}
-                    </div>
-                  </div>
-                  <div className="payment-product-price">
-                    <p className="payment-product-unit">{formatPrice(item.price)}</p>
-                    <p className="payment-product-quantity">x{item.quantity}</p>
-                    <p className="payment-product-total">{formatPrice(item.price * item.quantity)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Total */}
-            <div className="payment-total-section">
-              <div className="payment-total-row">
-                <span className="payment-total-label">Total</span>
-                <span className="payment-total-value">{formatPrice(orderDetails.total)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Información del pago */}
-          {orderDetails.paymentInfo && (
-            <div className="payment-info-card">
-              <h2 className="payment-section-title">
-                <CreditCard className="payment-icon" />
-                Información del Pago
-              </h2>
-              <div className="payment-details-grid">
-                <div>
-                  <p className="payment-info-label">Método de pago</p>
-                  <p className="payment-info-value">{orderDetails.paymentInfo.method}</p>
-                </div>
-                {orderDetails.paymentInfo.installments && (
-                  <div>
-                    <p className="payment-info-label">Cuotas</p>
-                    <p className="payment-info-value">{orderDetails.paymentInfo.installments} cuotas</p>
-                  </div>
-                )}
-                {orderDetails.paymentInfo.card?.lastFour && (
-                  <div>
-                    <p className="payment-info-label">Tarjeta</p>
-                    <p className="payment-info-value">
-                      **** **** **** {orderDetails.paymentInfo.card.lastFour}
-                      {orderDetails.paymentInfo.card.brand && ` (${orderDetails.paymentInfo.card.brand})`}
-                    </p>
-                  </div>
-                )}
-                {orderDetails.mercadoPagoPaymentId && (
-                  <div>
-                    <p className="payment-info-label">ID de transacción</p>
-                    <p className="payment-info-value payment-transaction-id">
-                      {orderDetails.mercadoPagoPaymentId.substring(0, 8)}...
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Acciones */}
-          <div className="payment-actions-section">
-            <div className="payment-actions-grid">
-              <Link
-                href="/orders"
-                className="payment-btn payment-btn-primary"
-              >
-                <Package className="payment-icon" />
-                Ver Mis Pedidos
-              </Link>
-              <Link
-                href="/"
-                className="payment-btn payment-btn-outline"
-              >
-                <ShoppingBag className="payment-icon" />
-                Seguir Comprando
-              </Link>
-              <button
-                onClick={() => window.print()}
-                className="payment-btn payment-btn-outline"
-              >
-                <Printer className="payment-icon" />
-                Imprimir Comprobante
-              </button>
-            </div>
-            
-            <p className="payment-email-notice">
-              <Mail className="payment-icon-sm" />
-              Te hemos enviado un correo con los detalles de tu compra.
-              Si no lo recibes en los próximos minutos, revisa tu carpeta de spam.
-            </p>
-            
-            <div className="payment-security-notice">
-              <Lock className="payment-icon-sm" />
-              <span>Tu pago está 100% protegido por Mercado Pago</span>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  };
-
-  // Pago pendiente
-  const renderPending = () => {
-    const pendingOrderId = orderDetails?.id || localStorage.getItem('pendingOrderId');
-
-    return (
-      <div className="payment-result-container">
-        <div className="payment-decorative-elements">
-          <div className="payment-decorative-icon clock">
-            <Clock className="payment-icon-md" />
-          </div>
-        </div>
-
-        <header className="payment-status-header payment-status-pending">
-          <div className="payment-status-icon">
-            <Clock className="payment-icon-xxl" />
-          </div>
-          <h1 className="payment-status-title">Pago Pendiente</h1>
-          <p className="payment-status-subtitle">
-            Tu pago está siendo procesado. Te notificaremos cuando se complete la transacción.
-            {pendingOrderId && <br />}
-            {pendingOrderId && <span className="payment-order-info">Orden #{pendingOrderId}</span>}
-          </p>
-          
-          {/* 🔴 TIMER DE EXPIRACIÓN */}
-          {timerSeconds !== null && timerSeconds > 0 && (
-            <div className="payment-timer-section">
-              <div className="payment-timer">
-                <Clock className="payment-icon" />
-                <span className="payment-timer-text">
-                  Tiempo restante para completar el pago: 
-                  <span className="payment-timer-countdown">
-                    {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
-                  </span>
-                </span>
-              </div>
-              <div className="payment-timer-progress">
-                <div 
-                  className="payment-timer-progress-bar"
-                  style={{ width: `${(timerSeconds / (10 * 60)) * 100}%` }}
-                />
-              </div>
-              <p className="payment-timer-warning">
-                ⚠️ Si no completas el pago en este tiempo, la orden se cancelará automáticamente
-              </p>
-            </div>
-          )}
-          
-          <div className="payment-loading-dots">
-            <div className="payment-dot"></div>
-            <div className="payment-dot" style={{animationDelay: '0.1s'}}></div>
-            <div className="payment-dot" style={{animationDelay: '0.2s'}}></div>
-          </div>
-        </header>
-
-        <main className="payment-result-main">
-          <div className="payment-info-card">
-            <h2 className="payment-section-title">
-              <AlertCircle className="payment-icon" />
-              ¿Qué significa esto?
-            </h2>
-            <ul className="payment-info-list">
-              <li>• Algunos métodos de pago pueden tardar unos minutos en procesarse</li>
-              <li>• Revisa tu correo electrónico para más detalles</li>
-              <li>• Si pagaste en efectivo, acércate al establecimiento con tu comprobante</li>
-              <li>• Tu pedido se procesará automáticamente cuando recibamos la confirmación</li>
-              <li>• El stock de tus productos está reservado por 15 minutos</li>
-              <li>• Estamos monitoreando tu pago automáticamente (polling cada segundo)</li>
-            </ul>
-          </div>
-
-          <div className="payment-actions-section">
-            <div className="payment-actions-grid">
-              <button
-                onClick={retryVerification}
-                className="payment-btn payment-btn-primary"
-              >
-                <RefreshCw className="payment-icon" />
-                Actualizar Estado
-              </button>
-              <Link
-                href="/"
-                className="payment-btn payment-btn-outline"
-              >
-                <ShoppingBag className="payment-icon" />
-                Seguir Comprando
-              </Link>
-              {pendingOrderId && (
-                <Link
-                  href={`/checkout`}
-                  className="payment-btn payment-btn-secondary"
-                >
-                  <ArrowLeft className="payment-icon" />
-                  Volver al Checkout
-                </Link>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  };
-
-  // Pago rechazado
-  const renderRejected = () => {
-    const isExpired = isOrderExpired || orderDetails?.status === 'CANCELADO';
-
-    return (
-      <div className="payment-result-container">
-        <header className="payment-status-header payment-status-rejected">
-          <div className="payment-status-icon">
-            {isExpired ? <Clock className="payment-icon-xxl" /> : <XCircle className="payment-icon-xxl" />}
-          </div>
-          <h1 className="payment-status-title">
-            {isExpired ? 'Orden Expirada' : 'Pago Rechazado'}
-          </h1>
-          <p className="payment-status-subtitle">
-            {isExpired 
-              ? 'El tiempo para completar el pago ha expirado.' 
-              : 'Lo sentimos, tu pago no pudo ser procesado.'}
-          </p>
-          {orderDetails?.cancellationReason && (
-            <div className="payment-cancellation-reason">
-              <AlertCircle className="payment-icon-sm" />
-              <span>{orderDetails.cancellationReason}</span>
-            </div>
-          )}
-        </header>
-
-        <main className="payment-result-main">
-          <div className="payment-info-card">
-            <h2 className="payment-section-title">
-              <AlertCircle className="payment-icon" />
-              {isExpired ? '¿Qué pasó?' : 'Posibles razones:'}
-            </h2>
-            <ul className="payment-info-list">
-              {isExpired ? (
-                <>
-                  <li>• No se completó el pago dentro de los 15 minutos de reserva</li>
-                  <li>• El stock reservado ha sido liberado para otros clientes</li>
-                  <li>• Puedes crear una nueva orden cuando lo desees</li>
-                  <li>• Los precios y disponibilidad pueden cambiar</li>
-                </>
-              ) : (
-                <>
-                  <li>• Fondos insuficientes en la cuenta/tarjeta</li>
-                  <li>• Datos de la tarjeta incorrectos</li>
-                  <li>• Límite de la tarjeta excedido</li>
-                  <li>• Problemas temporales con el banco emisor</li>
-                  <li>• Rechazo por políticas de seguridad</li>
-                </>
-              )}
-            </ul>
-          </div>
-
-          <div className="payment-actions-section">
-            <div className="payment-actions-grid">
-              {isExpired ? (
-                <>
-                  <button
-                    onClick={createNewOrder}
-                    className="payment-btn payment-btn-primary"
-                  >
-                    <RotateCcw className="payment-icon" />
-                    Crear Nueva Orden
-                  </button>
-                  <Link
-                    href="/"
-                    className="payment-btn payment-btn-outline"
-                  >
-                    <Home className="payment-icon" />
-                    Volver al Inicio
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/checkout"
-                    className="payment-btn payment-btn-primary"
-                  >
-                    <CreditCard className="payment-icon" />
-                    Intentar Nuevamente
-                  </Link>
-                  <Link
-                    href="/"
-                    className="payment-btn payment-btn-outline"
-                  >
-                    <Home className="payment-icon" />
-                    Volver al Inicio
-                  </Link>
-                  <Link
-                    href="/contact"
-                    className="payment-btn payment-btn-secondary"
-                  >
-                    <Shield className="payment-icon" />
-                    Contactar Soporte
-                  </Link>
-                </>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  };
-
-  // Estado desconocido
-  const renderUnknown = () => {
-    return (
-      <div className="payment-result-container">
-        <header className="payment-status-header payment-status-unknown">
-          <div className="payment-status-icon">
-            <AlertCircle className="payment-icon-xxl" />
-          </div>
-          <h1 className="payment-status-title">Estado del Pago Desconocido</h1>
-          <p className="payment-status-subtitle">
-            No pudimos determinar el estado de tu pago. Te recomendamos:
-          </p>
-        </header>
-
-        <main className="payment-result-main">
-          <div className="payment-info-grid">
-            <div className="payment-info-item">
-              <Mail className="payment-icon-lg" />
-              <div>
-                <h3>Revisa tu correo</h3>
-                <p>Mercado Pago envía confirmación por email</p>
-              </div>
-            </div>
-            <div className="payment-info-item">
-              <Shield className="payment-icon-lg" />
-              <div>
-                <h3>Consulta tu cuenta</h3>
-                <p>Verifica el estado en Mercado Pago</p>
-              </div>
-            </div>
-            <div className="payment-info-item">
-              <Package className="payment-icon-lg" />
-              <div>
-                <h3>Revisa tus pedidos</h3>
-                <p>El estado se actualiza automáticamente</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="payment-actions-section">
-            <div className="payment-actions-grid">
-              <button
-                onClick={retryVerification}
-                className="payment-btn payment-btn-primary"
-              >
-                <RefreshCw className="payment-icon" />
-                Reintentar Verificación
-              </button>
-              <Link
-                href="/orders"
-                className="payment-btn payment-btn-outline"
-              >
-                <Package className="payment-icon" />
-                Ver Mis Pedidos
-              </Link>
-              <Link
-                href="/"
-                className="payment-btn payment-btn-secondary"
-              >
-                <Home className="payment-icon" />
-                Volver al Inicio
-              </Link>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  };
-
-  return renderByStatus();
-}
-
-// Loading Fallback inline para PaymentResult
-function PaymentLoadingFallback() {
   return (
-    <div className="payment-result-container">
-      <div className="payment-loading-wrapper">
-        <div className="payment-spinner-container">
-          <div className="payment-spinner-circle">
-            <div className="payment-spinner-inner"></div>
-            <div className="payment-spinner-center">
-              <Package className="payment-icon-lg" />
-            </div>
+    <main
+      className={`payment-result-container payment-result-container--${paymentStatus}`}
+    >
+      <header className="payment-topbar">
+        <Link href="/" aria-label="Ir al inicio de VALSE">
+          <Image
+            src="/images/logos/logLog.svg"
+            alt="VALSE"
+            width={150}
+            height={58}
+            priority
+          />
+        </Link>
+
+        <span>
+          <Lock aria-hidden="true" />
+          Pago protegido
+        </span>
+      </header>
+
+      <section className="payment-status-hero">
+        <div
+          className={`payment-status-symbol payment-status-symbol--${paymentStatus}`}
+        >
+          <StatusIcon status={paymentStatus} />
+        </div>
+
+        <span className="payment-status-eyebrow">
+          {orderDetails?.id
+            ? `ORDEN #${orderDetails.id}`
+            : 'RESULTADO DEL PAGO'}
+        </span>
+
+        <h1>{title}</h1>
+        <p>{description}</p>
+
+        {orderDetails && (
+          <div className="payment-status-meta">
+            <span>
+              {formatDate(orderDetails.createdAt)}
+            </span>
+            <span>
+              {formatPrice(orderDetails.total)}
+            </span>
           </div>
-        </div>
-        
-        <h1 className="payment-loading-title">
-          Obteniendo detalles de tu compra
-        </h1>
-        <p className="payment-loading-subtitle">
-          Estamos recuperando la información de tu pedido...
-        </p>
-        
-        <div className="payment-loading-dots">
-          <div className="payment-dot"></div>
-          <div className="payment-dot" style={{animationDelay: '0.1s'}}></div>
-          <div className="payment-dot" style={{animationDelay: '0.2s'}}></div>
-        </div>
+        )}
+
+        {paymentStatus === 'pending' &&
+          timerSeconds !== null && (
+            <div className="payment-reservation">
+              <Clock3 aria-hidden="true" />
+              <span>
+                Reserva disponible durante
+              </span>
+              <strong>
+                {formatTimer(timerSeconds)}
+              </strong>
+            </div>
+          )}
+
+        {isPolling && (
+          <div className="payment-polling-note">
+            <Loader2
+              className="payment-spin"
+              aria-hidden="true"
+            />
+            Actualizando automáticamente
+          </div>
+        )}
+      </section>
+
+      <div className="payment-page-shell">
+        {paymentStatus === 'approved' &&
+          orderDetails && (
+            <ApprovedResult
+              order={orderDetails}
+              formatDate={formatDate}
+              formatPrice={formatPrice}
+            />
+          )}
+
+        {paymentStatus !== 'approved' && (
+          <StatusResult
+            status={paymentStatus}
+            error={error}
+            expired={isOrderExpired}
+            order={orderDetails}
+            refreshing={refreshing}
+            onRetry={retryVerification}
+            onNewCheckout={startNewCheckout}
+            formatPrice={formatPrice}
+          />
+        )}
       </div>
-    </div>
+    </main>
   );
 }
 
-// Exportar componente envuelto en Suspense para useSearchParams
+const ApprovedResult = ({
+  order,
+  formatDate,
+  formatPrice
+}: {
+  order: OrderDetails;
+  formatDate: (value: string) => string;
+  formatPrice: (value: number) => string;
+}) => (
+  <div className="payment-approved-layout">
+    <section className="payment-order-content">
+      <div className="payment-section-heading">
+        <div>
+          <span>DETALLE DEL PEDIDO</span>
+          <h2>Lo que compraste</h2>
+        </div>
+
+        <span className="payment-item-count">
+          {order.items.reduce(
+            (total, item) => total + item.quantity,
+            0
+          )}{' '}
+          unidades
+        </span>
+      </div>
+
+      {order.items.length > 0 ? (
+        <div className="payment-products-list">
+          {order.items.map((item) => (
+            <article
+              key={`${item.id}-${item.productVariantId ?? ''}`}
+              className="payment-product-item"
+            >
+              <div className="payment-product-image">
+                <SafeOrderImage
+                  src={item.image}
+                  alt={item.name}
+                />
+              </div>
+
+              <div className="payment-product-details">
+                <h3>{item.name}</h3>
+
+                <div className="payment-product-attributes">
+                  {item.size && (
+                    <span>Talla {item.size}</span>
+                  )}
+                  {item.color && (
+                    <span>{item.color}</span>
+                  )}
+                  <span>
+                    Cantidad {item.quantity}
+                  </span>
+                </div>
+              </div>
+
+              <div className="payment-product-price">
+                <small>
+                  {formatPrice(item.price)} c/u
+                </small>
+                <strong>
+                  {formatPrice(
+                    item.price * item.quantity
+                  )}
+                </strong>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="payment-empty-products">
+          <Package aria-hidden="true" />
+          <p>
+            La orden fue confirmada, pero el backend no
+            devolvió el detalle de productos.
+          </p>
+        </div>
+      )}
+
+      <div className="payment-next-steps">
+        <div>
+          <Check aria-hidden="true" />
+          <span>
+            <strong>Pago recibido</strong>
+            La transacción fue confirmada.
+          </span>
+        </div>
+
+        <div>
+          <Package aria-hidden="true" />
+          <span>
+            <strong>Preparación</strong>
+            Organizaremos las prendas de tu pedido.
+          </span>
+        </div>
+
+        <div>
+          <Truck aria-hidden="true" />
+          <span>
+            <strong>Envío</strong>
+            Recibirás las novedades por correo.
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <aside className="payment-order-summary">
+      <div className="payment-summary-block">
+        <span className="payment-summary-eyebrow">
+          RESUMEN
+        </span>
+
+        <div className="payment-summary-order">
+          <span>Orden</span>
+          <strong>#{order.id}</strong>
+        </div>
+
+        <div className="payment-summary-order">
+          <span>Fecha</span>
+          <strong>{formatDate(order.createdAt)}</strong>
+        </div>
+
+        <div className="payment-summary-total">
+          <span>Total pagado</span>
+          <strong>{formatPrice(order.total)}</strong>
+        </div>
+      </div>
+
+      <InfoBlock
+        icon={<User aria-hidden="true" />}
+        title="Cliente"
+      >
+        <strong>{order.customer.name}</strong>
+        {order.customer.email && (
+          <span>
+            <Mail aria-hidden="true" />
+            {order.customer.email}
+          </span>
+        )}
+        {order.customer.phone && (
+          <span>
+            <Phone aria-hidden="true" />
+            {order.customer.phone}
+          </span>
+        )}
+      </InfoBlock>
+
+      {order.shippingAddress && (
+        <InfoBlock
+          icon={<MapPin aria-hidden="true" />}
+          title="Entrega"
+        >
+          <strong>
+            {order.shippingAddress.address}
+          </strong>
+          <span>
+            {order.shippingAddress.city},{' '}
+            {order.shippingAddress.state}
+          </span>
+          <span>
+            {order.shippingAddress.country}
+          </span>
+        </InfoBlock>
+      )}
+
+      {order.paymentInfo && (
+        <InfoBlock
+          icon={<CreditCard aria-hidden="true" />}
+          title="Pago"
+        >
+          <strong>{order.paymentInfo.method}</strong>
+
+          {order.paymentInfo.installments && (
+            <span>
+              {order.paymentInfo.installments} cuotas
+            </span>
+          )}
+
+          {order.paymentInfo.card?.lastFour && (
+            <span>
+              {order.paymentInfo.card.brand || 'Tarjeta'}{' '}
+              terminada en{' '}
+              {order.paymentInfo.card.lastFour}
+            </span>
+          )}
+        </InfoBlock>
+      )}
+
+      <div className="payment-summary-actions">
+        <Link
+          href="/orders"
+          className="payment-button payment-button--primary"
+        >
+          Ver mis pedidos
+          <ArrowRight aria-hidden="true" />
+        </Link>
+
+        <Link
+          href="/menu"
+          className="payment-button payment-button--secondary"
+        >
+          Seguir comprando
+        </Link>
+
+        <button
+          type="button"
+          className="payment-print-button"
+          onClick={() => window.print()}
+        >
+          <Printer aria-hidden="true" />
+          Imprimir comprobante
+        </button>
+      </div>
+
+      <div className="payment-security-note">
+        <ShieldCheck aria-hidden="true" />
+        <span>
+          Pago procesado mediante una conexión protegida.
+        </span>
+      </div>
+    </aside>
+  </div>
+);
+
+const InfoBlock = ({
+  icon,
+  title,
+  children
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <section className="payment-info-block">
+    <div className="payment-info-block-title">
+      {icon}
+      <span>{title}</span>
+    </div>
+
+    <div className="payment-info-block-content">
+      {children}
+    </div>
+  </section>
+);
+
+const StatusResult = ({
+  status,
+  error,
+  expired,
+  order,
+  refreshing,
+  onRetry,
+  onNewCheckout,
+  formatPrice
+}: {
+  status: Exclude<PaymentViewStatus, 'approved'>;
+  error: string;
+  expired: boolean;
+  order: OrderDetails | null;
+  refreshing: boolean;
+  onRetry: () => void;
+  onNewCheckout: () => void;
+  formatPrice: (value: number) => string;
+}) => (
+  <section className="payment-status-card">
+    <div className="payment-status-card-copy">
+      <span>
+        {status === 'pending'
+          ? '¿QUÉ ESTÁ PASANDO?'
+          : status === 'rejected'
+            ? 'INFORMACIÓN DEL PAGO'
+            : 'VERIFICACIÓN'}
+      </span>
+
+      <h2>
+        {status === 'pending'
+          ? 'No necesitas repetir el pago.'
+          : status === 'rejected'
+            ? expired
+              ? 'Prepara una nueva orden.'
+              : 'Prueba con otro medio de pago.'
+            : 'Puedes volver a consultar la orden.'}
+      </h2>
+
+      <p>
+        {error ||
+          (status === 'pending'
+            ? 'La confirmación puede tardar algunos minutos. Esta página se actualiza automáticamente.'
+            : status === 'rejected'
+              ? 'No se realizó ningún cobro confirmado.'
+              : 'Conservaremos la referencia de la orden mientras realizas una nueva consulta.')}
+      </p>
+
+      {order && (
+        <div className="payment-status-order">
+          <div>
+            <span>Orden</span>
+            <strong>#{order.id}</strong>
+          </div>
+
+          <div>
+            <span>Total</span>
+            <strong>
+              {formatPrice(order.total)}
+            </strong>
+          </div>
+
+          <div>
+            <span>Estado</span>
+            <strong>{order.status}</strong>
+          </div>
+        </div>
+      )}
+    </div>
+
+    <div className="payment-status-guidance">
+      {status === 'pending' ? (
+        <>
+          <GuidanceItem
+            number="01"
+            title="No cierres el proceso"
+            text="Espera unos minutos mientras recibimos la respuesta definitiva."
+          />
+          <GuidanceItem
+            number="02"
+            title="Revisa tu correo"
+            text="Mercado Pago también puede enviarte el resultado de la transacción."
+          />
+          <GuidanceItem
+            number="03"
+            title="Consulta nuevamente"
+            text="Usa el botón solo cuando necesites actualizar el estado manualmente."
+          />
+        </>
+      ) : (
+        <>
+          <GuidanceItem
+            number="01"
+            title="Verifica los datos"
+            text="Confirma el medio de pago y la información solicitada por tu entidad."
+          />
+          <GuidanceItem
+            number="02"
+            title="Cambia el medio de pago"
+            text="Puedes usar otra tarjeta, PSE u otra opción disponible."
+          />
+          <GuidanceItem
+            number="03"
+            title="Conserva la referencia"
+            text="El número de orden será útil si necesitas soporte."
+          />
+        </>
+      )}
+
+      <div className="payment-status-actions">
+        {status !== 'rejected' || !expired ? (
+          <button
+            type="button"
+            className="payment-button payment-button--primary"
+            onClick={onRetry}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <>
+                <Loader2
+                  className="payment-spin"
+                  aria-hidden="true"
+                />
+                Verificando
+              </>
+            ) : (
+              <>
+                <RefreshCw aria-hidden="true" />
+                Verificar de nuevo
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="payment-button payment-button--primary"
+            onClick={onNewCheckout}
+          >
+            <RotateCcw aria-hidden="true" />
+            Crear nueva orden
+          </button>
+        )}
+
+        <Link
+          href="/"
+          className="payment-button payment-button--secondary"
+        >
+          <Home aria-hidden="true" />
+          Volver al inicio
+        </Link>
+      </div>
+    </div>
+  </section>
+);
+
+const GuidanceItem = ({
+  number,
+  title,
+  text
+}: {
+  number: string;
+  title: string;
+  text: string;
+}) => (
+  <div className="payment-guidance-item">
+    <span>{number}</span>
+
+    <div>
+      <strong>{title}</strong>
+      <p>{text}</p>
+    </div>
+  </div>
+);
+
+function PaymentLoadingFallback() {
+  return (
+    <main className="payment-result-container payment-result-container--loading">
+      <header className="payment-topbar">
+        <Link href="/" aria-label="Ir al inicio de VALSE">
+          <Image
+            src="/images/logos/logLog.svg"
+            alt="VALSE"
+            width={150}
+            height={58}
+            priority
+          />
+        </Link>
+
+        <span>
+          <Lock aria-hidden="true" />
+          Pago protegido
+        </span>
+      </header>
+
+      <section className="payment-loading">
+        <span className="payment-loading-symbol">
+          <Loader2
+            className="payment-spin"
+            aria-hidden="true"
+          />
+        </span>
+
+        <span>VALSE / CONFIRMACIÓN</span>
+        <h1>Verificando tu compra</h1>
+        <p>
+          Estamos consultando el estado definitivo de la
+          orden.
+        </p>
+      </section>
+    </main>
+  );
+}
+
 export default function PaymentResult() {
   return (
     <Suspense fallback={<PaymentLoadingFallback />}>
